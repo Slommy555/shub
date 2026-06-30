@@ -1,4 +1,5 @@
 import { useVoiceSettings } from '../hooks/useVoiceSettings';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface Props {
   open: boolean;
@@ -11,6 +12,7 @@ const inputCls =
 /** Slide-in drawer for configuring the voice start/stop keywords. */
 export default function SettingsDrawer({ open, onClose }: Props) {
   const { settings, setStartKeyword, setStopKeyword } = useVoiceSettings();
+  const isMobile = useIsMobile();
 
   return (
     <div className={['fixed inset-0 z-50', open ? '' : 'pointer-events-none'].join(' ')} aria-hidden={!open}>
@@ -45,31 +47,40 @@ export default function SettingsDrawer({ open, onClose }: Props) {
         </div>
 
         <div className="space-y-4 px-5 py-5">
-          <div>
-            <label className="mb-1 block text-sm font-medium">Start keyword</label>
-            <input
-              value={settings.startKeyword}
-              onChange={(e) => setStartKeyword(e.target.value)}
-              placeholder="start recording"
-              className={inputCls}
-            />
-            <p className="mt-1 text-xs text-gray-400">Spoken phrase that begins capturing.</p>
-          </div>
+          {isMobile ? (
+            <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
+              Keyword activation is available on desktop only. On mobile, tap the mic button in the
+              corner of the screen to start and stop recording.
+            </p>
+          ) : (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Start keyword</label>
+                <input
+                  value={settings.startKeyword}
+                  onChange={(e) => setStartKeyword(e.target.value)}
+                  placeholder="start recording"
+                  className={inputCls}
+                />
+                <p className="mt-1 text-xs text-gray-400">Spoken phrase that begins capturing.</p>
+              </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium">Stop keyword</label>
-            <input
-              value={settings.stopKeyword}
-              onChange={(e) => setStopKeyword(e.target.value)}
-              placeholder="done"
-              className={inputCls}
-            />
-            <p className="mt-1 text-xs text-gray-400">Spoken phrase that stops and sends to Claude.</p>
-          </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Stop keyword</label>
+                <input
+                  value={settings.stopKeyword}
+                  onChange={(e) => setStopKeyword(e.target.value)}
+                  placeholder="done"
+                  className={inputCls}
+                />
+                <p className="mt-1 text-xs text-gray-400">Spoken phrase that stops and sends to Claude.</p>
+              </div>
 
-          <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
-            Keywords are case-insensitive and can be any word or short phrase.
-          </p>
+              <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
+                Keywords are case-insensitive and can be any word or short phrase.
+              </p>
+            </>
+          )}
 
           <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
             Your work days and sleep are now set from the <span className="font-medium">Work days</span> and{' '}

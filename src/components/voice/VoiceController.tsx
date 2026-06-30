@@ -9,6 +9,7 @@ import type {
 import { useApp } from '../../context/AppContext';
 import { VoiceProvider } from '../../context/VoiceContext';
 import { useVoiceSettings } from '../../hooks/useVoiceSettings';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { useSpeechRecognition, type StopReason } from '../../hooks/useSpeechRecognition';
 import {
   parseTranscript,
@@ -31,6 +32,7 @@ import {
 } from '../../lib/claudeActions';
 import SettingsDrawer from '../SettingsDrawer';
 import VoicePopup from './VoicePopup';
+import MicFab from './MicFab';
 
 const DRAFT_KEY = 'voiceDraft';
 const VALID_PRIORITIES: Priority[] = ['high', 'med', 'low'];
@@ -75,6 +77,7 @@ export default function VoiceController({
   const defaultCategory = cats[0]?.name ?? 'other';
 
   const { settings, setWorkShift } = useVoiceSettings();
+  const isMobile = useIsMobile();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [reviewing, setReviewing] = useState(false);
@@ -323,15 +326,19 @@ export default function VoiceController({
     startKeyword: settings.startKeyword,
     stopKeyword: settings.stopKeyword,
     onCaptureComplete: handleCaptureComplete,
+    // Mobile uses the tap-to-record FAB only — never the always-on listener.
+    keywordsEnabled: !isMobile,
   });
 
-  // Always-on keyword listener for the whole session (local only).
+  // Always-on keyword listener for the whole session (desktop only). On mobile
+  // the recognizer is started on demand by the corner mic button instead, so we
+  // never hold the mic open in the background.
   const { supported, startListening, stopListening } = speech;
   useEffect(() => {
-    if (!supported || !voiceEnabled) return;
+    if (!supported || !voiceEnabled || isMobile) return;
     startListening();
     return () => stopListening();
-  }, [supported, startListening, stopListening]);
+  }, [supported, isMobile, startListening, stopListening]);
 
   // Restore an in-progress review draft (survives reloads/tab switches).
   const restored = useRef(false);
@@ -543,6 +550,7 @@ export default function VoiceController({
           workShifts={workShifts}
           extras={extras}
           stopKeyword={settings.stopKeyword}
+          mobile={isMobile}
           onStop={speech.stopRecordingManual}
           onRetry={() => runParse(finalTranscript)}
           onChangeProposed={updateProposed}
@@ -555,6 +563,16 @@ export default function VoiceController({
           onChangeExtras={updateExtras}
           onReset={reset}
           onConfirm={addToList}
+        />
+      )}
+
+      {/* Mobile-only corner mic button (no always-on listener on mobile). Hidden
+          while the review panel is up; shown idle (start) and recording (stop). */}
+      {voiceEnabled && supported && isMobile && !reviewing && (
+        <MicFab
+          recording={speech.recording}
+          onStart={speech.startRecordingManual}
+          onStop={speech.stopRecordingManual}
         />
       )}
 

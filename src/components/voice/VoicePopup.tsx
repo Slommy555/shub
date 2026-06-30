@@ -24,6 +24,8 @@ interface Props {
   /** Habit/workout/weight/reminder sections from the app-wide actions pass. */
   extras: ReviewModel;
   stopKeyword: string;
+  /** Mobile uses tap-to-stop, so the "say [keyword]" hint is replaced. */
+  mobile?: boolean;
   onStop: () => void;
   onRetry: () => void;
   onChangeProposed: (id: string, patch: Partial<ProposedTask>) => void;
@@ -55,6 +57,7 @@ export default function VoicePopup(props: Props) {
     workShifts,
     extras,
     stopKeyword,
+    mobile,
   } = props;
 
   const confirmDisabled =
@@ -113,7 +116,7 @@ export default function VoicePopup(props: Props) {
             <>
               <VoiceTranscript text={transcript} live placeholder="Listening…" />
               <p className="text-center text-xs text-gray-400">
-                Say “{stopKeyword}” to finish
+                {mobile ? 'Tap the mic button to stop' : `Say “${stopKeyword}” to finish`}
               </p>
             </>
           ) : parsing ? (

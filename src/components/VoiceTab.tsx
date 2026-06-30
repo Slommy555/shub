@@ -1,4 +1,5 @@
 import { useVoice } from '../context/VoiceContext';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 /**
  * The Voice tab is now just a control surface — the keyword listener and the
@@ -7,6 +8,7 @@ import { useVoice } from '../context/VoiceContext';
  */
 export default function VoiceTab() {
   const voice = useVoice();
+  const isMobile = useIsMobile();
 
   if (!voice.enabled) {
     return (
@@ -56,18 +58,30 @@ export default function VoiceTab() {
           <MicIcon size={40} />
         </button>
         <p className="mt-5 text-base font-medium text-gray-700 dark:text-gray-200">
-          {busy ? 'Listening — see the popup' : `Say “${voice.startKeyword}” to begin recording`}
+          {busy
+            ? 'Listening — see the popup'
+            : isMobile
+              ? 'Tap to start recording'
+              : `Say “${voice.startKeyword}” to begin recording`}
         </p>
-        <p className="mt-1 text-sm text-gray-400">or tap the mic to start manually</p>
+        {!isMobile && <p className="mt-1 text-sm text-gray-400">or tap the mic to start manually</p>}
         {voice.error && <p className="mt-3 text-sm text-red-500">{voice.error}</p>}
 
         <div className="mt-8 max-w-sm rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-800/50 dark:text-gray-400">
           <p className="font-semibold text-gray-600 dark:text-gray-300">Works on every tab</p>
-          <p className="mt-1">
-            The keyword is always listening — say “{voice.startKeyword}” from any page and a popup
-            appears with your proposed tasks. Mention work shifts or events (like a hike) and they’ll
-            show up as time blocks in the Schedule view.
-          </p>
+          {isMobile ? (
+            <p className="mt-1">
+              Tap the mic button in the corner from any page to record, then review your proposed
+              tasks. Mention work shifts or events (like a hike) and they’ll show up as time blocks in
+              the Schedule view.
+            </p>
+          ) : (
+            <p className="mt-1">
+              The keyword is always listening — say “{voice.startKeyword}” from any page and a popup
+              appears with your proposed tasks. Mention work shifts or events (like a hike) and they’ll
+              show up as time blocks in the Schedule view.
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { watchUserPrefs } from '../lib/userPrefs';
 
 /** What the user picked. 'system' follows the OS setting. */
 export type ThemePref = 'light' | 'dark' | 'system';
@@ -91,22 +92,13 @@ export function useTheme(userId?: string | null) {
   }, [userId]);
 
   // Realtime: pick up changes made on another device while this one is open.
+  // watchUserPrefs also re-subscribes + reconciles when the tab regains focus,
+  // since mobile browsers drop the websocket when backgrounded.
   useEffect(() => {
     if (!userId) return;
-    const channel = supabase
-      .channel(`user_prefs-rt-${userId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'user_preferences', filter: `user_id=eq.${userId}` },
-        (payload) => {
-          const next = (payload.new as { theme?: unknown } | null)?.theme;
-          if (isThemePref(next)) setPref(next);
-        }
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return watchUserPrefs(userId, 'theme', (row) => {
+      if (isThemePref(row.theme)) setPref(row.theme);
+    });
   }, [userId]);
 
   /** Set an explicit preference: apply locally first, then sync to Supabase. */

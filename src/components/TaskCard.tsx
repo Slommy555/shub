@@ -112,7 +112,7 @@ export default function TaskCard({
         <button
           type="button"
           aria-label="Drag to reorder"
-          className="mt-0.5 cursor-grab touch-none px-1 py-1 text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-gray-600 dark:hover:text-gray-400"
+          className="mt-0.5 cursor-grab touch-none px-1 py-1 text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-gray-600 dark:hover:text-gray-400 max-sm:grid max-sm:h-11 max-sm:w-11 max-sm:place-items-center max-sm:px-0 max-sm:py-0"
           {...attributes}
           {...listeners}
         >
@@ -129,7 +129,7 @@ export default function TaskCard({
           checked={task.done}
           onChange={(e) => onUpdate(task.id, { done: e.target.checked })}
           aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
-          className="mt-1 h-5 w-5 shrink-0 cursor-pointer rounded-md border-gray-300 text-gray-600 focus:ring-gray-400/40 dark:border-gray-600 dark:bg-gray-800"
+          className="mt-1 h-5 w-5 shrink-0 cursor-pointer rounded-md border-gray-300 text-gray-600 focus:ring-gray-400/40 dark:border-gray-600 dark:bg-gray-800 max-sm:mt-0.5 max-sm:h-6 max-sm:w-6"
         />
 
         {/* Main content */}

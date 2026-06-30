@@ -26,7 +26,7 @@ function Shell({ userId }: { userId: string }) {
   const [tab, setTab] = useState<Tab>('todo');
   const [editing, setEditing] = useState<Task | null>(null);
   const { resolvedTheme, toggleTheme } = useTheme(userId);
-  const appearance = useAppearance();
+  const appearance = useAppearance(userId);
   const api = useTasks(userId);
   const categories = useCategories(userId);
   const { dueTasks, upcomingEvents, permission, requestPermission } = useReminders(api.tasks);

@@ -34,6 +34,14 @@ interface Options {
   /** Called with the cleaned transcript (keywords stripped) when capture ends. */
   onCaptureComplete: (finalText: string, reason: StopReason) => void;
   inactivityMs?: number;
+  /**
+   * Whether the always-on start/stop keyword detection runs. Defaults to true
+   * (desktop). On mobile this is false: there is no background listener — the
+   * recognizer only runs during an explicit tap-to-record session and is fully
+   * stopped + released the moment that session ends (tap, inactivity, the tab
+   * being hidden, or unmount), so the OS mic indicator can't get stuck on.
+   */
+  keywordsEnabled?: boolean;
 }
 
 /**
@@ -53,6 +61,10 @@ export function useSpeechRecognition(opts: Options) {
   const recordingRef = useRef(false);
   const finalRef = useRef(''); // accumulated final captured text
   const timerRef = useRef<number | null>(null);
+  // A directly-acquired mic stream, if we ever take one (we currently rely on
+  // SpeechRecognition's own stream). Released explicitly on every stop path so
+  // the mic indicator never lingers.
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const optsRef = useRef(opts);
   optsRef.current = opts;
 
@@ -60,6 +72,13 @@ export function useSpeechRecognition(opts: Options) {
     if (timerRef.current) {
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
+    }
+  };
+
+  const releaseMediaStream = () => {
+    if (mediaStreamRef.current) {
+      for (const track of mediaStreamRef.current.getTracks()) track.stop();
+      mediaStreamRef.current = null;
     }
   };
 
@@ -71,6 +90,17 @@ export function useSpeechRecognition(opts: Options) {
     const text = finalRef.current.trim();
     finalRef.current = '';
     setTranscript('');
+    // Mobile (no keyword listener): fully tear down so the mic is released. Use
+    // the graceful stop() — never abort() — and stop any directly-held stream.
+    if (optsRef.current.keywordsEnabled === false) {
+      activeRef.current = false;
+      try {
+        recRef.current?.stop();
+      } catch {
+        /* not running */
+      }
+      releaseMediaStream();
+    }
     optsRef.current.onCaptureComplete(text, reason);
   }, []);
 
@@ -98,6 +128,9 @@ export function useSpeechRecognition(opts: Options) {
   const handleResult = useCallback(
     (event: any) => {
       const { startKeyword, stopKeyword } = optsRef.current;
+      // Mobile: the recognizer only runs during a manual session, so start/stop
+      // keyword detection is disabled — we just accumulate the transcript.
+      const keywordsOn = optsRef.current.keywordsEnabled !== false;
       let interim = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -106,10 +139,10 @@ export function useSpeechRecognition(opts: Options) {
 
         if (result.isFinal) {
           if (!recordingRef.current) {
-            if (hasKeyword(chunk, startKeyword)) {
+            if (keywordsOn && hasKeyword(chunk, startKeyword)) {
               beginCapture(afterKeyword(chunk, startKeyword));
             }
-          } else if (hasKeyword(chunk, stopKeyword)) {
+          } else if (keywordsOn && hasKeyword(chunk, stopKeyword)) {
             const tail = beforeKeyword(chunk, stopKeyword);
             finalRef.current = `${finalRef.current} ${tail}`.trim();
             setTranscript(finalRef.current);
@@ -129,7 +162,7 @@ export function useSpeechRecognition(opts: Options) {
         // Detect the stop keyword in interim text too — the recognizer is often
         // slow to finalize (or ends the session) right as it's spoken, so relying
         // on final-only results can miss it entirely.
-        if (hasKeyword(interim, stopKeyword)) {
+        if (keywordsOn && hasKeyword(interim, stopKeyword)) {
           const tail = beforeKeyword(interim, stopKeyword);
           finalRef.current = `${finalRef.current} ${tail}`.trim();
           setTranscript(finalRef.current);
@@ -138,8 +171,8 @@ export function useSpeechRecognition(opts: Options) {
         }
         setTranscript(`${finalRef.current} ${interim}`.trim());
         if (interim) armInactivity();
-      } else if (interim && hasKeyword(interim, optsRef.current.startKeyword)) {
-        beginCapture(afterKeyword(interim, optsRef.current.startKeyword));
+      } else if (keywordsOn && interim && hasKeyword(interim, startKeyword)) {
+        beginCapture(afterKeyword(interim, startKeyword));
       }
     },
     [beginCapture, finishCapture, armInactivity]
@@ -196,6 +229,7 @@ export function useSpeechRecognition(opts: Options) {
     } catch {
       /* not running */
     }
+    releaseMediaStream();
   }, []);
 
   /** Start capturing immediately, without waiting for the keyword. */
@@ -212,6 +246,21 @@ export function useSpeechRecognition(opts: Options) {
 
   // Clean up on unmount.
   useEffect(() => () => stopListening(), [stopListening]);
+
+  // Mobile safeguard: if the tab is hidden mid-recording (app backgrounded,
+  // screen lock, tab switch), explicitly stop so the mic indicator can't stick.
+  // Desktop keeps its always-on listener, so this only applies when keywords
+  // are disabled.
+  useEffect(() => {
+    if (opts.keywordsEnabled !== false) return;
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden' && recordingRef.current) {
+        finishCapture('inactivity');
+      }
+    };
+    document.addEventListener('visibilitychange', onHidden);
+    return () => document.removeEventListener('visibilitychange', onHidden);
+  }, [opts.keywordsEnabled, finishCapture]);
 
   return {
     supported,
