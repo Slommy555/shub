@@ -1,0 +1,7 @@
+project_id = "cntmsrztqgejgavrsdfp"
+
+# Gateway-level JWT verification for the proxy (defense in depth: the function
+# also re-verifies the JWT and enforces the ALLOWED_EMAIL whitelist in code).
+# OPTIONS preflight requests are exempt from this check.
+[functions.anthropic-proxy]
+verify_jwt = true

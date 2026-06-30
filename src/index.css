@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+}
+
+/* Loading skeleton shimmer */
+.skeleton {
+  @apply relative overflow-hidden bg-gray-200 dark:bg-gray-800;
+}
+.skeleton::after {
+  content: '';
+  @apply absolute inset-0 -translate-x-full;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0.35) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: shimmer 1.4s infinite;
+}
+.dark .skeleton::after {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Horizontal scroll regions that should scroll without a visible scrollbar
+   (e.g. the muscle-group filter chips). */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Custom color theming. When the user enables custom colors (Settings →
+   Appearance), <html> gets data-theme-custom="on" and the CSS variables below
+   are set inline. These rules remap the app's common Tailwind color utilities
+   onto those variables so the whole UI recolors at once. Category/priority
+   accent colors (blue/red/etc.) are intentionally left untouched.
+--------------------------------------------------------------------------- */
+html[data-theme-custom] body {
+  background-color: var(--c-bg) !important;
+  color: var(--c-text) !important;
+}
+
+/* Page background (incl. the translucent panels used for unscheduled /
+   out-of-month areas, so they match the page). */
+html[data-theme-custom] [class~='bg-gray-50'],
+html[data-theme-custom] [class~='bg-gray-50/50'],
+html[data-theme-custom] [class~='bg-gray-50/60'],
+html[data-theme-custom] [class~='dark:bg-gray-950'],
+html[data-theme-custom] [class~='dark:bg-gray-950/60'],
+html[data-theme-custom] [class~='dark:bg-gray-900/40'],
+html[data-theme-custom] [class~='bg-gray-900/40'],
+html[data-theme-custom] [class~='bg-gray-950'] {
+  background-color: var(--c-bg) !important;
+}
+
+/* Foreground surfaces: cards, panels, inputs, popovers */
+html[data-theme-custom] [class~='bg-white'],
+html[data-theme-custom] [class~='dark:bg-gray-900'],
+html[data-theme-custom] [class~='bg-gray-900'],
+html[data-theme-custom] [class~='dark:bg-gray-950'][class~='bg-white'] {
+  background-color: var(--c-surface) !important;
+}
+
+/* Accent: primary buttons, active tabs, today badge, selected chips */
+html[data-theme-custom] [class~='bg-gray-800'],
+html[data-theme-custom] [class~='dark:bg-gray-200'],
+html[data-theme-custom] [class~='dark:bg-gray-100'] {
+  background-color: var(--c-accent) !important;
+}
+html[data-theme-custom] [class~='text-white'],
+html[data-theme-custom] [class~='dark:text-gray-900'] {
+  color: var(--c-accent-text) !important;
+}
+
+/* Primary text */
+html[data-theme-custom] [class~='text-gray-900'],
+html[data-theme-custom] [class~='text-gray-800'],
+html[data-theme-custom] [class~='text-gray-700'],
+html[data-theme-custom] [class~='dark:text-gray-100'],
+html[data-theme-custom] [class~='dark:text-gray-200'] {
+  color: var(--c-text) !important;
+}
+
+/* Muted / secondary text */
+html[data-theme-custom] [class~='text-gray-600'],
+html[data-theme-custom] [class~='text-gray-500'],
+html[data-theme-custom] [class~='text-gray-400'],
+html[data-theme-custom] [class~='dark:text-gray-300'],
+html[data-theme-custom] [class~='dark:text-gray-400'] {
+  color: var(--c-muted) !important;
+}
+
+/* Borders & dividers */
+html[data-theme-custom] [class~='border-gray-100'],
+html[data-theme-custom] [class~='border-gray-200'],
+html[data-theme-custom] [class~='border-gray-300'],
+html[data-theme-custom] [class~='dark:border-gray-700'],
+html[data-theme-custom] [class~='dark:border-gray-800'] {
+  border-color: var(--c-border) !important;
+}

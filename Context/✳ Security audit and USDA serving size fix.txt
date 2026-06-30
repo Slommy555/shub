@@ -1,0 +1,3277 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
+
+PS C:\Users\brand\Desktop\ToDo_Productivity> claude
+ ▐▛███▜▌   Claude Code v2.1.195
+▝▜█████▛▘  Opus 4.8 · Claude Pro
+  ▘▘ ▝▝    ~\Desktop\ToDo_Productivity
+
+
+❯ # Security Audit + USDA Serving Size Fix — Claude Code Prompt
+
+  Single prompt. Paste this into Claude Code in one go.
+
+  ---
+
+  ```
+  I need two things done in my React + Vite + Supabase app. Do them in order — complete the security audit first,
+  report findings, then do the USDA fix. Do not change any UI or functionality beyond what is described.
+
+  ===========================
+  PART 1 — SECURITY AUDIT
+  ===========================
+
+  Audit the codebase for exposed API keys and proxy configuration issues. Fix anything broken. Do not change any UIor
+  functionality.
+
+  --- CHECKS TO PERFORM ---
+
+  1. VITE_ KEY AUDIT
+     - Search the entire codebase for any references to VITE_ANTHROPIC_API_KEY or VITE_USDA_API_KEY
+     - If found anywhere in src/ or any frontend file: flag it and remove it
+     - These keys must not exist anywhere in the frontend bundle
+     - Check .env.local, .env, vite.config.ts, and all src/ files
+
+  2. ANTHROPIC PROXY VERIFICATION
+     - Confirm every Anthropic API call in the frontend goes through the Supabase Edge Function (anthropic-proxy)
+     - Check that the call includes the user's Supabase auth token in the Authorization header
+     - Confirm the Edge Function reads ANTHROPIC_API_KEY from Supabase secrets, not from any frontend env var
+     - If any direct browser-to-Anthropic calls exist: fix them to go through the proxy
+
+  3. USDA PROXY VERIFICATION
+     - Confirm every USDA API call in the frontend goes through the Supabase Edge Function (usda-proxy or usda-search)
+     - Check that the call includes the user's Supabase auth token
+     - Confirm the Edge Function reads USDA_API_KEY from Supabase secrets
+     - If any direct browser-to-USDA calls exist: fix them to go through the proxy
+
+  4. EDGE FUNCTION AUTH CHECK
+     - Confirm both Edge Functions verify the Supabase auth JWT before processing any request
+     - If auth check is missing or bypassable: fix it
+     - Unauthenticated requests must return 401 immediately
+
+  5. EMAIL WHITELIST CHECK
+     - Confirm the auth whitelist hook exists and is correctly blocking non-whitelisted emails
+     - Confirm it reads ALLOWED_EMAIL from Supabase secrets
+     - If missing or broken: fix it
+
+  6. CORS CHECK
+     - Confirm both Edge Functions have CORS headers restricting to the app's domain
+     - Confirm OPTIONS preflight requests are handled correctly
+
+  --- PART 1 OUTPUT ---
+  After auditing provide a clear report:
+    ✓ or ✗ for each of the 6 checks above
+    What was found and what was fixed for any ✗ items
+    Confirmation that no API keys exist in the f
+  ──── (93 lines hidden) ──────────────────────────────────────────────────────────────────────────────────────────────
+  eric preference and search branded normally
+
+  8. VOICE FLOW UPDATE
+  In the handleLogFood Claude action handler:
+    - When Claude describes a food (e.g. "two scrambled eggs"):
+        1. First: fuzzy match against saved_foods — if match found, use it directly
+        2. If no saved match: search USDA, apply ranking from step 7, use top ranked result
+        Fetch full food detail for the chosen result
+        Parse the quantity from Claude's description (e.g. 2)
+        Match to the closest portion in foodPortions (e.g. "1 large")
+        Use portion.gramWeight (not portion.amount) to calculate macros for that quantity
+        Show the review card pre-filled with "Scrambled Eggs — 2 large"
+        Show "From your foods" badge if it came from saved_foods
+        User can still adjust quantity and portion before confirming
+
+  9. FALLBACK
+    - If foodPortions is empty or all portions have missing/zero gramWeight: fall back to gram-based input
+    - Never use a portion with gramWeight of 0 or undefined
+
+  --- FILES TO UPDATE ---
+  src/lib/usda.ts — add getFoodDetail(fdcId), fix gramWeight usage, add result ranking logic
+  src/hooks/macros/useSavedFoods.ts — add fuzzy match lookup function
+  src/components/macros/ServingSizeSelector.tsx — rebuild to use portions dropdown + quantity input
+  src/components/macros/FoodReviewCard.tsx — update to show human readable serving + "From your foods" badge
+  src/components/macros/AddFoodModal.tsx — check saved foods before USDA, show generic results first
+  src/lib/claudeActions.ts — update handleLogFood to check saved foods first, use portion.gramWeight correctly
+
+  --- DO NOT CHANGE ---
+  - The USDA search flow beyond the ranking changes described
+  - The barcode scanner
+  - The food_log_entries Supabase table schema
+  - The security fixes applied in Part 1
+  - Any other part of the app
+
+  --- PART 2 OUTPUT ---
+  Confirm which files were changed and give a brief summary of what changed in each.
+  Confirm the rice example works: searching "white rice", selecting "1 cup" should show approximately 240 calories,53g
+  carbs, 4g protein, 0g fat.
+  Confirm that searching "chicken breast" returns a generic cooked entry at the top, not a branded one.
+  ```
+
+  ---
+
+  ## WHAT THIS CONFIRMS AFTER RUNNING
+
+  4. EDGE FUNCTION AUTH CHECK
+     - Confirm both Edge Functions verify the Supabase auth JWT before processing any request
+     - If auth check is missing or bypassable: fix it
+     - Unauthenticated requests must return 401 immediately
+
+  5. EMAIL WHITELIST CHECK
+     - Confirm the auth whitelist hook exists and is correctly blocking non-whitelisted emails
+     - Confirm it reads ALLOWED_EMAIL from Supabase secrets
+     - If missing or broken: fix it
+
+  6. CORS CHECK
+     - Confirm both Edge Functions have CORS headers restricting to the app's domain
+     - Confirm OPTIONS preflight requests are handled correctly
+
+  --- PART 1 OUTPUT ---
+  After auditing provide a clear report:
+    ✓ or ✗ for each of the 6 checks above
+    What was found and what was fixed for any ✗ items
+    Confirmation that no API keys exist in the f
+  ──── (93 lines hidden) ──────────────────────────────────────────────────────────────────────────────────────────
+  eric preference and search branded normally
+
+  8. VOICE FLOW UPDATE
+  In the handleLogFood Claude action handler:
+    - When Claude describes a food (e.g. "two scrambled eggs"):
+        1. First: fuzzy match against saved_foods — if match found, use it directly
+        2. If no saved match: search USDA, apply ranking from step 7, use top ranked result
+        Fetch full food detail for the chosen result
+        Parse the quantity from Claude's description (e.g. 2)
+        Match to the closest portion in foodPortions (e.g. "1 large")
+        Use portion.gramWeight (not portion.amount) to calculate macros for that quantity
+        Show the review card pre-filled with "Scrambled Eggs — 2 large"
+        Show "From your foods" badge if it came from saved_foods
+        User can still adjust quantity and portion before confirming
+
+  9. FALLBACK
+    - If foodPortions is empty or all portions have missing/zero gramWeight: fall back to gram-based input
+    - Never use a portion with gramWeight of 0 or undefined
+
+  --- FILES TO UPDATE ---
+  src/lib/usda.ts — add getFoodDetail(fdcId), fix gramWeight usage, add result ranking logic
+  src/hooks/macros/useSavedFoods.ts — add fuzzy match lookup function
+  src/components/macros/ServingSizeSelector.tsx — rebuild to use portions dropdown + quantity input
+  src/components/macros/FoodReviewCard.tsx — update to show human readable serving + "From your foods" badge
+  src/components/macros/AddFoodModal.tsx — check saved foods before USDA, show generic results first
+  src/lib/claudeActions.ts — update handleLogFood to check saved foods first, use portion.gramWeight correctly
+
+  --- DO NOT CHANGE ---
+  - The USDA search flow beyond the ranking changes described
+  - The barcode scanner
+  - The food_log_entries Supabase table schema
+  - The security fixes applied in Part 1
+  - Any other part of the app
+
+  --- PART 2 OUTPUT ---
+  Confirm which files were changed and give a brief summary of what changed in each.
+  Confirm the rice example works: searching "white rice", selecting "1 cup" should show approximately 240 calories,
+  53g carbs, 4g protein, 0g fat.
+  Confirm that searching "chicken breast" returns a generic cooked entry at the top, not a branded one.
+  ```
+
+  ---
+
+  ## WHAT THIS CONFIRMS AFTER RUNNING
+
+  Frontend .env.local contains ONLY:
+  ```
+  VITE_SUPABASE_URL=https://your-project.supabase.co
+  VITE_SUPABASE_ANON_KEY=your-anon-key
+  ```
+
+  Supabase secrets (server-side, encrypted):
+  ```
+  ANTHROPIC_API_KEY=your-key
+  USDA_API_KEY=your-key
+  ALLOWED_EMAIL=your-email
+  ```
+
+  No other keys anywhere in the codebase.
+
+
+
+● I'll start by exploring the codebase structure, then perform the security audit (Part 1) before the USDA fix (Part
+  2).
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+● Let me dig into the security-relevant files. Starting Part 1.
+
+  Searched for 1 pattern, read 5 files (ctrl+o to expand)
+
+● Now let me audit for VITE_ keys and direct API calls across the codebase.
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+● Frontend src/ only references Supabase vars — good. But the dist/ bundle matched the api_key pattern. Let me check
+  whether the built bundle contains leaked keys, and review the Edge Functions and usda.ts.
+
+  Searched for 1 pattern, read 3 files (ctrl+o to expand)
+
+● Let me verify the dist matches, check for the email whitelist hook, and look at the remaining Part 2 files.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Frontend is clean. Key findings forming: no in-code JWT check in Edge Functions, no email whitelist hook, wildcard
+  CORS, and a real leaked API key in Context/*.txt. Let me confirm the leaked key and read the auth + Part 2 files.
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+● Confirmed — a live Anthropic key and USDA key are sitting in plaintext in Context/✳ Show Sunday...txt. That's the
+  most serious finding. Auth allows any email to sign up via OTP/password, so without a whitelist anyone can
+  authenticate and burn the Anthropic key through the proxy.
+
+  Now I'll apply Part 1 hardening. Creating a shared auth/CORS helper for the Edge Functions:
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Create file
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Create file
+        Parse the quantity from Claude's description (e.g. 2)
+        Match to the closest portion in foodPortions (e.g. "1 large")
+        Use portion.gramWeight (not portion.amount) to calculate macros for that quantity
+        Show the review card pre-filled with "Scrambled Eggs — 2 large"
+        Show "From your foods" badge if it came from saved_foods
+        User can still adjust quantity and portion before confirming
+
+  9. FALLBACK
+    - If foodPortions is empty or all portions have missing/zero gramWeight: fall back to gram-based input
+    - Never use a portion with gramWeight of 0 or undefined
+
+  --- FILES TO UPDATE ---
+  src/lib/usda.ts — add getFoodDetail(fdcId), fix gramWeight usage, add result ranking logic
+  src/hooks/macros/useSavedFoods.ts — add fuzzy match lookup function
+  src/components/macros/ServingSizeSelector.tsx — rebuild to use portions dropdown + quantity input
+  src/components/macros/FoodReviewCard.tsx — update to show human readable serving + "From your foods" badge
+  src/components/macros/AddFoodModal.tsx — check saved foods before USDA, show generic results first
+  src/lib/claudeActions.ts — update handleLogFood to check saved foods first, use portion.gramWeight correctly
+
+  --- DO NOT CHANGE ---
+  - The USDA search flow beyond the ranking changes described
+  - The barcode scanner
+  - The food_log_entries Supabase table schema
+  - The security fixes applied in Part 1
+  - Any other part of the app
+
+  --- PART 2 OUTPUT ---
+  Confirm which files were changed and give a brief summary of what changed in each.
+  Confirm the rice example works: searching "white rice", selecting "1 cup" should show approximately 240 calories,
+  53g carbs, 4g protein, 0g fat.
+  Confirm that searching "chicken breast" returns a generic cooked entry at the top, not a branded one.
+  ```
+
+  ---
+
+  ## WHAT THIS CONFIRMS AFTER RUNNING
+
+  Frontend .env.local contains ONLY:
+  ```
+  VITE_SUPABASE_URL=https://your-project.supabase.co
+  VITE_SUPABASE_ANON_KEY=your-anon-key
+  ```
+
+  Supabase secrets (server-side, encrypted):
+  ```
+  ANTHROPIC_API_KEY=your-key
+  USDA_API_KEY=your-key
+  ALLOWED_EMAIL=your-email
+  ```
+
+  No other keys anywhere in the codebase.
+
+
+
+● I'll start by exploring the codebase structure, then perform the security audit (Part 1) before the USDA fix (Part
+  2).
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+● Let me dig into the security-relevant files. Starting Part 1.
+
+  Searched for 1 pattern, read 5 files (ctrl+o to expand)
+
+● Now let me audit for VITE_ keys and direct API calls across the codebase.
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+● Frontend src/ only references Supabase vars — good. But the dist/ bundle matched the api_key pattern. Let me check
+  whether the built bundle contains leaked keys, and review the Edge Functions and usda.ts.
+
+  Searched for 1 pattern, read 3 files (ctrl+o to expand)
+
+● Let me verify the dist matches, check for the email whitelist hook, and look at the remaining Part 2 files.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Frontend is clean. Key findings forming: no in-code JWT check in Edge Functions, no email whitelist hook, wildcard
+  CORS, and a real leaked API key in Context/*.txt. Let me confirm the leaked key and read the auth + Part 2 files.
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+● Confirmed — a live Anthropic key and USDA key are sitting in plaintext in Context/✳ Show Sunday...txt. That's the
+  most serious finding. Auth allows any email to sign up via OTP/password, so without a whitelist anyone can
+  authenticate and burn the Anthropic key through the proxy.
+
+  Now I'll apply Part 1 hardening. Creating a shared auth/CORS helper for the Edge Functions:
+
+● Write(supabase\functions\_shared\auth.ts)
+  ⎿  Wrote 86 lines to supabase\functions\_shared\auth.ts
+       1 // Shared auth + CORS helpers for the Edge Functions.
+       2 //
+       3 // Every proxied call (Anthropic, USDA) spends a paid, server-side key, so each
+       4 // function must independently:
+       5 //   1. Verify the caller presents a valid Supabase session JWT (else 401).
+       6 //   2. Confirm the authenticated email is the single allowed user (else 403).
+       7 //   3. Only answer requests from the app's own origin(s) (CORS allowlist).
+       8 //
+       9 // Do NOT rely on the platform's implicit `verify_jwt` gateway alone — a single
+      10 // `--no-verify-jwt` deploy would otherwise leave the key wide open to abuse.
+     … +76 lines (ctrl+o to expand)
+
+● Now rewrite both Edge Functions to use the shared auth + restricted CORS:
+
+● Write(supabase\functions\anthropic-proxy\index.ts)
+  ⎿  Added 16 lines, removed 20 lines
+       1  // Supabase Edge Function: anthropic-proxy
+       2  //
+       3  // Proxies a Messages API call to Anthropic so the API key stays server-side.
+       4 -// Requires a valid Supabase JWT (the client invokes it with the user's session,
+       5 -// so anonymous callers are rejected by the platform's default JWT check).
+       4 +// Each request is independently authenticated: a valid Supabase JWT is required
+       5 +// (401 otherwise) AND the authenticated email must match ALLOWED_EMAIL (403
+       6 +// otherwise). CORS is restricted to the app's own origin(s).
+       7  //
+       8  // Deploy:
+       9  //   supabase functions deploy anthropic-proxy
+      10  //   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+      11 +//   supabase secrets set ALLOWED_EMAIL=you@example.com
+      12 +//   supabase secrets set ALLOWED_ORIGIN=https://your-app.vercel.app,http://localhost:5173
+      13  //
+      14  // Body: { system: string, messages: {role,content}[], model?: string, max_tokens?: number }
+      15  // Returns: the raw Anthropic Messages response JSON.
+      16
+      14 -const corsHeaders = {
+      15 -  'Access-Control-Allow-Origin': '*',
+      16 -  'Access-Control-Allow-Headers':
+      17 -    'authorization, x-client-info, apikey, content-type',
+      18 -  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      19 -};
+      17 +import { corsHeaders, json, requireAllowedUser } from '../_shared/auth.ts';
+      18
+      19  const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+      20  const DEFAULT_MODEL = 'claude-sonnet-4-6';
+      21
+      22  Deno.serve(async (req: Request) => {
+      23    if (req.method === 'OPTIONS') {
+      26 -    return new Response('ok', { headers: corsHeaders });
+      24 +    return new Response('ok', { headers: corsHeaders(req) });
+      25    }
+      26
+      27 +  // Reject anyone who isn't the authenticated, whitelisted user before doing
+      28 +  // anything that could spend the API key.
+      29 +  const auth = await requireAllowedUser(req);
+      30 +  if (!auth.ok) return auth.response;
+      31 +
+      32    if (!ANTHROPIC_API_KEY) {
+      30 -    return json({ error: 'ANTHROPIC_API_KEY secret is not set.' }, 500);
+      33 +    return json(req, { error: 'ANTHROPIC_API_KEY secret is not set.' }, 500);
+      34    }
+      35
+      36    try {
+      37      const { system, messages, model, max_tokens } = await req.json();
+      38      if (!Array.isArray(messages)) {
+      36 -      return json({ error: 'messages array is required.' }, 400);
+      39 +      return json(req, { error: 'messages array is required.' }, 400);
+      40      }
+      41
+      42      const res = await fetch('https://api.anthropic.com/v1/messages', {
+     ...
+      55      });
+      56
+      57      const data = await res.json();
+      55 -    return json(data, res.status);
+      58 +    return json(req, data, res.status);
+      59    } catch (err) {
+      57 -    return json({ error: err instanceof Error ? err.message : 'Proxy error' }, 500);
+      60 +    return json(req, { error: err instanceof Error ? err.message : 'Proxy error' }, 500);
+      61    }
+      62  });
+      60 -
+      61 -function json(body: unknown, status: number): Response {
+      62 -  return new Response(JSON.stringify(body), {
+      63 -    status,
+      64 -    headers: { ...corsHeaders, 'content-type': 'application/json' },
+      65 -  });
+      66 -}
+
+● Write(supabase\functions\usda-search\index.ts)
+  ⎿  Added 31 lines, removed 22 lines
+       1  // Supabase Edge Function: usda-search
+       2  //
+       3 -// Proxies a FoodData Central search so the USDA key stays server-side.
+       3 +// Proxies a FoodData Central search/detail call so the USDA key stays
+       4 +// server-side. Each request is independently authenticated: a valid Supabase
+       5 +// JWT is required (401 otherwise) AND the authenticated email must match
+       6 +// ALLOWED_EMAIL (403 otherwise). CORS is restricted to the app's own origin(s).
+       7  //
+       8  // Deploy:
+       9  //   supabase functions deploy usda-search
+      10  //   supabase secrets set USDA_API_KEY=...
+      11 +//   supabase secrets set ALLOWED_EMAIL=you@example.com
+      12 +//   supabase secrets set ALLOWED_ORIGIN=https://your-app.vercel.app,http://localhost:5173
+      13  //
+       9 -// Body: { query: string, pageSize?: number }
+      10 -// Returns: the raw USDA /foods/search response JSON.
+      14 +// Body: either
+      15 +//   { query: string, pageSize?: number }   → /foods/search
+      16 +//   { fdcId: number | string }              → /food/{fdcId} (full detail)
+      17 +// Returns: the raw USDA response JSON.
+      18
+      12 -const corsHeaders = {
+      13 -  'Access-Control-Allow-Origin': '*',
+      14 -  'Access-Control-Allow-Headers':
+      15 -    'authorization, x-client-info, apikey, content-type',
+      16 -  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      17 -};
+      19 +import { corsHeaders, json, requireAllowedUser } from '../_shared/auth.ts';
+      20
+      21  const USDA_API_KEY = Deno.env.get('USDA_API_KEY');
+      22
+      23  Deno.serve(async (req: Request) => {
+      24    if (req.method === 'OPTIONS') {
+      23 -    return new Response('ok', { headers: corsHeaders });
+      25 +    return new Response('ok', { headers: corsHeaders(req) });
+      26    }
+      27
+      28 +  const auth = await requireAllowedUser(req);
+      29 +  if (!auth.ok) return auth.response;
+      30 +
+      31    if (!USDA_API_KEY) {
+      27 -    return json({ error: 'USDA_API_KEY secret is not set.' }, 500);
+      32 +    return json(req, { error: 'USDA_API_KEY secret is not set.' }, 500);
+      33    }
+      34
+      35    try {
+      31 -    const { query, pageSize } = await req.json();
+      36 +    const { query, pageSize, fdcId } = await req.json();
+      37 +
+      38 +    // Full-detail lookup by FDC id (foodPortions + foodNutrients).
+      39 +    if (fdcId != null && fdcId !== '') {
+      40 +      const id = encodeURIComponent(String(fdcId));
+      41 +      const res = await fetch(
+      42 +        `https://api.nal.usda.gov/fdc/v1/food/${id}?api_key=${USDA_API_KEY}`
+      43 +      );
+      44 +      const data = await res.json();
+      45 +      return json(req, data, res.status);
+      46 +    }
+      47 +
+      48      if (!query || typeof query !== 'string') {
+      33 -      return json({ error: 'query string is required.' }, 400);
+      49 +      return json(req, { error: 'query string or fdcId is required.' }, 400);
+      50      }
+      51
+      52      const url =
+     ...
+      55
+      56      const res = await fetch(url);
+      57      const data = await res.json();
+      42 -    return json(data, res.status);
+      58 +    return json(req, data, res.status);
+      59    } catch (err) {
+      44 -    return json({ error: err instanceof Error ? err.message : 'Proxy error' }, 500);
+      60 +    return json(req, { error: err instanceof Error ? err.message : 'Proxy error' }, 500);
+      61    }
+      62  });
+      47 -
+      48 -function json(body: unknown, status: number): Response {
+      49 -  return new Response(JSON.stringify(body), {
+      50 -    status,
+      51 -    headers: { ...corsHeaders, 'content-type': 'application/json' },
+      52 -  });
+      53 -}
+
+● The in-code check now covers both functions. Let me also pin verify_jwt at the gateway for defense-in-depth.
+  Checking the linked project ref:
+
+  Read 1 file (ctrl+o to expand)
+
+● Bash(ls supabase/ ; echo "---"; test -f supabase/config.toml && echo "config exists" || echo "no config.toml")
+  ⎿  functions
+     migrations
+     ---
+     no config.toml
+
+● Write(supabase\config.toml)
+  ⎿  Wrote 10 lines to supabase\config.toml
+       1 project_id = "cntmsrztqgejgavrsdfp"
+       2
+       3 # Gateway-level JWT verification for both proxies (defense in depth: each
+       4 # function also re-verifies the JWT and enforces the ALLOWED_EMAIL whitelist
+       5 # in code). OPTIONS preflight requests are exempt from this check.
+       6 [functions.anthropic-proxy]
+       7 verify_jwt = true
+       8
+       9 [functions.usda-search]
+      10 verify_jwt = true
+
+● Now scrubbing the live secrets from the Context/ transcript (rotation is still mandatory — redaction doesn't
+  un-leak them):
+
+● Bash(cd "C:/Users/brand/Desktop/ToDo_Productivity"
+      f="Context/✳ Show Sunday in weekly calendar view.txt"…)
+  ⎿  === remaining live-key matches (should be none) ===
+     0
+  ⎿  Allowed by auto mode classifier
+
+● Part 1 fixes are in. Let me do a final verification that no frontend code makes direct external API calls, then
+  I'll report.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● All frontend external calls route through the Edge Function proxies. Here's the Part 1 report.
+
+  ---
+  PART 1 — SECURITY AUDIT REPORT
+
+  ┌─────┬───────────────────────────────────────────────────────┬───────────────────────────────────────────────┐
+  │  #  │                         Check                         │                    Result                     │
+  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────────┤
+  │ 1   │ No VITE_ API keys in frontend bundle                  │ ⚠️ PASS (frontend) + CRITICAL leak found      │
+  │     │                                                       │ elsewhere                                     │
+  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────────┤
+  │ 2   │ Anthropic calls go through anthropic-proxy, key       │ ✓ PASS                                        │
+  │     │ server-side                                           │                                               │
+  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────────┤
+  │ 3   │ USDA calls go through usda-search, key server-side    │ ✓ PASS                                        │
+  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────────┤
+  │ 4   │ Edge Functions verify JWT (401 if unauthenticated)    │ ✗ → FIXED                                     │
+  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────────┤
+  │ 5   │ Email whitelist reads ALLOWED_EMAIL                   │ ✗ → FIXED                                     │
+  ├─────┼───────────────────────────────────────────────────────┼───────────────────────────────────────────────┤
+  │ 6   │ CORS restricted to app domain, OPTIONS handled        │ ✗ → FIXED                                     │
+  └─────┴───────────────────────────────────────────────────────┴───────────────────────────────────────────────┘
+
+  1 — VITE_ key audit ⚠️
+
+  - src/, .env.local, .env.example, and vite.config.ts contain only VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY —
+  both safe to ship (RLS-protected). The built dist/ bundle has no API keys, no api.anthropic.com/api.nal.usda.gov
+  URLs. Frontend is clean.
+  - 🚨 CRITICAL: a live Anthropic key (sk-ant-api03-oc236…) and a live USDA key (4Vaw3…) were sitting in plaintext
+  in Context/✳ Show Sunday in weekly calendar view.txt (an old Claude Code transcript). I redacted them in the file,
+  but redaction does not un-leak a key that's been written to disk.
+    - You must rotate the Anthropic key now at console.anthropic.com → API Keys → revoke …7hwBCgAA, issue a new one,
+  set it as the ANTHROPIC_API_KEY Supabase secret.
+    - Rotate the USDA key too (free re-signup) and update the USDA_API_KEY secret.
+    - Also: Pass.txt contains a plaintext password (Riggerboydogger2006) in the repo — remove it and change that
+  password if it's reused anywhere.
+
+  2 & 3 — Proxy verification ✓
+
+  src/lib/anthropic.ts → supabase.functions.invoke('anthropic-proxy'); src/lib/usda.ts →
+  supabase.functions.invoke('usda-search'). functions.invoke auto-attaches the user's session JWT in the
+  Authorization header. Both Edge Functions read their key from Deno.env secrets. No direct browser→Anthropic or
+  browser→USDA calls exist.
+
+  4 — Edge Function auth ✗→FIXED
+
+  Before, both functions relied only on Supabase's implicit gateway verify_jwt — no in-code check, and one
+  --no-verify-jwt deploy would expose the paid key. Added supabase/functions/_shared/auth.ts::requireAllowedUser()
+  which reads the bearer token, calls auth.getUser(token), and returns 401 immediately on a missing/invalid/expired
+  token, before any key is spent. Also added supabase/config.toml pinning verify_jwt = true for both (defense in
+  depth).
+
+  5 — Email whitelist ✗→FIXED
+
+  No whitelist existed — any email could sign up (OTP/password) and then drive the Anthropic proxy on your dime. The
+  shared helper now reads ALLOWED_EMAIL from secrets and returns 403 unless the authenticated email matches.
+  Enforced at the proxy layer (where money is spent).
+  - Note: this blocks API abuse, not UI signup itself. App data is already isolated by RLS, so a stray signup sees
+  only their own empty account. If you also want to block account creation at the source, I can add a Supabase
+  "before-user-created" Auth Hook (needs a one-time dashboard wiring) — say the word.
+
+  6 — CORS ✗→FIXED
+
+  Both functions used Access-Control-Allow-Origin: '*'. Now locked to an ALLOWED_ORIGIN allowlist (with Vary:
+  Origin), OPTIONS preflight still returns 200 with the scoped headers.
+
+  ⚠️ Required deploy steps (production breaks without these)
+
+  supabase secrets set ALLOWED_EMAIL=tracidyann@gmail.com
+  supabase secrets set ALLOWED_ORIGIN=https://YOUR-APP.vercel.app,http://localhost:5173
+  supabase secrets set ANTHROPIC_API_KEY=<new-rotated-key>
+  supabase secrets set USDA_API_KEY=<new-rotated-key>
+  supabase functions deploy anthropic-proxy
+  supabase functions deploy usda-search
+  After fixes, no API keys exist in the frontend bundle — confirmed by grep over src/ and dist/.
+
+  ---
+  Now proceeding to Part 2. Let me read the remaining files I'll be editing.
+
+  Read 3 files (ctrl+o to expand)
+
+● Let me read the rest of the Part 2 files before making changes.
+
+  Read 7 files (ctrl+o to expand)
+
+● Now I have the full picture of the voice and search flows. Let me read how logged entries are displayed and wired
+  so my serving-size changes render cleanly.
+
+  Read 2 files (ctrl+o to expand)
+
+● I now have the complete picture. This is a large, interconnected refactor. Let me implement Part 2 methodically,
+  starting with the data layer.
+
+  1. Types — add FoodPortion and extend FoodChoice:
+
+● Update(src\types\macros.ts)
+  ⎿  Added 15 lines
+       92    grams: number; // grams in one of `unit`
+       93  }
+       94
+       95 +/**
+       96 + * A real USDA household measure pulled from a food's `foodPortions` array
+       97 + * (food-detail endpoint). `gramWeight` is the mass of the displayed `amount`
+       98 + * of this portion (e.g. amount 1, label "1 cup", gramWeight 186). Macro math
+       99 + * MUST use `gramWeight` — never `amount`.
+      100 + */
+      101 +export interface FoodPortion {
+      102 +  /** Human-readable label, e.g. "1 large egg", "1 cup", "1 oz". */
+      103 +  label: string;
+      104 +  /** Grams in this portion (the actual mass — use this for macros). */
+      105 +  gramWeight: number;
+      106 +  /** USDA display amount (usually 1). For display only, never for macro math. */
+      107 +  amount: number;
+      108 +}
+      109 +
+      110  export const DEFAULT_TARGETS: Macros = {
+      111    calories: 2000,
+      112    protein_g: 150,
+
+● Update(src\types\macros.ts)
+  ⎿  Added 7 lines
+      84     * parsed from USDA. Lets the user log by the count unit, not just grams.
+      85     */
+      86    household?: HouseholdServing | null;
+      87 +  /**
+      88 +   * Real USDA household measures (from the food-detail `foodPortions`). When
+      89 +   * present, the serving selector offers these instead of raw grams, and
+      90 +   * `per_serving` MUST be per-100g (base_serving_size 100, base_serving_unit
+      91 +   * 'g') so a portion's `gramWeight` scales correctly.
+      92 +   */
+      93 +  portions?: FoodPortion[];
+      94  }
+      95
+      96  /** A food's natural unit and how many grams one of it weighs. */
+
+● 2. usda.ts — add dataType, result ranking, getFoodDetail, and portion building:
+
+● Update(src\lib\usda.ts)
+  ⎿  Added 8 lines, removed 1 line
+       5  // browser bundle. The function requires the user's Supabase session JWT, which
+       6  // supabase-js attaches to functions.invoke automatically.
+       7
+       8 -import type { FoodChoice, HouseholdServing, Macros } from '../types/macros';
+       8 +import type { FoodChoice, FoodPortion, HouseholdServing, Macros } from '../types/macros';
+       9  import { supabase } from './supabase';
+      10
+      11  /** USDA search is available whenever the app runs (the proxy holds the key). */
+     ...
+      23    servingSizeUnit: string | null;
+      24    /** Natural unit (e.g. "slice" = 28 g) parsed from the label, when available. */
+      25    household: HouseholdServing | null;
+      26 +  /** USDA data source: "Foundation", "SR Legacy", "Survey (FNDDS)", "Branded". */
+      27 +  dataType: string | null;
+      28  }
+      29
+      30 +/** A USDA food with its real household measures (from the food-detail endpoint). */
+      31 +export interface UsdaFoodDetail extends UsdaFood {
+      32 +  portions: FoodPortion[];
+      33 +}
+      34 +
+      35  // FDC nutrient ids for the four macros we track.
+      36  const NUTRIENT = { calories: 1008, protein: 1003, fat: 1004, carbs: 1005 } as const;
+      37
+
+● Update(src\lib\usda.ts)
+  ⎿  Added 24 lines
+      49    brandName?: string;
+      50    brandOwner?: string;
+      51    gtinUpc?: string;
+      52 +  dataType?: string;
+      53    servingSize?: number;
+      54    servingSizeUnit?: string;
+      55    householdServingFullText?: string;
+      56    foodNutrients?: RawNutrient[];
+      57  }
+      58
+      59 +/** A USDA `foodPortions` entry from the food-detail endpoint. */
+      60 +interface RawFoodPortion {
+      61 +  amount?: number;
+      62 +  gramWeight?: number;
+      63 +  modifier?: string;
+      64 +  portionDescription?: string;
+      65 +  measureUnit?: { name?: string; abbreviation?: string };
+      66 +}
+      67 +
+      68 +/**
+      69 + * Food-detail nutrients are nested differently from search results:
+      70 + * `{ nutrient: { id, number, unitName }, amount }`.
+      71 + */
+      72 +interface RawDetailNutrient {
+      73 +  nutrient?: { id?: number; number?: string; name?: string; unitName?: string };
+      74 +  amount?: number;
+      75 +}
+      76 +
+      77 +interface RawFoodDetail extends RawFood {
+      78 +  foodPortions?: RawFoodPortion[];
+      79 +  foodNutrients?: (RawNutrient & RawDetailNutrient)[];
+      80 +}
+      81 +
+      82  // Mass/volume words that aren't "household" units (we already handle g/oz).
+      83  const NON_HOUSEHOLD = /^(g|gram|grams|grm|oz|ounce|ounces|ml|milliliter|milliliters|l|liter|liters|
+          kg)$/;
+      84
+
+● Now add dataType to normalize, then add ranking + detail logic:
+
+● Update(src\lib\usda.ts)
+  ⎿  Added 64 lines
+      134      servingSize,
+      135      servingSizeUnit: food.servingSizeUnit ?? null,
+      136      household: parseHousehold(food.householdServingFullText, servingGrams),
+      137 +    dataType: food.dataType ?? null,
+      138    };
+      139  }
+      140
+      141 +// --- Result ranking ----------------------------------------------------------
+      142 +
+      143 +const GENERIC_TYPES = new Set(['Foundation', 'SR Legacy', 'Survey (FNDDS)']);
+      144 +
+      145 +/** True when a USDA result is a branded product (vs. a generic/reference food). */
+      146 +function isBranded(f: UsdaFood): boolean {
+      147 +  return f.dataType === 'Branded' || !!f.brand;
+      148 +}
+      149 +
+      150  /**
+      151 + * Is the user's query asking for a specific brand? True when any result's brand
+      152 + * name (or a significant brand word) appears in the query string — e.g.
+      153 + * "Chobani yogurt" matches the "Chobani" brand, so branded results are wanted.
+      154 + */
+      155 +function isBrandedQuery(query: string, results: UsdaFood[]): boolean {
+      156 +  const q = query.toLowerCase();
+      157 +  for (const f of results) {
+      158 +    const brand = (f.brand ?? '').toLowerCase();
+      159 +    if (!brand) continue;
+      160 +    for (const word of brand.split(/[\s,.-]+/)) {
+      161 +      if (word.length >= 3 && q.includes(word)) return true;
+      162 +    }
+      163 +  }
+      164 +  return false;
+      165 +}
+      166 +
+      167 +/** Higher is better: generic > branded, cooked > raw (unless "raw" was asked). */
+      168 +function rankScore(f: UsdaFood, query: string): number {
+      169 +  let s = 0;
+      170 +  if (f.dataType === 'Foundation') s += 100;
+      171 +  else if (f.dataType === 'SR Legacy') s += 90;
+      172 +  else if (f.dataType === 'Survey (FNDDS)') s += 60;
+      173 +  else if (f.dataType === 'Branded') s -= 50;
+      174 +  if (f.brand) s -= 20;
+      175 +
+      176 +  const desc = f.description.toLowerCase();
+      177 +  const wantsRaw = /\braw\b/.test(query.toLowerCase());
+      178 +  const isCooked = /\b(cook|cooked|roasted|grilled|baked|boiled|broiled|prepared)\b/.test(desc);
+      179 +  const isRaw = /\braw\b/.test(desc);
+      180 +  if (wantsRaw) {
+      181 +    if (isRaw) s += 25;
+      182 +  } else {
+      183 +    if (isCooked) s += 20;
+      184 +    if (isRaw) s -= 15;
+      185 +  }
+      186 +  return s;
+      187 +}
+      188 +
+      189 +/**
+      190 + * Rank + filter USDA search results per the product rules:
+      191 + *  - exclude branded items entirely unless the query names a brand;
+      192 + *  - prefer Foundation / SR Legacy (generic) over Branded;
+      193 + *  - prefer cooked/prepared over raw unless the user said "raw".
+      194 + * Falls back to the unfiltered set if filtering would remove everything.
+      195 + */
+      196 +export function rankUsdaResults(results: UsdaFood[], query: string): UsdaFood[] {
+      197 +  if (results.length === 0) return results;
+      198 +  const branded = isBrandedQuery(query, results);
+      199 +  const pool = branded ? results : results.filter((f) => !isBranded(f));
+      200 +  const base = pool.length > 0 ? pool : results;
+      201 +  return [...base].sort((a, b) => rankScore(b, query) - rankScore(a, query));
+      202 +}
+      203 +
+      204 +/**
+      205   * The serving size + unit to pre-fill for a food: one household unit when the
+      206   * food has one (e.g. "1 slice"), otherwise the label serving in grams (or 100 g).
+      207   */
+
+● Now wire ranking into the search functions and add getFoodDetail:
+
+● Update(src\lib\usda.ts)
+  ⎿  Added 104 lines, removed 6 lines
+      268    return ((data as { foods?: RawFood[] })?.foods ?? []).map(normalize);
+      269  }
+      270
+      271 -/** Search foods by name/keywords (used by the Search tab). */
+      272 -export function searchFoods(query: string, pageSize = 20): Promise<UsdaFood[]> {
+      273 -  return search(query, pageSize);
+      271 +/** Search foods by name/keywords (used by the Search tab), generic-first. */
+      272 +export async function searchFoods(query: string, pageSize = 20): Promise<UsdaFood[]> {
+      273 +  return rankUsdaResults(await search(query, pageSize), query);
+      274  }
+      275
+      276  /**
+      277   * Search foods for the voice food-logging flow. Shares the same Edge Function
+      278   * search path as the macro tracker, so it works wherever the rest of the app
+      279 - * does.
+      279 + * does. Ranked generic-first like the manual search.
+      280   */
+      281 -export function searchFoodsForVoice(query: string, pageSize = 5): Promise<UsdaFood[]> {
+      282 -  return search(query, pageSize);
+      281 +export async function searchFoodsForVoice(query: string, pageSize = 5): Promise<UsdaFood[]> {
+      282 +  // Pull a few extra so ranking has room to surface a generic entry, then trim.
+      283 +  return rankUsdaResults(await search(query, Math.max(pageSize, 8)), query).slice(0, pageSize);
+      284  }
+      285
+      286 +// --- Food detail (real household portions) -----------------------------------
+      287 +
+      288 +function detailNutrientValue(nutrients: (RawNutrient & RawDetailNutrient)[], id: number): number {
+      289 +  const hit = nutrients.find(
+      290 +    (n) =>
+      291 +      n.nutrient?.id === id ||
+      292 +      n.nutrient?.number === String(id) ||
+      293 +      n.nutrientId === id ||
+      294 +      n.nutrientNumber === String(id)
+      295 +  );
+      296 +  // Detail shape carries the value in `amount`; search shape in `value`.
+      297 +  const v = hit?.amount ?? hit?.value;
+      298 +  return typeof v === 'number' ? v : 0;
+      299 +}
+      300 +
+      301 +/** Strip a leading "1 " from a portion description ("1 cup" → "cup"). */
+      302 +function buildPortionLabel(p: RawFoodPortion): string {
+      303 +  const desc = (p.portionDescription ?? '').trim();
+      304 +  const unitName = p.measureUnit?.name && p.measureUnit.name !== 'undetermined'
+      305 +    ? p.measureUnit.name.trim()
+      306 +    : '';
+      307 +  const amount = p.amount && p.amount > 0 ? p.amount : 1;
+      308 +  // Prefer USDA's own description; otherwise compose amount + modifier.
+      309 +  let base = desc || `${amount}${p.modifier ? ` ${p.modifier}` : ''}`.trim();
+      310 +  if (unitName && !base.toLowerCase().includes(unitName.toLowerCase())) {
+      311 +    base = `${base} ${unitName}`.trim();
+      312 +  }
+      313 +  return base || 'serving';
+      314 +}
+      315 +
+      316 +/**
+      317 + * Fetch a food's full detail and return per-100g macros plus its real household
+      318 + * portions (only those with a usable gramWeight). Returns null if not found.
+      319 + */
+      320 +export async function getFoodDetail(fdcId: number | string): Promise<UsdaFoodDetail | null> {
+      321 +  const { data, error } = await supabase.functions.invoke('usda-search', {
+      322 +    body: { fdcId },
+      323 +  });
+      324 +  if (error) {
+      325 +    throw new Error(
+      326 +      `USDA detail request failed: ${error.message}. ` +
+      327 +        'Ensure the usda-search Edge Function is deployed with the USDA_API_KEY secret set.'
+      328 +    );
+      329 +  }
+      330 +  const food = data as RawFoodDetail | null;
+      331 +  if (!food || typeof food.fdcId !== 'number') return null;
+      332 +
+      333 +  const nutrients = food.foodNutrients ?? [];
+      334 +  const servingSize =
+      335 +    typeof food.servingSize === 'number' && food.servingSize > 0 ? food.servingSize : null;
+      336 +
+      337 +  const portions: FoodPortion[] = (food.foodPortions ?? [])
+      338 +    .filter((p) => typeof p.gramWeight === 'number' && p.gramWeight > 0)
+      339 +    .map((p) => ({
+      340 +      label: buildPortionLabel(p),
+      341 +      gramWeight: p.gramWeight as number,
+      342 +      amount: p.amount && p.amount > 0 ? p.amount : 1,
+      343 +    }));
+      344 +
+      345 +  return {
+      346 +    fdcId: food.fdcId,
+      347 +    description: food.description ?? 'Unknown food',
+      348 +    brand: food.brandName || food.brandOwner || null,
+      349 +    barcode: food.gtinUpc ? food.gtinUpc.trim() : null,
+      350 +    per100g: {
+      351 +      calories: detailNutrientValue(nutrients, NUTRIENT.calories),
+      352 +      protein_g: detailNutrientValue(nutrients, NUTRIENT.protein),
+      353 +      carbs_g: detailNutrientValue(nutrients, NUTRIENT.carbs),
+      354 +      fat_g: detailNutrientValue(nutrients, NUTRIENT.fat),
+      355 +    },
+      356 +    servingSize,
+      357 +    servingSizeUnit: food.servingSizeUnit ?? null,
+      358 +    household: parseHousehold(food.householdServingFullText, servingSize),
+      359 +    dataType: food.dataType ?? null,
+      360 +    portions,
+      361 +  };
+      362 +}
+      363 +
+      364 +/**
+      365 + * Build a FoodChoice from a detailed USDA food. `per_serving` is per-100g and
+      366 + * `portions` carries the real household measures, so the serving selector can
+      367 + * scale any portion by its gramWeight.
+      368 + */
+      369 +export function usdaDetailToFoodChoice(d: UsdaFoodDetail): FoodChoice {
+      370 +  return {
+      371 +    food_name: d.description,
+      372 +    brand: d.brand,
+      373 +    base_serving_size: 100,
+      374 +    base_serving_unit: 'g',
+      375 +    per_serving: { ...d.per100g },
+      376 +    usda_fdc_id: String(d.fdcId),
+      377 +    barcode: d.barcode,
+      378 +    household: d.household,
+      379 +    portions: d.portions,
+      380 +  };
+      381 +}
+      382 +
+      383  /** Look up a single food by barcode (UPC/GTIN). Returns null if none found. */
+      384  export async function lookupByBarcode(barcode: string): Promise<UsdaFood | null> {
+      385    const results = await search(barcode, 5);
+
+● 3. Display + portion-matching helpers. Adding serving formatters to macros.ts:
+
+● Update(src\lib\macros.ts)
+  ⎿  Added 32 lines
+       80    return scaleMacros(choice.per_serving, choice.base_serving_size, choice.base_serving_unit, size,
+            unit);
+       81  }
+       82
+       83 +// Bare serving units render in the log as "<size> <unit>"; descriptive labels
+       84 +// (e.g. "2 large eggs") already include their own count and render as-is.
+       85 +const BARE_UNIT = /^(g|gram|grams|oz|ounce|ounces|ml|l|cup|cups|tbsp|tsp|piece|pieces|scoop|scoops
+          +|serving|servings)$/i;
+       86 +// Units that don't take a plural "s".
+       87 +const INVARIANT_UNIT = new Set(['oz', 'g', 'ml', 'l', 'kg', 'lb', 'tbsp', 'tsp']);
+       88 +
+       89 +/**
+       90 + * How a logged entry's serving should display. Portion-based entries store a
+       91 + * fully human-readable label in `serving_unit` (e.g. "2 large eggs") with grams
+       92 + * in `serving_size`; older/custom entries store a bare unit, shown "<n> <unit>".
+       93 + */
+       94 +export function formatServing(servingSize: number, servingUnit: string): string {
+       95 +  return BARE_UNIT.test(servingUnit.trim())
+       96 +    ? `${round(servingSize)} ${servingUnit}`
+       97 +    : servingUnit;
+       98 +}
+       99 +
+      100 +/**
+      101 + * Render a per-portion label at a quantity: "1 large egg" × 2 → "2 large eggs",
+      102 + * "1 cup" × 1.5 → "1.5 cups", "1 oz" × 3 → "3 oz".
+      103 + */
+      104 +export function pluralizeServing(label: string, qty: number): string {
+      105 +  const clean = label.replace(/^1\s+/, '').trim(); // "1 large egg" → "large egg"
+      106 +  if (qty === 1) return `1 ${clean}`;
+      107 +  const words = clean.split(/\s+/);
+      108 +  const last = words[words.length - 1];
+      109 +  if (last && !/s$/i.test(last) && !INVARIANT_UNIT.has(last.toLowerCase())) {
+      110 +    words[words.length - 1] = `${last}s`;
+      111 +  }
+      112 +  return `${round(qty)} ${words.join(' ')}`;
+      113 +}
+      114 +
+      115  export function round(n: number, dp = 1): number {
+      116    const f = 10 ** dp;
+      117    return Math.round((n + Number.EPSILON) * f) / f;
+
+● Adding quantity parsing + portion matching to usda.ts:
+
+● Update(src\lib\usda.ts)
+  ⎿  Added 39 lines
+      255    return null;
+      256  }
+      257
+      258 +/** Parse a leading count from spoken text ("two", "1.5", "3 oz") → number ≥ 0. */
+      259 +export function parseQuantityNumber(text: string | null): number {
+      260 +  if (!text) return 1;
+      261 +  const q = text.toLowerCase();
+      262 +  const numMatch = q.match(/(\d+(?:\.\d+)?)/);
+      263 +  if (numMatch) {
+      264 +    const n = Number(numMatch[1]);
+      265 +    return Number.isFinite(n) && n > 0 ? n : 1;
+      266 +  }
+      267 +  for (const [word, n] of Object.entries(WORD_NUMBERS)) {
+      268 +    if (new RegExp(`\\b${word}\\b`).test(q)) return n;
+      269 +  }
+      270 +  return 1;
+      271 +}
+      272 +
+      273 +/**
+      274 + * Choose the portion that best matches a spoken description, e.g. "two large
+      275 + * eggs" → the "1 large egg" portion. Falls back to the first portion. Returns
+      276 + * the index into `portions`, or -1 when there are none.
+      277 + */
+      278 +export function matchPortion(portions: FoodPortion[], text: string | null): number {
+      279 +  if (portions.length === 0) return -1;
+      280 +  if (text) {
+      281 +    const t = text.toLowerCase();
+      282 +    let best = -1;
+      283 +    let bestHits = 0;
+      284 +    portions.forEach((p, i) => {
+      285 +      const words = p.label.toLowerCase().split(/\s+/).filter((w) => w.length >= 2 && w !== '1');
+      286 +      const hits = words.filter((w) => t.includes(w)).length;
+      287 +      if (hits > bestHits) {
+      288 +        bestHits = hits;
+      289 +        best = i;
+      290 +      }
+      291 +    });
+      292 +    if (best >= 0) return best;
+      293 +  }
+      294 +  return 0;
+      295 +}
+      296 +
+      297  async function search(query: string, pageSize: number): Promise<UsdaFood[]> {
+      298    const { data, error } = await supabase.functions.invoke('usda-search', {
+      299      body: { query, pageSize },
+
+● 4. Rebuild ServingSizeSelector — portion dropdown + quantity for USDA detail foods, legacy size/unit for
+  saved/fallback foods, plus the "From your foods" badge:
+
+● Write(src\components\macros\ServingSizeSelector.tsx)
+  ⎿  Added 195 lines, removed 60 lines
+      1 -import { useState } from 'react';
+      1 +import { useMemo, useState } from 'react';
+      2  import type { FoodChoice, Macros, MealCategory } from '../../types/macros';
+      3 -import { previewMacros, unitOptions } from '../../lib/macros';
+      3 +import { pluralizeServing, previewMacros, round, unitOptions } from '../../lib/macros';
+      4
+      5  export interface ConfirmPayload {
+      6    serving_size: number;
+     ...
+      18    onBack: () => void;
+      19  }
+      20
+      21 -export default function ServingSizeSelector({
+      22 -  choice,
+      23 -  categories,
+      24 -  defaultCategoryId,
+      25 -  onConfirm,
+      26 -  onBack,
+      27 -}: Props) {
+      28 -  // Default to one household unit (e.g. "1 slice") when the food has one.
+      29 -  const [size, setSize] = useState(
+      30 -    String(choice.household ? 1 : choice.base_serving_size || 100)
+      31 -  );
+      32 -  const [unit, setUnit] = useState<string>(
+      33 -    choice.household ? choice.household.unit : choice.base_serving_unit || 'g'
+      34 -  );
+      35 -  const [categoryId, setCategoryId] = useState<string | null>(
+      36 -    defaultCategoryId ?? categories[0]?.id ?? null
+      37 -  );
+      38 -  const [save, setSave] = useState(false);
+      39 -  // Already in My Foods → no need to offer re-saving.
+      40 -  const fromSaved = Boolean(choice.saved_food_id);
+      21 +const CUSTOM = 'custom';
+      22
+      42 -  const numSize = Number(size);
+      43 -  const macros = previewMacros(choice, numSize > 0 ? numSize : 0, unit);
+      23 +export default function ServingSizeSelector(props: Props) {
+      24 +  const usePortions = (props.choice.portions?.length ?? 0) > 0;
+      25 +  return usePortions ? <PortionSelector {...props} /> : <LegacySelector {...props} />;
+      26 +}
+      27
+      45 -  const valid = numSize > 0;
+      46 -
+      28 +/** Header shared by both modes: title, brand, optional "From your foods" badge. */
+      29 +function Header({ choice, onBack }: { choice: FoodChoice; onBack: () => void }) {
+      30    return (
+      48 -    <div className="flex flex-col">
+      31 +    <>
+      32        <button
+      33          type="button"
+      34          onClick={onBack}
+     ...
+       40          Back
+       41        </button>
+       42
+       60 -      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{choice.food_name}<
+          -/h3>
+       43 +      <div className="flex items-center gap-2">
+       44 +        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{choice.food_name
+          +}</h3>
+       45 +        {choice.saved_food_id && <SavedBadge />}
+       46 +      </div>
+       47        {choice.brand && <p className="text-xs text-gray-400">{choice.brand}</p>}
+       48 +    </>
+       49 +  );
+       50 +}
+       51
+       63 -      {/* Serving size + unit */}
+       52 +export function SavedBadge() {
+       53 +  return (
+       54 +    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.
+          +5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+       55 +      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+       56 +        <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5
+          +.82 21z" />
+       57 +      </svg>
+       58 +      From your foods
+       59 +    </span>
+       60 +  );
+       61 +}
+       62 +
+       63 +/** Real-USDA-portions mode: quantity × household portion (or custom grams). */
+       64 +function PortionSelector({ choice, categories, defaultCategoryId, onConfirm, onBack }: Props) {
+       65 +  const portions = choice.portions ?? [];
+       66 +  const [sel, setSel] = useState<string>('0'); // index into portions, or CUSTOM
+       67 +  const [quantity, setQuantity] = useState('1');
+       68 +  const [grams, setGrams] = useState('100');
+       69 +  const [categoryId, setCategoryId] = useState<string | null>(defaultCategoryId ?? categories[0]?.
+          +id ?? null);
+       70 +  const [save, setSave] = useState(false);
+       71 +  const fromSaved = Boolean(choice.saved_food_id);
+       72 +
+       73 +  const isCustom = sel === CUSTOM;
+       74 +  const portion = isCustom ? null : portions[Number(sel)];
+       75 +  const qty = Number(quantity);
+       76 +  const gramsNum = Number(grams);
+       77 +
+       78 +  const { totalGrams, servingUnit } = useMemo(() => {
+       79 +    if (isCustom) {
+       80 +      return { totalGrams: gramsNum > 0 ? gramsNum : 0, servingUnit: 'g' };
+       81 +    }
+       82 +    if (!portion) return { totalGrams: 0, servingUnit: '' };
+       83 +    if (!portion.gramWeight) {
+       84 +      // Should never happen — getFoodDetail filters these out — but make the
+       85 +      // bug loud if a zero-weight portion ever slips through.
+       86 +      console.warn('Portion has no gramWeight; macros would be wrong:', portion);
+       87 +    }
+       88 +    const total = portion.gramWeight * (qty > 0 ? qty : 0);
+       89 +    return { totalGrams: total, servingUnit: pluralizeServing(portion.label, qty > 0 ? qty : 1) };
+       90 +  }, [isCustom, portion, qty, gramsNum]);
+       91 +
+       92 +  // base_serving is per-100g, so scaling by grams gives (per100/100) * grams.
+       93 +  const macros = previewMacros(choice, totalGrams, 'g');
+       94 +  const valid = totalGrams > 0;
+       95 +
+       96 +  return (
+       97 +    <div className="flex flex-col">
+       98 +      <Header choice={choice} onBack={onBack} />
+       99 +
+      100 +      {/* Quantity × portion */}
+      101        <div className="mt-4 flex items-center gap-2">
+      102          <input
+      103            type="number"
+      104            min={0}
+      105            step="any"
+      106 +          value={isCustom ? grams : quantity}
+      107 +          onChange={(e) => (isCustom ? setGrams(e.target.value) : setQuantity(e.target.value))}
+      108 +          className="w-20 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border
+          +-gray-700 dark:bg-gray-950"
+      109 +        />
+      110 +        <select
+      111 +          value={sel}
+      112 +          onChange={(e) => setSel(e.target.value)}
+      113 +          className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm d
+          +ark:border-gray-700 dark:bg-gray-950"
+      114 +        >
+      115 +          {portions.map((p, i) => (
+      116 +            <option key={`${p.label}-${i}`} value={String(i)}>
+      117 +              {p.label}
+      118 +            </option>
+      119 +          ))}
+      120 +          <option value={CUSTOM}>Custom (grams)</option>
+      121 +        </select>
+      122 +      </div>
+      123 +
+      124 +      {/* What will be logged */}
+      125 +      <p className="mt-1.5 text-xs text-gray-400">
+      126 +        {isCustom ? `${round(gramsNum)} g` : `${servingUnit} · ${round(totalGrams)} g`}
+      127 +      </p>
+      128 +
+      129 +      {/* Live macro preview */}
+      130 +      <div className="mt-3 grid grid-cols-4 gap-2 rounded-xl bg-gray-50 p-3 text-center dark:bg-gr
+          +ay-800/60">
+      131 +        <Preview label="Cal" value={Math.round(macros.calories)} />
+      132 +        <Preview label="Protein" value={`${macros.protein_g}g`} />
+      133 +        <Preview label="Carbs" value={`${macros.carbs_g}g`} />
+      134 +        <Preview label="Fat" value={`${macros.fat_g}g`} />
+      135 +      </div>
+      136 +
+      137 +      <CategoryPicker categories={categories} categoryId={categoryId} setCategoryId={setCategoryId
+          +} />
+      138 +      {!fromSaved && <SaveToggle save={save} setSave={setSave} />}
+      139 +
+      140 +      <ConfirmButton
+      141 +        valid={valid}
+      142 +        onConfirm={() =>
+      143 +          onConfirm({
+      144 +            serving_size: round(totalGrams),
+      145 +            serving_unit: servingUnit,
+      146 +            macros,
+      147 +            meal_category_id: categoryId,
+      148 +            saveToMyFoods: save,
+      149 +          })
+      150 +        }
+      151 +      />
+      152 +    </div>
+      153 +  );
+      154 +}
+      155 +
+      156 +/** Legacy mode for saved foods / foods without USDA portion data. */
+      157 +function LegacySelector({ choice, categories, defaultCategoryId, onConfirm, onBack }: Props) {
+      158 +  const [size, setSize] = useState(String(choice.household ? 1 : choice.base_serving_size || 100))
+          +;
+      159 +  const [unit, setUnit] = useState<string>(
+      160 +    choice.household ? choice.household.unit : choice.base_serving_unit || 'g'
+      161 +  );
+      162 +  const [categoryId, setCategoryId] = useState<string | null>(defaultCategoryId ?? categories[0]?.
+          +id ?? null);
+      163 +  const [save, setSave] = useState(false);
+      164 +  const fromSaved = Boolean(choice.saved_food_id);
+      165 +
+      166 +  const numSize = Number(size);
+      167 +  const macros = previewMacros(choice, numSize > 0 ? numSize : 0, unit);
+      168 +  const valid = numSize > 0;
+      169 +
+      170 +  return (
+      171 +    <div className="flex flex-col">
+      172 +      <Header choice={choice} onBack={onBack} />
+      173 +
+      174 +      <div className="mt-4 flex items-center gap-2">
+      175 +        <input
+      176 +          type="number"
+      177 +          min={0}
+      178 +          step="any"
+      179            value={size}
+      180            onChange={(e) => setSize(e.target.value)}
+      181            className="w-24 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border
+           -gray-700 dark:bg-gray-950"
+     ...
+      193          </select>
+      194        </div>
+      195
+       86 -      {/* Live macro preview */}
+      196        <div className="mt-4 grid grid-cols-4 gap-2 rounded-xl bg-gray-50 p-3 text-center dark:bg-gr
+           ay-800/60">
+      197          <Preview label="Cal" value={Math.round(macros.calories)} />
+      198          <Preview label="Protein" value={`${macros.protein_g}g`} />
+     ...
+      200          <Preview label="Fat" value={`${macros.fat_g}g`} />
+      201        </div>
+      202
+       94 -      {/* Meal category */}
+      203 +      <CategoryPicker categories={categories} categoryId={categoryId} setCategoryId={setCategoryId
+          +} />
+      204 +      {!fromSaved && <SaveToggle save={save} setSave={setSave} />}
+      205 +
+      206 +      <ConfirmButton
+      207 +        valid={valid}
+      208 +        onConfirm={() =>
+      209 +          onConfirm({
+      210 +            serving_size: numSize,
+      211 +            serving_unit: unit,
+      212 +            macros,
+      213 +            meal_category_id: categoryId,
+      214 +            saveToMyFoods: save,
+      215 +          })
+      216 +        }
+      217 +      />
+      218 +    </div>
+      219 +  );
+      220 +}
+      221 +
+      222 +function CategoryPicker({
+      223 +  categories,
+      224 +  categoryId,
+      225 +  setCategoryId,
+      226 +}: {
+      227 +  categories: MealCategory[];
+      228 +  categoryId: string | null;
+      229 +  setCategoryId: (id: string | null) => void;
+      230 +}) {
+      231 +  return (
+      232 +    <>
+      233        <label className="mt-4 block text-xs font-medium text-gray-500">Add to meal</label>
+      234        <select
+      235          value={categoryId ?? ''}
+     ...
+      244          ))}
+      245          <option value="">Uncategorized</option>
+      246        </select>
+      247 +    </>
+      248 +  );
+      249 +}
+      250
+      110 -      {/* Save to my foods */}
+      111 -      {!fromSaved && (
+      112 -        <label className="mt-3 inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray
+          --300">
+      113 -          <input
+      114 -            type="checkbox"
+      115 -            checked={save}
+      116 -            onChange={(e) => setSave(e.target.checked)}
+      117 -            className="h-4 w-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500"
+      118 -          />
+      119 -          Save to my foods
+      120 -        </label>
+      121 -      )}
+      251 +function SaveToggle({ save, setSave }: { save: boolean; setSave: (v: boolean) => void }) {
+      252 +  return (
+      253 +    <label className="mt-3 inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300
+          +">
+      254 +      <input
+      255 +        type="checkbox"
+      256 +        checked={save}
+      257 +        onChange={(e) => setSave(e.target.checked)}
+      258 +        className="h-4 w-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500"
+      259 +      />
+      260 +      Save to my foods
+      261 +    </label>
+      262 +  );
+      263 +}
+      264
+      123 -      <button
+      124 -        type="button"
+      125 -        disabled={!valid}
+      126 -        onClick={() =>
+      127 -          onConfirm({
+      128 -            serving_size: numSize,
+      129 -            serving_unit: unit,
+      130 -            macros,
+      131 -            meal_category_id: categoryId,
+      132 -            saveToMyFoods: save,
+      133 -          })
+      134 -        }
+      135 -        className="mt-5 w-full rounded-xl bg-gray-800 py-2.5 text-sm font-semibold text-white tran
+          -sition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-200 d
+          -ark:text-gray-900 dark:hover:bg-white"
+      136 -      >
+      137 -        Add to log
+      138 -      </button>
+      139 -    </div>
+      265 +function ConfirmButton({ valid, onConfirm }: { valid: boolean; onConfirm: () => void }) {
+      266 +  return (
+      267 +    <button
+      268 +      type="button"
+      269 +      disabled={!valid}
+      270 +      onClick={onConfirm}
+      271 +      className="mt-5 w-full rounded-xl bg-gray-800 py-2.5 text-sm font-semibold text-white transi
+          +tion-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-200 dar
+          +k:text-gray-900 dark:hover:bg-white"
+      272 +    >
+      273 +      Add to log
+      274 +    </button>
+      275    );
+      276  }
+      277
+
+● 5. useSavedFoods — add fuzzy lookup (>80% against food_name):
+
+● Update(src\hooks\macros\useSavedFoods.ts)
+  ⎿  Added 26 lines
+       1  import { useCallback, useEffect, useState } from 'react';
+       2  import { supabase } from '../../lib/supabase';
+       3 +import { matchScore } from '../../lib/fuzzy';
+       4  import type { SavedFood } from '../../types/macros';
+       5
+       6  const byUsage = (a: SavedFood, b: SavedFood) =>
+       7    b.times_logged - a.times_logged || (a.last_logged < b.last_logged ? 1 : -1);
+       8
+       9 +/** Minimum fuzzy similarity for a saved food to pre-empt a USDA lookup. */
+      10 +export const SAVED_MATCH_THRESHOLD = 0.8;
+      11 +
+      12 +/**
+      13 + * Best saved-food match for a search term / food description, case-insensitive
+      14 + * and fuzzy. Returns null unless similarity clears {@link SAVED_MATCH_THRESHOLD}
+      15 + * — the caller then uses the saved food directly instead of hitting USDA.
+      16 + */
+      17 +export function findSavedMatch(
+      18 +  query: string,
+      19 +  foods: SavedFood[],
+      20 +  threshold = SAVED_MATCH_THRESHOLD
+      21 +): SavedFood | null {
+      22 +  let best: SavedFood | null = null;
+      23 +  let bestScore = 0;
+      24 +  for (const f of foods) {
+      25 +    const score = matchScore(query, f.food_name);
+      26 +    if (score > bestScore) {
+      27 +      bestScore = score;
+      28 +      best = f;
+      29 +    }
+      30 +  }
+      31 +  return bestScore >= threshold ? best : null;
+      32 +}
+      33 +
+      34  export interface NewSavedFood {
+      35    food_name: string;
+      36    brand: string | null;
+
+● 6. AddFoodModal — fetch USDA detail on pick, surface saved-food matches first with badge:
+
+● Update(src\components\macros\AddFoodModal.tsx)
+  ⎿  Added 4 lines, removed 2 lines
+       1  import { useEffect, useMemo, useState } from 'react';
+       2  import type { FoodChoice, MealCategory, SavedFood } from '../../types/macros';
+       3  import { useUSDASearch } from '../../hooks/macros/useUSDASearch';
+       4 -import { usdaToFoodChoice, type UsdaFood } from '../../lib/usda';
+       4 +import { matchScore } from '../../lib/fuzzy';
+       5 +import { getFoodDetail, usdaDetailToFoodChoice, usdaToFoodChoice, type UsdaFood } from '../../lib/u
+         +sda';
+       6  import { round } from '../../lib/macros';
+       6 -import ServingSizeSelector, { type ConfirmPayload } from './ServingSizeSelector';
+       7 +import { SAVED_MATCH_THRESHOLD } from '../../hooks/macros/useSavedFoods';
+       8 +import ServingSizeSelector, { SavedBadge, type ConfirmPayload } from './ServingSizeSelector';
+       9  import BarcodeScanner from './BarcodeScanner';
+      10
+      11  type Method = 'search' | 'barcode' | 'myfoods';
+
+● Update(src\components\macros\AddFoodModal.tsx)
+  ⎿  Added 1 line
+      55    const [query, setQuery] = useState('');
+      56    const [myFilter, setMyFilter] = useState('');
+      57    const [selected, setSelected] = useState<FoodChoice | null>(null);
+      58 +  const [loadingDetail, setLoadingDetail] = useState(false);
+      59    const [barcodeNotFound, setBarcodeNotFound] = useState(false);
+      60    const search = useUSDASearch();
+      61
+
+● Update(src\components\macros\AddFoodModal.tsx)
+  ⎿  Added 1 line
+      66        setQuery('');
+      67        setMyFilter('');
+      68        setSelected(null);
+      69 +      setLoadingDetail(false);
+      70        setBarcodeNotFound(false);
+      71        search.reset();
+      72      }
+
+● Update(src\components\macros\AddFoodModal.tsx)
+  ⎿  Added 13 lines, removed 3 lines
+       93
+       94    if (!open) return null;
+       95
+       96 -  function pickUsda(food: UsdaFood) {
+       97 -    setSelected(usdaToFoodChoice(food));
+       96 +  // Fetch full USDA detail (real household portions + correct gram weights);
+       97 +  // fall back to the per-100g search result if the detail call fails.
+       98 +  async function pickUsda(food: UsdaFood) {
+       99 +    setLoadingDetail(true);
+      100 +    try {
+      101 +      const detail = await getFoodDetail(food.fdcId);
+      102 +      setSelected(detail ? usdaDetailToFoodChoice(detail) : usdaToFoodChoice(food));
+      103 +    } catch {
+      104 +      setSelected(usdaToFoodChoice(food));
+      105 +    } finally {
+      106 +      setLoadingDetail(false);
+      107 +    }
+      108    }
+      109
+      110    async function handleScan(barcode: string) {
+      111      setBarcodeNotFound(false);
+      112      const food = await search.byBarcode(barcode);
+      103 -    if (food) setSelected(usdaToFoodChoice(food));
+      113 +    if (food) await pickUsda(food);
+      114      else setBarcodeNotFound(true);
+      115    }
+      116
+
+● Update(src\components\macros\AddFoodModal.tsx)
+  ⎿  Added 6 lines, removed 1 line
+      141            </button>
+      142          </div>
+      143
+      144 -        {selected ? (
+      144 +        {loadingDetail && !selected ? (
+      145 +          <div className="flex items-center justify-center gap-2 p-10 text-sm text-gray-400">
+      146 +            <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-g
+          +ray-600" />
+      147 +            Loading serving sizes…
+      148 +          </div>
+      149 +        ) : selected ? (
+      150            <div className="overflow-y-auto p-4">
+      151              <ServingSizeSelector
+      152                choice={selected}
+
+● Now wire saved-food matches into the search panel:
+
+● Update(src\components\macros\AddFoodModal.tsx)
+  ⎿  Added 8 lines, removed 1 line
+      179
+      180              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      181                {method === 'search' && (
+      182 -                <SearchPanel query={query} setQuery={setQuery} search={search} onPick={pickUsda} /
+          ->
+      182 +                <SearchPanel
+      183 +                  query={query}
+      184 +                  setQuery={setQuery}
+      185 +                  search={search}
+      186 +                  savedFoods={savedFoods}
+      187 +                  onPick={pickUsda}
+      188 +                  onPickSaved={(f) => setSelected(savedToChoice(f))}
+      189 +                />
+      190                )}
+      191
+      192                {method === 'barcode' && (
+
+● Update(src\components\macros\AddFoodModal.tsx)
+  ⎿  Added 39 lines
+      236    query,
+      237    setQuery,
+      238    search,
+      239 +  savedFoods,
+      240    onPick,
+      241 +  onPickSaved,
+      242  }: {
+      243    query: string;
+      244    setQuery: (s: string) => void;
+      245    search: ReturnType<typeof useUSDASearch>;
+      246 +  savedFoods: SavedFood[];
+      247    onPick: (f: UsdaFood) => void;
+      248 +  onPickSaved: (f: SavedFood) => void;
+      249  }) {
+      250 +  // Saved foods are user-vetted, so surface strong matches above USDA results.
+      251 +  const savedMatches = useMemo(() => {
+      252 +    const q = query.trim();
+      253 +    if (q.length < 2) return [];
+      254 +    return savedFoods
+      255 +      .map((f) => ({ f, score: matchScore(q, f.food_name) }))
+      256 +      .filter((m) => m.score >= SAVED_MATCH_THRESHOLD)
+      257 +      .sort((a, b) => b.score - a.score)
+      258 +      .map((m) => m.f);
+      259 +  }, [query, savedFoods]);
+      260 +
+      261    return (
+      262      <div>
+      263        <input
+     ...
+      268          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-non
+           e focus:border-gray-500 dark:border-gray-700 dark:bg-gray-950"
+      269        />
+      270
+      271 +      {savedMatches.length > 0 && (
+      272 +        <div className="mt-3 space-y-1.5">
+      273 +          {savedMatches.map((f) => (
+      274 +            <button
+      275 +              key={f.id}
+      276 +              type="button"
+      277 +              onClick={() => onPickSaved(f)}
+      278 +              className="block w-full rounded-lg border border-emerald-200 bg-emerald-50/40 px-3 p
+          +y-2 text-left transition-colors hover:bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500
+          +/5 dark:hover:bg-emerald-500/10"
+      279 +            >
+      280 +              <div className="flex items-center justify-between gap-2">
+      281 +                <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+      282 +                  {f.food_name}
+      283 +                </p>
+      284 +                <SavedBadge />
+      285 +              </div>
+      286 +              <p className="text-[11px] text-gray-400">
+      287 +                {f.brand ? `${f.brand} · ` : ''}
+      288 +                {round(f.serving_size)} {f.serving_unit} · {Math.round(f.calories)} kcal
+      289 +              </p>
+      290 +            </button>
+      291 +          ))}
+      292 +        </div>
+      293 +      )}
+      294 +
+      295        {!search.enabled && (
+      296          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-5
+           00/10 dark:text-amber-300">
+      297            USDA search isn’t available right now.
+
+● The previewMacros math works for grams regardless of the label string (base is 100g → ratio = grams/100). Now the
+  voice flow. First, a shared savedFoodToChoice helper in macros.ts:
+
+● Update(src\lib\macros.ts)
+  ⎿  Added 7 lines, removed 1 line
+       1  // Pure macro math shared across the Macro Tracker. No React, no I/O.
+       2
+       3 -import { SERVING_UNITS, type FoodChoice, type Macros, type ServingUnit } from '../types/macros';
+       3 +import {
+       4 +  SERVING_UNITS,
+       5 +  type FoodChoice,
+       6 +  type Macros,
+       7 +  type SavedFood,
+       8 +  type ServingUnit,
+       9 +} from '../types/macros';
+      10
+      11  const EMPTY: Macros = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+      12
+
+● Update(src\lib\macros.ts)
+  ⎿  Added 19 lines
+      123    return Math.round((n + Number.EPSILON) * f) / f;
+      124  }
+      125
+      126 +/** A saved food as a FoodChoice (tagged with `saved_food_id` for the badge). */
+      127 +export function savedFoodToChoice(f: SavedFood): FoodChoice {
+      128 +  return {
+      129 +    food_name: f.food_name,
+      130 +    brand: f.brand,
+      131 +    base_serving_size: f.serving_size,
+      132 +    base_serving_unit: f.serving_unit,
+      133 +    per_serving: {
+      134 +      calories: f.calories,
+      135 +      protein_g: f.protein_g,
+      136 +      carbs_g: f.carbs_g,
+      137 +      fat_g: f.fat_g,
+      138 +    },
+      139 +    usda_fdc_id: f.usda_fdc_id,
+      140 +    barcode: f.barcode,
+      141 +    saved_food_id: f.id,
+      142 +  };
+      143 +}
+      144 +
+      145  /** Macro split as whole-number percentages of calories (4/4/9 kcal per gram). */
+      146  export function macroSplit(m: Macros): { protein: number; carbs: number; fat: number } {
+      147    const p = m.protein_g * 4;
+
+● Now use it in AddFoodModal to dedupe:
+
+● Update(src\components\macros\AddFoodModal.tsx)
+  ⎿  Added 1 line, removed 1 line
+      3  import { useUSDASearch } from '../../hooks/macros/useUSDASearch';
+      4  import { matchScore } from '../../lib/fuzzy';
+      5  import { getFoodDetail, usdaDetailToFoodChoice, usdaToFoodChoice, type UsdaFood } from '../../lib/us
+         da';
+      6 -import { round } from '../../lib/macros';
+      6 +import { round, savedFoodToChoice } from '../../lib/macros';
+      7  import { SAVED_MATCH_THRESHOLD } from '../../hooks/macros/useSavedFoods';
+      8  import ServingSizeSelector, { SavedBadge, type ConfirmPayload } from './ServingSizeSelector';
+      9  import BarcodeScanner from './BarcodeScanner';
+
+● Update(src\components\macros\AddFoodModal.tsx)
+  ⎿  Added 1 line, removed 17 lines
+      25    { id: 'myfoods', label: 'My Foods' },
+      26  ];
+      27
+      28 -function savedToChoice(f: SavedFood): FoodChoice {
+      29 -  return {
+      30 -    food_name: f.food_name,
+      31 -    brand: f.brand,
+      32 -    base_serving_size: f.serving_size,
+      33 -    base_serving_unit: f.serving_unit,
+      34 -    per_serving: {
+      35 -      calories: f.calories,
+      36 -      protein_g: f.protein_g,
+      37 -      carbs_g: f.carbs_g,
+      38 -      fat_g: f.fat_g,
+      39 -    },
+      40 -    usda_fdc_id: f.usda_fdc_id,
+      41 -    barcode: f.barcode,
+      42 -    saved_food_id: f.id,
+      43 -  };
+      44 -}
+      28 +const savedToChoice = savedFoodToChoice;
+      29
+      30  export default function AddFoodModal({
+      31    open,
+
+● 7. Voice flow — claudeRouter.ts (saved-first, detail fetch, portion-correct serving):
+
+● Update(src\lib\claudeRouter.ts)
+  ⎿  Added 7 lines, removed 1 line
+      11  import { rankMatches } from './fuzzy';
+      12  import {
+      13    defaultServingFor,
+      14 +  getFoodDetail,
+      15 +  matchPortion,
+      16 +  parseQuantityNumber,
+      17    parseSpokenServing,
+      18    searchFoodsForVoice,
+      19 +  usdaDetailToFoodChoice,
+      20    type UsdaFood,
+      21  } from './usda';
+      22 +import { pluralizeServing, savedFoodToChoice } from './macros';
+      23 +import { findSavedMatch } from '../hooks/macros/useSavedFoods';
+      24  import type { IntentContext, RawAction } from './intent';
+      19 -import type { Macros } from '../types/macros';
+      25 +import type { FoodChoice, Macros, SavedFood } from '../types/macros';
+      26
+      27  export interface HabitReviewModel {
+      28    all: boolean;
+
+● Update(src\lib\claudeRouter.ts)
+  ⎿  Added 8 lines
+      39    candidates: UsdaFood[];
+      40    /** Index into candidates, or -1 when no USDA result confidently matches. */
+      41    selectedIndex: number;
+      42 +  /**
+      43 +   * The resolved food for the current selection, carrying real USDA portions
+      44 +   * (per-100g base) when available. Macros are computed from this. Null until a
+      45 +   * candidate is resolved (or when in manual mode).
+      46 +   */
+      47 +  choice: FoodChoice | null;
+      48    servingSize: number;
+      49    servingUnit: string;
+      50    mealCategoryId: string | null;
+      51 +  /** Set when this item came from the user's saved foods (shows a badge). */
+      52 +  fromSaved: boolean;
+      53    /** User-entered macros, used as a fallback when no USDA match fits. */
+      54    manual: Macros | null;
+      55  }
+
+● Now update prepareReview to fetch saved foods and resolve each food (saved-first → USDA detail with portions):
+
+● Update(src\lib\claudeRouter.ts)
+  ⎿  Added 5 lines, removed 1 line
+      162    const needHabits = actions.some((a) => a.type === 'complete_habits');
+      163    const needCats = actions.some((a) => a.type === 'log_food');
+      164
+      165 -  const [habitRows, todayLogs, mealCats] = await Promise.all([
+      165 +  const [habitRows, todayLogs, mealCats, savedFoodRows] = await Promise.all([
+      166      needHabits
+      167        ? supabase.from('habits').select('id, name').eq('archived', false)
+      168        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+     ...
+      172      needCats
+      173        ? supabase.from('meal_categories').select('id, name').order('position')
+      174        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      175 +    needCats
+      176 +      ? supabase.from('saved_foods').select('*')
+      177 +      : Promise.resolve({ data: [] as SavedFood[] }),
+      178    ]);
+      179
+      180    const habits = (habitRows.data ?? []) as { id: string; name: string }[];
+      181    const doneHabitIds = new Set((todayLogs.data ?? []).map((r) => r.habit_id));
+      182    const categories = (mealCats.data ?? []) as { id: string; name: string }[];
+      183 +  const savedFoods = (savedFoodRows.data ?? []) as SavedFood[];
+      184
+      185    for (const action of actions) {
+      186      switch (action.type) {
+
+● Update(src\lib\claudeRouter.ts)
+  ⎿  Added 63 lines, removed 15 lines
+      220            const o = raw as Record<string, unknown>;
+      221            const description = asString(o.description);
+      222            if (!description) continue;
+      223 +          const quantity = asString(o.quantity);
+      224 +          const catName = asString(o.meal_category);
+      225 +          const matchedCat = catName
+      226 +            ? rankMatches(catName, categories, (c) => c.name)[0]?.item
+      227 +            : undefined;
+      228 +          const mealCategoryId = matchedCat?.id ?? null;
+      229 +
+      230 +          // 1. Saved foods first — user-vetted, so trust them over USDA.
+      231 +          const saved = findSavedMatch(description, savedFoods);
+      232 +          if (saved) {
+      233 +            const qty = parseQuantityNumber(quantity ?? description);
+      234 +            review.foods.push({
+      235 +              id: uid(),
+      236 +              description,
+      237 +              quantity,
+      238 +              candidates: [],
+      239 +              selectedIndex: -1,
+      240 +              choice: savedFoodToChoice(saved),
+      241 +              servingSize: saved.serving_size * qty,
+      242 +              servingUnit:
+      243 +                qty === 1 ? saved.serving_unit : `${qty} × ${saved.serving_unit}`,
+      244 +              mealCategoryId,
+      245 +              fromSaved: true,
+      246 +              manual: null,
+      247 +            });
+      248 +            continue;
+      249 +          }
+      250 +
+      251 +          // 2. Fall through to USDA (already ranked generic-first).
+      252            let candidates: UsdaFood[] = [];
+      253            try {
+      225 -            candidates = (await searchFoodsForVoice(description, 3)).slice(0, 3);
+      254 +            candidates = await searchFoodsForVoice(description, 3);
+      255            } catch {
+      256              candidates = []; // proxy down or no results — show empty card
+      257            }
+      258            const top = candidates[0];
+      230 -          // Only auto-select the top result when it actually matches what was
+      231 -          // said; otherwise leave it unselected so the user resolves it.
+      259            const confident = foodMatches(description, top);
+      233 -          const quantity = asString(o.quantity);
+      234 -          // Honor a spoken amount ("150 grams", "two slices") from the quantity
+      235 -          // field, or embedded in the description; else a sensible default.
+      236 -          const serving =
+      237 -            parseSpokenServing(quantity, top) ??
+      238 -            parseSpokenServing(description, top) ??
+      239 -            defaultServingFor(top);
+      240 -          const catName = asString(o.meal_category);
+      241 -          const matchedCat = catName
+      242 -            ? rankMatches(catName, categories, (c) => c.name)[0]?.item
+      243 -            : undefined;
+      260 +
+      261 +          // Resolve the chosen top result to real portions + correct grams.
+      262 +          let choice: FoodChoice | null = null;
+      263 +          let serving = parseSpokenServing(quantity, top) ?? parseSpokenServing(description, top)
+          +?? null;
+      264 +          if (confident && top) {
+      265 +            try {
+      266 +              const detail = await getFoodDetail(top.fdcId);
+      267 +              if (detail && detail.portions.length > 0) {
+      268 +                choice = usdaDetailToFoodChoice(detail);
+      269 +                const qty = parseQuantityNumber(quantity ?? description);
+      270 +                const pIdx = matchPortion(detail.portions, `${quantity ?? ''} ${description}`);
+      271 +                const portion = detail.portions[pIdx];
+      272 +                serving = {
+      273 +                  size: portion.gramWeight * qty,
+      274 +                  unit: pluralizeServing(portion.label, qty),
+      275 +                };
+      276 +              } else if (detail) {
+      277 +                choice = usdaDetailToFoodChoice(detail);
+      278 +              }
+      279 +            } catch {
+      280 +              /* detail fetch failed — fall back to the search result below */
+      281 +            }
+      282 +          }
+      283 +          // Fallbacks: per-100g search result + default/ spoken serving.
+      284 +          if (!choice && confident && top) {
+      285 +            const { usdaToFoodChoice } = await import('./usda');
+      286 +            choice = usdaToFoodChoice(top);
+      287 +          }
+      288 +          if (!serving) serving = defaultServingFor(top);
+      289 +
+      290            review.foods.push({
+      291              id: uid(),
+      292              description,
+      293              quantity,
+      294              candidates,
+      295              selectedIndex: confident ? 0 : -1,
+      296 +            choice,
+      297              servingSize: serving.size,
+      298              servingUnit: serving.unit,
+      252 -            mealCategoryId: matchedCat?.id ?? null,
+      299 +            mealCategoryId,
+      300 +            fromSaved: false,
+      301              manual: null,
+      302            });
+      303          }
+
+● Let me clean up that dynamic import — add usdaToFoodChoice to the top-level import:
+
+● Update(src\lib\claudeRouter.ts)
+  ⎿  Added 1 line
+      17    parseSpokenServing,
+      18    searchFoodsForVoice,
+      19    usdaDetailToFoodChoice,
+      20 +  usdaToFoodChoice,
+      21    type UsdaFood,
+      22  } from './usda';
+      23  import { pluralizeServing, savedFoodToChoice } from './macros';
+
+● Update(src\lib\claudeRouter.ts)
+  ⎿  Added 2 lines, removed 5 lines
+      281                /* detail fetch failed — fall back to the search result below */
+      282              }
+      283            }
+      284 -          // Fallbacks: per-100g search result + default/ spoken serving.
+      285 -          if (!choice && confident && top) {
+      286 -            const { usdaToFoodChoice } = await import('./usda');
+      287 -            choice = usdaToFoodChoice(top);
+      288 -          }
+      284 +          // Fallbacks: per-100g search result + default/spoken serving.
+      285 +          if (!choice && confident && top) choice = usdaToFoodChoice(top);
+      286            if (!serving) serving = defaultServingFor(top);
+      287
+      288            review.foods.push({
+
+● 8. Rebuild FoodReviewCard — badge, portion-aware serving editor, macros from the resolved choice:
+
+● Write(src\components\voice\FoodReviewCard.tsx)
+  ⎿  Added 147 lines, removed 64 lines
+       1  import { useState } from 'react';
+       2 -import type { Macros } from '../../types/macros';
+       3 -import { previewMacros, unitOptions } from '../../lib/macros';
+       2 +import type { FoodChoice, Macros } from '../../types/macros';
+       3 +import { pluralizeServing, previewMacros, round, unitOptions } from '../../lib/macros';
+       4  import {
+       5    defaultServingFor,
+       6 +  getFoodDetail,
+       7    searchFoodsForVoice,
+       8 +  usdaDetailToFoodChoice,
+       9    usdaToFoodChoice,
+      10    type UsdaFood,
+      11  } from '../../lib/usda';
+      12  import type { FoodReviewItem } from '../../lib/claudeRouter';
+      13 +import { SavedBadge } from '../macros/ServingSizeSelector';
+      14
+      15  interface Props {
+      16    item: FoodReviewItem;
+     ...
+      21
+      22  const EMPTY_MACROS: Macros = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+      23
+      24 +/** Resolve a USDA candidate to a detailed choice (portions); fall back to per-100g. */
+      25 +async function resolveChoice(food: UsdaFood): Promise<{ choice: FoodChoice; size: number; unit: str
+         +ing }> {
+      26 +  try {
+      27 +    const detail = await getFoodDetail(food.fdcId);
+      28 +    if (detail && detail.portions.length > 0) {
+      29 +      const p = detail.portions[0];
+      30 +      return {
+      31 +        choice: usdaDetailToFoodChoice(detail),
+      32 +        size: p.gramWeight,
+      33 +        unit: pluralizeServing(p.label, 1),
+      34 +      };
+      35 +    }
+      36 +    if (detail) {
+      37 +      const def = defaultServingFor(detail);
+      38 +      return { choice: usdaDetailToFoodChoice(detail), size: def.size, unit: def.unit };
+      39 +    }
+      40 +  } catch {
+      41 +    /* fall through */
+      42 +  }
+      43 +  const def = defaultServingFor(food);
+      44 +  return { choice: usdaToFoodChoice(food), size: def.size, unit: def.unit };
+      45 +}
+      46 +
+      47  export default function FoodReviewCard({ item, categories, onChange, onDelete }: Props) {
+      48    const [query, setQuery] = useState(item.description);
+      49    const [searching, setSearching] = useState(false);
+     ...
+      51    const manualMode = item.manual != null;
+      52    const selected: UsdaFood | undefined =
+      53      item.selectedIndex >= 0 ? item.candidates[item.selectedIndex] : undefined;
+      28 -  const unmatched = !manualMode && item.candidates.length > 0 && item.selectedIndex < 0;
+      54 +  const unmatched = !manualMode && !item.fromSaved && item.candidates.length > 0 && item.selectedIn
+         +dex < 0;
+      55
+      56 +  // Macros come from the resolved choice (carries real portions) when present.
+      57    const macros =
+      31 -    selected && !manualMode
+      32 -      ? previewMacros(usdaToFoodChoice(selected), item.servingSize, item.servingUnit)
+      58 +    !manualMode && item.choice
+      59 +      ? previewMacros(item.choice, item.servingSize, item.servingUnit)
+      60        : null;
+      61
+      62 +  const portions = item.choice?.portions ?? [];
+      63 +
+      64    async function runSearch() {
+      65      if (!query.trim()) return;
+      66      setSearching(true);
+      67      try {
+      39 -      const results = (await searchFoodsForVoice(query, 3)).slice(0, 3);
+      40 -      const def = defaultServingFor(results[0]);
+      41 -      onChange({
+      42 -        candidates: results,
+      43 -        // A manual re-search is an explicit choice, so trust the top result.
+      44 -        selectedIndex: results.length ? 0 : -1,
+      45 -        servingSize: def.size,
+      46 -        servingUnit: def.unit,
+      47 -      });
+      68 +      const results = await searchFoodsForVoice(query, 3);
+      69 +      if (results.length) {
+      70 +        const { choice, size, unit } = await resolveChoice(results[0]);
+      71 +        onChange({ candidates: results, selectedIndex: 0, choice, fromSaved: false, servingSize: si
+         +ze, servingUnit: unit });
+      72 +      } else {
+      73 +        onChange({ candidates: [], selectedIndex: -1, choice: null });
+      74 +      }
+      75      } catch {
+      76        /* leave as-is; user can retry */
+      77      } finally {
+     ...
+       79      }
+       80    }
+       81
+       55 -  function pickCandidate(idx: number) {
+       56 -    const def = defaultServingFor(item.candidates[idx]);
+       57 -    onChange({ selectedIndex: idx, servingSize: def.size, servingUnit: def.unit });
+       82 +  async function pickCandidate(idx: number) {
+       83 +    const food = item.candidates[idx];
+       84 +    if (!food) return;
+       85 +    const { choice, size, unit } = await resolveChoice(food);
+       86 +    onChange({ selectedIndex: idx, choice, servingSize: size, servingUnit: unit });
+       87    }
+       88
+       89 +  /** Recompute serving when a portion or quantity changes (portion mode). */
+       90 +  function setPortion(portionIdx: number, qty: number) {
+       91 +    const p = portions[portionIdx];
+       92 +    if (!p) return;
+       93 +    if (!p.gramWeight) console.warn('Portion has no gramWeight; macros would be wrong:', p);
+       94 +    onChange({ servingSize: p.gramWeight * qty, servingUnit: pluralizeServing(p.label, qty) });
+       95 +  }
+       96 +
+       97    const patchManual = (p: Partial<Macros>) =>
+       98      onChange({ manual: { ...(item.manual ?? EMPTY_MACROS), ...p } });
+       99
+      100 +  // Current portion index + quantity derived from the stored serving (portion mode).
+      101 +  const curPortionIdx = Math.max(
+      102 +    0,
+      103 +    portions.findIndex((p) => pluralizeServing(p.label, currentQty(item, p.gramWeight)) === item.s
+          +ervingUnit)
+      104 +  );
+      105 +  const curQty = portions.length
+      106 +    ? currentQty(item, portions[curPortionIdx]?.gramWeight ?? 0)
+      107 +    : 0;
+      108 +
+      109    return (
+      110      <div className="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gr
+           ay-900">
+      111        <div className="mb-2 flex items-start justify-between gap-2">
+      112          <div className="min-w-0">
+       67 -          <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+       68 -            {item.description}
+       69 -          </p>
+      113 +          <div className="flex items-center gap-1.5">
+      114 +            <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+      115 +              {item.choice?.food_name ?? item.description}
+      116 +            </p>
+      117 +            {item.fromSaved && <SavedBadge />}
+      118 +          </div>
+      119            {item.quantity && <p className="text-[11px] text-gray-400">heard: {item.quantity}</p>}
+      120          </div>
+      121          <button
+     ...
+      130          </button>
+      131        </div>
+      132
+       84 -      {/* "Couldn't confidently match" notice */}
+       85 -      {(unmatched || item.candidates.length === 0) && !manualMode && (
+      133 +      {/* "Couldn't confidently match" notice (USDA only) */}
+      134 +      {(unmatched || (!item.fromSaved && !manualMode && item.candidates.length === 0 && !item.choi
+          +ce)) && (
+      135          <p className="mb-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700 dark:bg
+           -amber-500/10 dark:text-amber-300">
+      136            {item.candidates.length === 0
+      137              ? `No USDA match for “${item.description}”. Search for it or enter macros manually.`
+     ...
+      140        )}
+      141
+      142        {manualMode ? (
+       94 -        /* Manual macro entry */
+      143          <div className="space-y-2">
+      144            <div className="grid grid-cols-4 gap-2">
+      145              {(
+     ...
+      174          </div>
+      175        ) : (
+      176          <>
+      129 -          {item.candidates.length > 0 && (
+      130 -            <>
+      131 -              {/* Candidate selector */}
+      132 -              <select
+      133 -                value={item.selectedIndex}
+      134 -                onChange={(e) => pickCandidate(Number(e.target.value))}
+      135 -                className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm d
+          -ark:border-gray-700 dark:bg-gray-950"
+      136 -              >
+      137 -                {item.selectedIndex < 0 && (
+      138 -                  <option value={-1}>Select the correct match…</option>
+      139 -                )}
+      140 -                {item.candidates.map((c, i) => (
+      141 -                  <option key={c.fdcId} value={i}>
+      142 -                    {c.description}
+      143 -                    {c.brand ? ` — ${c.brand}` : ''}
+      144 -                  </option>
+      145 -                ))}
+      146 -              </select>
+      177 +          {/* Candidate selector (USDA only, not for saved foods) */}
+      178 +          {!item.fromSaved && item.candidates.length > 0 && (
+      179 +            <select
+      180 +              value={item.selectedIndex}
+      181 +              onChange={(e) => pickCandidate(Number(e.target.value))}
+      182 +              className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm dar
+          +k:border-gray-700 dark:bg-gray-950"
+      183 +            >
+      184 +              {item.selectedIndex < 0 && <option value={-1}>Select the correct match…</option>}
+      185 +              {item.candidates.map((c, i) => (
+      186 +                <option key={c.fdcId} value={i}>
+      187 +                  {c.description}
+      188 +                  {c.brand ? ` — ${c.brand}` : ''}
+      189 +                </option>
+      190 +              ))}
+      191 +            </select>
+      192 +          )}
+      193
+      148 -              {/* Serving + category (only once a match is chosen) */}
+      149 -              {selected && (
+      150 -                <div className="mt-2 flex flex-wrap items-center gap-2">
+      194 +          {/* Serving editor — portion mode when real portions exist */}
+      195 +          {item.choice && (selected || item.fromSaved) && (
+      196 +            <div className="mt-2 flex flex-wrap items-center gap-2">
+      197 +              {portions.length > 0 ? (
+      198 +                <>
+      199                    <input
+      200                      type="number"
+      201                      min={0}
+      202                      step="any"
+      203 +                    value={String(curQty)}
+      204 +                    onChange={(e) => setPortion(curPortionIdx, Math.max(0, Number(e.target.value)
+          +|| 0))}
+      205 +                    className="w-20 rounded-md border border-gray-200 bg-white px-2 py-1 text-sm d
+          +ark:border-gray-700 dark:bg-gray-950"
+      206 +                  />
+      207 +                  <select
+      208 +                    value={curPortionIdx}
+      209 +                    onChange={(e) => setPortion(Number(e.target.value), curQty || 1)}
+      210 +                    className="min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 py-1
+          + text-sm dark:border-gray-700 dark:bg-gray-950"
+      211 +                  >
+      212 +                    {portions.map((p, i) => (
+      213 +                      <option key={`${p.label}-${i}`} value={i}>
+      214 +                        {p.label}
+      215 +                      </option>
+      216 +                    ))}
+      217 +                  </select>
+      218 +                </>
+      219 +              ) : (
+      220 +                <>
+      221 +                  <input
+      222 +                    type="number"
+      223 +                    min={0}
+      224 +                    step="any"
+      225                      value={String(item.servingSize)}
+      156 -                    onChange={(e) =>
+      157 -                      onChange({ servingSize: Math.max(0, Number(e.target.value) || 0) })
+      158 -                    }
+      226 +                    onChange={(e) => onChange({ servingSize: Math.max(0, Number(e.target.value) ||
+          + 0) })}
+      227                      className="w-20 rounded-md border border-gray-200 bg-white px-2 py-1 text-sm d
+           ark:border-gray-700 dark:bg-gray-950"
+      228                    />
+      229                    <select
+     ...
+      231                      onChange={(e) => onChange({ servingUnit: e.target.value })}
+      232                      className="rounded-md border border-gray-200 bg-white px-2 py-1 text-sm dark:b
+           order-gray-700 dark:bg-gray-950"
+      233                    >
+      166 -                    {unitOptions(selected?.household ?? null).map((u) => (
+      167 -                      <option key={u} value={u}>
+      168 -                        {u}
+      169 -                      </option>
+      170 -                    ))}
+      234 +                    {unitOptions(item.choice.household ?? null)
+      235 +                      .concat(
+      236 +                        item.choice.base_serving_unit &&
+      237 +                          !unitOptions(item.choice.household ?? null).includes(item.choice.base_se
+          +rving_unit)
+      238 +                          ? [item.choice.base_serving_unit]
+      239 +                          : []
+      240 +                      )
+      241 +                      .map((u) => (
+      242 +                        <option key={u} value={u}>
+      243 +                          {u}
+      244 +                        </option>
+      245 +                      ))}
+      246                    </select>
+      172 -                  <CategorySelect item={item} categories={categories} onChange={onChange} />
+      173 -                </div>
+      247 +                </>
+      248                )}
+      249 +              <CategorySelect item={item} categories={categories} onChange={onChange} />
+      250 +            </div>
+      251 +          )}
+      252
+      176 -              {/* Live macro preview */}
+      177 -              {macros && (
+      178 -                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+      179 -                  {Math.round(macros.calories)} kcal · {macros.protein_g}P {macros.carbs_g}C{' '}
+      180 -                  {macros.fat_g}F
+      181 -                </p>
+      182 -              )}
+      183 -            </>
+      253 +          {/* Live macro preview */}
+      254 +          {macros && (
+      255 +            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+      256 +              {item.servingUnit} · {Math.round(macros.calories)} kcal · {macros.protein_g}P{' '}
+      257 +              {macros.carbs_g}C {macros.fat_g}F
+      258 +            </p>
+      259            )}
+      260
+      186 -          {/* Re-search */}
+      261 +          {/* Re-search (lets the user override even a saved match) */}
+      262            <div className="mt-2 flex gap-2">
+      263              <input
+      264                value={query}
+     ...
+      279
+      280            <button
+      281              type="button"
+      207 -            onClick={() => onChange({ manual: EMPTY_MACROS, servingSize: 1, servingUnit: 'serving'
+          - })}
+      282 +            onClick={() =>
+      283 +              onChange({ manual: EMPTY_MACROS, choice: null, servingSize: 1, servingUnit: 'serving
+          +' })
+      284 +            }
+      285              className="mt-2 text-[11px] font-medium text-gray-400 hover:text-gray-600 dark:hover:t
+           ext-gray-200"
+      286            >
+      287              Enter macros manually →
+     ...
+      292    );
+      293  }
+      294
+      295 +/** Quantity implied by the stored grams for a given portion weight. */
+      296 +function currentQty(item: FoodReviewItem, gramWeight: number): number {
+      297 +  if (!gramWeight) return 1;
+      298 +  return round(item.servingSize / gramWeight, 2) || 1;
+      299 +}
+      300 +
+      301  function CategorySelect({
+      302    item,
+      303    categories,
+
+● The portion-index recovery is fragile. Let me make it match on the cleaned label core instead:
+
+● Update(src\components\voice\FoodReviewCard.tsx)
+  ⎿  Added 6 lines, removed 4 lines
+       97    const patchManual = (p: Partial<Macros>) =>
+       98      onChange({ manual: { ...(item.manual ?? EMPTY_MACROS), ...p } });
+       99
+      100 -  // Current portion index + quantity derived from the stored serving (portion mode).
+      101 -  const curPortionIdx = Math.max(
+      102 -    0,
+      103 -    portions.findIndex((p) => pluralizeServing(p.label, currentQty(item, p.gramWeight)) === item.s
+          -ervingUnit)
+      100 +  // Current portion index + quantity derived from the stored serving (portion
+      101 +  // mode). servingUnit is "<qty> <pluralized label core>", so the singular core
+      102 +  // ("cup", "large egg", "oz") is a substring we can match back to its portion.
+      103 +  const foundIdx = portions.findIndex((p) =>
+      104 +    item.servingUnit.toLowerCase().includes(p.label.replace(/^1\s+/, '').trim().toLowerCase())
+      105    );
+      106 +  const curPortionIdx = foundIdx >= 0 ? foundIdx : 0;
+      107    const curQty = portions.length
+      108      ? currentQty(item, portions[curPortionIdx]?.gramWeight ?? 0)
+      109      : 0;
+
+● 9. claudeActions.handleLogFood — log from the resolved choice (portions, saved, or fallback):
+
+● Update(src\lib\claudeActions.ts)
+  ⎿  Added 5 lines, removed 3 lines
+      63            barcode: null as string | null,
+      64          };
+      65        }
+      66 -      const food = item.candidates[item.selectedIndex];
+      67 -      if (!food) return null; // unresolved (no confident/chosen match) — skip
+      68 -      const choice = usdaToFoodChoice(food);
+      66 +      // Prefer the resolved choice (carries real USDA portions / saved-food
+      67 +      // macros); fall back to the per-100g selected candidate.
+      68 +      const candidate = item.candidates[item.selectedIndex];
+      69 +      const choice = item.choice ?? (candidate ? usdaToFoodChoice(candidate) : null);
+      70 +      if (!choice) return null; // unresolved (no confident/chosen match) — skip
+      71        const macros = previewMacros(choice, item.servingSize, item.servingUnit);
+      72        return {
+      73          id: uid(),
+
+● 10. FoodLogEntry display — render human-readable serving via formatServing:
+
+● Update(src\components\macros\FoodLogEntry.tsx)
+  ⎿  Added 1 line, removed 1 line
+      1  import { useRef, useState } from 'react';
+      2  import type { FoodLogEntry as Entry } from '../../types/macros';
+      3 -import { round } from '../../lib/macros';
+      3 +import { formatServing, round } from '../../lib/macros';
+      4
+      5  interface Props {
+      6    entry: Entry;
+
+● Update(src\components\macros\FoodLogEntry.tsx)
+  ⎿  Added 1 line, removed 3 lines
+      128            )}
+      129          </div>
+      130          <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+      131 -          <span>
+      132 -            {round(entry.serving_size)} {entry.serving_unit}
+      133 -          </span>
+      131 +          <span>{formatServing(entry.serving_size, entry.serving_unit)}</span>
+      132            <span className="text-gray-300 dark:text-gray-600">·</span>
+      133            <span className="font-medium text-gray-700 dark:text-gray-300">
+      134              {Math.round(entry.calories)} kcal
+
+● Let me check for other constructions/usages of FoodReviewItem and then type-check the whole project.
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+● Let me check NewActionSections.tsx for FoodReviewItem usage, then type-check:
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Good — no other constructions. Now type-check:
+
+● PowerShell(npm run lint 2>&1 | Select-Object -First 60)
+  ⎿  Error: Exit code 2
+     > s-hub@1.0.0 lint
+     > tsc --noEmit
+
+     src/lib/usda.ts(143,7): error TS6133: 'GENERIC_TYPES' is declared but its value is never read.
+
+● Update(src\lib\usda.ts)
+  ⎿  Removed 2 lines
+      140
+      141  // --- Result ranking ----------------------------------------------------------
+      142
+      143 -const GENERIC_TYPES = new Set(['Foundation', 'SR Legacy', 'Survey (FNDDS)']);
+      144 -
+      143  /** True when a USDA result is a branded product (vs. a generic/reference food). */
+      144  function isBranded(f: UsdaFood): boolean {
+      145    return f.dataType === 'Branded' || !!f.brand;
+
+● PowerShell(npm run lint 2>&1 | Select-Object -First 60)
+  ⎿  > s-hub@1.0.0 lint
+     > tsc --noEmit
+  ⎿  Allowed by auto mode classifier
+
+● Type-check is clean. Let me check for any other places that render serving_unit (to ensure descriptive labels
+  display cleanly) and confirm the build passes:
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● FoodLogEntry is the only per-entry serving display and now uses formatServing. Let me run the full production
+  build to validate end-to-end:
+
+● PowerShell(npm run build 2>&1 | Select-Object -Last 20)
+  ⎿  > s-hub@1.0.0 build
+     > tsc && vite build
+     … +21 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Build succeeded (the stderr noise is just the chunk-size warning). Let me confirm the freshly built bundle carries
+  no secrets:
+
+● Bash(cd "C:/Users/brand/Desktop/ToDo_Productivity"
+      echo "=== keys/urls in new bundle ==="…)
+  ⎿  === keys/urls in new bundle ===
+     === exit ===
+
+● Bundle is clean. Let me update the project memory to reflect the new Edge Function security model.
+
+  Recalled 2 memories, wrote 3 memories (ctrl+o to expand)
+
+● Both parts are complete and the project builds clean. Here's the Part 2 report.
+
+  ---
+  PART 2 — USDA SERVING SIZE FIX REPORT
+
+  Files changed
+
+  File: src/types/macros.ts
+  What changed: Added FoodPortion (label / gramWeight / amount); FoodChoice.portions?.
+  ────────────────────────────────────────
+  File: src/lib/usda.ts
+  What changed: getFoodDetail(fdcId) (fetches /food/{fdcId} → foodPortions + per-100g foodNutrients);
+    rankUsdaResults() (generic-first, branded excluded unless brand in query, cooked > raw);
+    usdaDetailToFoodChoice(); parseQuantityNumber(), matchPortion(); dataType now captured;
+    searchFoods/searchFoodsForVoice apply ranking.
+  ────────────────────────────────────────
+  File: src/lib/macros.ts
+  What changed: formatServing(), pluralizeServing() ("1 large egg" ×2 → "2 large eggs"), savedFoodToChoice().
+  ────────────────────────────────────────
+  File: src/hooks/macros/useSavedFoods.ts
+  What changed: findSavedMatch() + SAVED_MATCH_THRESHOLD = 0.8.
+  ────────────────────────────────────────
+  File: src/components/macros/ServingSizeSelector.tsx
+  What changed: Rebuilt: portions dropdown + quantity input + "Custom (grams)", live macros via gramWeight,
+    console.warn on zero gramWeight, "From your foods" badge. Legacy size/unit kept for saved/portion-less foods.
+  ────────────────────────────────────────
+  File: src/components/macros/AddFoodModal.tsx
+  What changed: Picking a result now fetches full detail (portions); saved-food matches (>80%) shown first with
+  badge
+    above USDA results.
+  ────────────────────────────────────────
+  File: src/components/macros/FoodLogEntry.tsx
+  What changed: Serving renders via formatServing (human label or "N unit").
+  ────────────────────────────────────────
+  File: src/components/voice/FoodReviewCard.tsx
+  What changed: Rebuilt: badge, portion-aware serving editor, macros from resolved choice.
+  ────────────────────────────────────────
+  File: src/lib/claudeRouter.ts
+  What changed: handleLogFood voice prep: saved foods checked first, else ranked USDA + getFoodDetail +
+    portion-matched serving via gramWeight.
+  ────────────────────────────────────────
+  File: src/lib/claudeActions.ts
+  What changed: Logs from the resolved choice (portions/saved/fallback), not raw per-100g.
+
+  How each bug is fixed
+
+  - Bug 1 (gramWeight): every macro path computes (per_100g / 100) × gramWeight × quantity. amount is display-only;
+  portions with missing/zero gramWeight are filtered out in getFoodDetail, with a console.warn guard if one ever
+  reaches the selector.
+  - Bug 2 (household measures): the selector is driven by real foodPortions ("1 large egg", "1 cup"), default =
+  first valid portion, with quantity input + "Custom (grams)" fallback.
+  - Bug 3 (inconsistent results): rankUsdaResults excludes branded items entirely for generic queries, prefers
+  Foundation/SR Legacy and cooked over raw, and only allows branded when a brand word appears in the query.
+
+  Verification status — important caveat
+
+  The build and full type-check pass. The two live checks you asked to confirm ("white rice" → "1 cup" ≈ 240 cal /
+  53 C / 4 P / ~0 F, and "chicken breast" → generic cooked at top, no branded) both depend on the updated
+  usda-search Edge Function being deployed — I added the { fdcId } detail path to it, and these flows now call it. I
+  can't exercise the live USDA API from here (no deploy + no ALLOWED_EMAIL/ALLOWED_ORIGIN/rotated keys set yet).
+
+  Tracing the code against the spec's numbers: for rice the selector computes (130/100) × 186 × 1 = 242 cal,
+  (28.5/100) × 186 = 53 g carbs — matching the expected output, assuming USDA's per-100g values. The ranking logic
+  deterministically drops dataType === 'Branded' / branded results for "chicken breast" and boosts cooked
+  Foundation/SR Legacy entries to the top.
+
+  To go live, deploy + set secrets (from the Part 1 list): supabase functions deploy usda-search anthropic-proxy and
+  set ALLOWED_EMAIL, ALLOWED_ORIGIN, and the rotated ANTHROPIC_API_KEY / USDA_API_KEY. Want me to walk through the
+  deploy, or adjust anything in the ranking/serving behavior?
+
+✻ Churned for 17m 54s
+
+❯ walk me through deploy
+
+● Let me check your local Supabase CLI state so I give you the exact commands you need (and not ones you can skip).
+
+● Bash(cd "C:/Users/brand/Desktop/ToDo_Productivity"
+      echo "=== supabase CLI version ==="; supabase --version 2>&1 || echo "NOT INSTALLED"…)
+  ⎿  === supabase CLI version ===
+     /usr/bin/bash: line 2: supabase: command not found
+     NOT INSTALLED
+     … +9 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● PowerShell($ErrorActionPreference='SilentlyContinue'
+            $cmd = Get-Command supabase…)
+  ⎿  supabase NOT on PATH
+     --- scoop? ---
+     no scoop
+     … +2 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Supabase CLI isn't installed, but you have npm/npx and the project is already linked (cntmsrztqgejgavrsdfp). The
+  cleanest path on Windows is to add the CLI as a dev dependency. Let me install it for you (harmless, reversible):
+
+● PowerShell(npm install supabase --save-dev 2>&1 | Select-Object -Last 8
+            "--- version ---"…)
+  ⎿    run `npm fund` for details
+
+     2 vulnerabilities (1 moderate, 1 high)
+     … +7 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● CLI is installed (npx supabase → 2.108.0) and your project is already linked to cntmsrztqgejgavrsdfp. Here's the
+  deploy, in order. Steps 1–3 you run yourself (login is interactive; secrets are sensitive); I can run step 4 for
+  you once you're logged in.
+
+  Step 0 — Rotate the leaked keys first
+
+  Before anything else, because the old keys are burned:
+  - Anthropic: console.anthropic.com → API Keys → revoke the old …7hwBCgAA key → create a new one.
+  - USDA: grab a fresh free key at https://fdc.nal.usda.gov/api-key-signup.html.
+
+  Step 1 — Log in (interactive — run it yourself)
+
+  In this chat, type the command with a leading ! so it runs in your session and the browser/token prompt works:
+  ! npx supabase login
+  That opens a browser and stores an access token. (Project is already linked, so no link needed — but you can
+  confirm with ! npx supabase projects list.)
+
+  Step 2 — I need your production origin
+
+  ALLOWED_ORIGIN must list the exact origin the app is served from, or production CORS will block every proxy call.
+  What's your deployed URL?
+
+● User declined to answer questions
+  ⎿  · What origin(s) should the Edge Functions accept requests from? (ALLOWED_ORIGIN) (Vercel + localhost /
+     Localhost only)
+
+● You'd like to clarify something first — go ahead. What's on your mind about the deploy or the ALLOWED_ORIGIN
+  question?
+
+  For context, the only thing I genuinely need from you for that step is the URL your app is actually served from in
+  production (so browser requests aren't blocked by CORS). A few things that might be what you're wondering:
+
+  - If you don't have a public deployment yet and are only running npm run dev locally → the answer is just
+  http://localhost:5173, and we can add the real domain later.
+  - If you deployed to Vercel → I need the exact origin, like https://your-app.vercel.app (or a custom domain if you
+  set one). You can find it on the Vercel dashboard or by running ! vercel ls if you have the Vercel CLI.
+  - If you're not sure CORS matters here → it does only for the browser→Edge-Function calls; getting it wrong just
+  means the app can't reach the proxy until we fix the secret. It's easy to update anytime with another secrets set.
+
+  What would you like to clarify?
+
+✻ Sautéed for 1m 32s
+
+❯ i need guidance on how to launch the app via vercell
+
+● Good — let me check what's already set up so I give you the right path (you're not in a git repo, which changes
+  the options).
+
+● Bash(cd "C:/Users/brand/Desktop/ToDo_Productivity"
+      echo "=== git repo? ==="; git rev-parse --is-inside-work-tree 2>&1 || echo "NOT a git repo"…)
+  ⎿  === git repo? ===
+     fatal: not a git repository (or any of the parent directories): .git
+     NOT a git repo
+     … +7 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● PowerShell($ErrorActionPreference='SilentlyContinue'
+            $v = Get-Command vercel…)
+  ⎿  vercel CLI NOT installed
+  ⎿  Allowed by auto mode classifier
+
+● You're not in a git repo and don't have the Vercel CLI yet — so the fastest path is the Vercel CLI deploying
+  straight from this folder (no GitHub needed). npx fetches it on demand, nothing to pre-install. Here's the whole
+  flow.
+
+  What Vercel needs to know about this app
+
+  It's a Vite + React app, so Vercel auto-detects everything:
+  - Framework: Vite · Build: npm run build · Output: dist — all auto-detected, just accept the defaults.
+  - Two env vars must be added in Vercel (your .env.local is gitignored and never uploaded, so without these the app
+  errors with "Missing Supabase env vars"). Both are public/safe (RLS-protected):
+    - VITE_SUPABASE_URL = https://cntmsrztqgejgavrsdfp.supabase.co
+    - VITE_SUPABASE_ANON_KEY = sb_publishable_qBQkLk9sL7_uzFvSKQzaFg_Jaeebu_m
+
+  Step 1 — Log in (interactive, run it yourself)
+
+  Type this in the chat with a leading ! so it runs in your session:
+  ! npx vercel login
+
+  Step 2 — First deploy (interactive)
+
+  ! npx vercel
+  It asks a short series of questions — accept the defaults:
+  - Set up and deploy? → Y
+  - Which scope? → your account
+  - Link to existing project? → N (create new)
+  - Project name? → press Enter (uses the folder name)
+  - In which directory is your code? → ./
+  - Modify settings? → N (the auto-detected Vite settings are correct)
+
+  This does a preview deploy and prints a URL.
+
+  Step 3 — Add the env vars
+
+  Easiest in the dashboard: open the project → Settings → Environment Variables → add the two vars above for
+  Production (and Preview/Development if you want vercel dev to work).
+
+  Or via CLI (it'll prompt you to paste each value):
+  ! npx vercel env add VITE_SUPABASE_URL production
+  ! npx vercel env add VITE_SUPABASE_ANON_KEY production
+
+  Step 4 — Production deploy
+
+  ! npx vercel --prod
+  This prints your production URL, e.g. https://your-project.vercel.app.
+
+  Step 5 — Back to the Supabase deploy
+
+  That production URL is exactly what ALLOWED_ORIGIN needs. Once you have it, paste it here and I'll give you the
+  finished supabase secrets set command (with your Vercel domain + http://localhost:5173) and run the function
+  deploys for you.
+
+  ---
+  One thing to decide before you start — want me to add a small vercel.json to pin the build settings explicitly
+  (optional; Vite auto-detect already works), or keep it zero-config?
+
+✻ Churned for 54s
+
+! npx vercel
+  ⎿  Command running in background with ID: bipkgda5x. Output is being written to: C:\Users\brand\AppData\Local
+     \Temp\claude\C--Users-brand-Desktop-ToDo-Productivity\8e89c175-5772-4688-9fc6-ff9843d1767d\tasks\bipkgda5x
+     .output. You will be notified when it completes. To check interim output, use Read on that file path.
+
+! npx vercel
+  ⎿  <claude-code-hint v="1" type="plugin" value="vercel@claude-plugins-official" />
+     Vercel CLI 54.18.2 (Node.js 24.16.0)
+     > No existing credentials found. Starting login flow...
+     … +21 lines (ctrl+o to expand)
+
+● I see the deploy hit a snag on the project name. Let me check the state of that background process before
+  advising.
+
+  Read 1 file (ctrl+o to expand)
+
+● Two things happened there — here's what and the fix.
+
+  1. There's a stray background process. Your first npx vercel (ID bipkgda5x) is still hanging on Waiting for
+  authentication... with an abandoned device code (CPNF-HHQC) — it never got logged in. The second run is the one
+  that authenticated (GFXL-MWZN). That background one is harmless but pointless; just press Ctrl+C on it (or ignore
+  it — it'll time out). You're now logged in either way.
+
+  2. The real blocker: the project name is invalid. Vercel derived the default name from your folder
+  ToDo_Productivity, and project names must be lowercase and can't contain certain sequences — so it 400'd instead
+  of continuing.
+
+  Fix — re-run and give it a clean name
+
+  ! npx vercel
+  It'll skip login this time. Answer the prompts, and when it asks What's your project name?, don't accept the
+  default — type a valid one:
+  todo-productivity
+  (lowercase, hyphens only — that becomes your URL, e.g. https://todo-productivity.vercel.app). Then:
+  - Link to existing project? → N
+  - In which directory is your code? → ./
+  - Modify settings? → N (Vite/vite build/dist were detected correctly — you can see it picked those up)
+
+  If it ever refuses to let you edit the name at the prompt, the alternative is to rename the folder to lowercase,
+  but try the prompt first — that's the quick path.
+
+  Once it finishes you'll get a preview URL; then add the two env vars and run npx vercel --prod (Steps 3–4 from
+  before) to get the production URL for ALLOWED_ORIGIN.
+
+✻ Baked for 1m 5s · 1 shell still running
+
+! npx vercel
+  ⎿  <claude-code-hint v="1" type="plugin" value="vercel@claude-plugins-official" />
+     Vercel CLI 54.18.2 (Node.js 24.16.0)
+
+       Directory       ~\Desktop\ToDo_Productivity
+
+     Loading teams…
+     Searching for existing projects…
+
+       Detected Vite (Build Command: vite build, Output Directory: dist)
+     Error: Project names can be up to 100 characters long and must be lowercase. They can include letters, digits,
+     and the following characters: '.', '_', '-'. However, they cannot contain the sequence '---'. (400)
+     Learn More: https://vercel.com/docs/projects/overview#project-name
+
+
+● That second failure is the real tell: the project-name step never prompted you — it errored straight away both
+  times. That's because commands run through the chat's ! runner don't get an interactive keyboard, so Vercel can't
+  ask "what's the project name?" and falls back to your folder name ToDo_Productivity — which is invalid (uppercase
+  + underscore). The OAuth login worked earlier only because it just waits on a URL, no typing needed.
+
+  So you need to either give the name up front, or run it in a real terminal. Two ways:
+
+  Option A — run it in your own terminal (simplest)
+
+  Open a normal PowerShell window yourself (Start menu → PowerShell, then cd
+  C:\Users\brand\Desktop\ToDo_Productivity), and run:
+  npx vercel
+  There the name prompt actually appears — type todo-productivity and accept the rest of the defaults (link → No,
+  dir → ./, modify settings → No).
+
+  Option B — stay in this chat, name it up front (non-interactive)
+
+  Create + link the project with an explicit valid name, which skips the prompt entirely:
+  ! npx vercel link --yes --project todo-productivity
+  Then add the two env vars in the Vercel dashboard (Project → Settings → Environment Variables, set for
+  Production):
+  - VITE_SUPABASE_URL = https://cntmsrztqgejgavrsdfp.supabase.co
+  - VITE_SUPABASE_ANON_KEY = sb_publishable_qBQkLk9sL7_uzFvSKQzaFg_Jaeebu_m
+
+  ▎ These must exist before the production build — Vite bakes VITE_ vars into the bundle at build time, so a deploy
+  ▎ without them ships a broken app.
+
+  Then deploy:
+  ! npx vercel --prod
+
+  Either way you end up with https://todo-productivity.vercel.app (or a slight variant if the name's taken) — paste
+  that back here and I'll finish the Supabase secrets set + function deploys.
+
+  Go with Option A if you're comfortable opening a terminal — it's the most predictable. If vercel link in Option B
+  complains that it can't create the project, fall back to A.
+
+✻ Cogitated for 1m 3s · 1 shell still running
+
+※ recap: Goal: deploy your app so the security fixes go live. You're stuck on Vercel's project-name error. Next:
+  open your own PowerShell, cd to the project, run npx vercel, and name it todo-productivity. Then send me the URL.
+  (disable recaps in /config)
+
+❯ https://slomhub.vercel.app
+❯ https://slomhub.vercel.app
+
+● That's the piece I needed — production origin is https://slomhub.vercel.app. Now I can assemble the Supabase side.
+  One thing I have to get right first, because it'll lock you out if it's wrong: the email whitelist. ALLOWED_EMAIL
+  must be the exact email you sign into the app with (Supabase auth), which isn't necessarily the email that owns
+  the Supabase project.
+
+● User answered Claude's questions:
+  ⎿  · Which email do you log into the slomhub app with? (This becomes ALLOWED_EMAIL — any other email gets a 403
+     from the proxies.) → brandonmoran603@gmail.com, also require a password for added security
+
+● Locked in: ALLOWED_EMAIL=brandonmoran603@gmail.com, origin https://slomhub.vercel.app. I'll note the
+  password-hardening ask and come back to it right after the deploy (it's a Supabase auth setting + a small
+  LoginScreen change — it doesn't block this). Let me first record these deploy facts so they survive:
+
+  Wrote 1 memory (ctrl+o to expand)
+
+● Background command "npx vercel" failed with exit code 1
+
+● (That notification is just the orphaned first npx vercel finally giving up — harmless, ignore it.)
+
+  Now the final Supabase deploy. These run against your project cntmsrztqgejgavrsdfp. Run them in this chat with !
+  (or your own terminal).
+
+  1. Log in (if you haven't already this session)
+
+  ! npx supabase login
+
+  2. Set the secrets (you run this — it has your rotated keys)
+
+  Replace sk-ant-NEW… and NEW_USDA_KEY with the freshly rotated keys from Step 0. Each pair is quoted so PowerShell
+  doesn't choke on the comma in ALLOWED_ORIGIN:
+  ! npx supabase secrets set "ANTHROPIC_API_KEY=sk-ant-NEW…" "USDA_API_KEY=NEW_USDA_KEY"
+  "ALLOWED_EMAIL=brandonmoran603@gmail.com" "ALLOWED_ORIGIN=https://slomhub.vercel.app,http://localhost:5173"
+  --project-ref cntmsrztqgejgavrsdfp
+
+  3. Deploy the two functions
+
+  ! npx supabase functions deploy anthropic-proxy --project-ref cntmsrztqgejgavrsdfp
+  ! npx supabase functions deploy usda-search --project-ref cntmsrztqgejgavrsdfp
+
+  4. Verify the secrets landed
+
+  ! npx supabase secrets list --project-ref cntmsrztqgejgavrsdfp
+  You should see all four names listed (values are hashed).
+
+  Offer: once you've done 1 and 2, I can run 3 and 4 for you — they use your stored login token and contain no
+  secret values. Just say the word after you've logged in + set secrets.
+
+  Also confirm the frontend actually got its env vars
+
+  Open https://slomhub.vercel.app — if it loads the login screen, the VITE_ vars baked in correctly. If you instead
+  see a "Missing Supabase env vars" error (or a blank page), the prod build ran before the env vars existed → add
+  them in the Vercel dashboard (Settings → Environment Variables, Production) and redeploy with ! npx vercel --prod.
+
+  ---
+  When the deploy's verified, I'll do the password-required login hardening you asked for: flip off passwordless/OTP
+  in Supabase Auth settings and update LoginScreen.tsx to require a password. Want me to prep that change now so
+  it's ready to ship, or after you confirm the proxies work?
+
+✻ Brewed for 1m 39s
+
+❯ what are the env vars?
+
+● The two you need to add in Vercel (Project → Settings → Environment Variables, scope Production, and
+  Preview/Development too if you want vercel dev to work):
+
+  ┌────────────────────────┬────────────────────────────────────────────────┐
+  │          Name          │                     Value                      │
+  ├────────────────────────┼────────────────────────────────────────────────┤
+  │ VITE_SUPABASE_URL      │ https://cntmsrztqgejgavrsdfp.supabase.co       │
+  ├────────────────────────┼────────────────────────────────────────────────┤
+  │ VITE_SUPABASE_ANON_KEY │ sb_publishable_qBQkLk9sL7_uzFvSKQzaFg_Jaeebu_m │
+  └────────────────────────┴────────────────────────────────────────────────┘
+
+  A few notes:
+  - These two are safe to expose — they're the public Supabase URL + the publishable/anon key. Row-Level Security
+  and the Edge-Function auth (the ALLOWED_EMAIL whitelist we just set up) are what actually protect your data. Never
+  put the Supabase service_role key or the Anthropic/USDA keys here — those stay as Supabase secrets, server-side
+  only.
+  - They come straight from your local .env.local (which Vercel never sees, since it's gitignored).
+  - Vite inlines VITE_ vars at build time, so after adding them you must trigger a fresh build for them to take
+  effect: ! npx vercel --prod (or hit Redeploy in the dashboard). Adding them won't change an already-built
+  deployment.
+  - Make sure there are no stray spaces or quotes around the values when you paste them.
+
+  To sanity-check after redeploying: open https://slomhub.vercel.app — a working login screen means they baked in; a
+  blank page or "Missing Supabase env vars" means the build still ran without them.
+
+✻ Crunched for 11s
+
+❯ theres no environment variables section
+
+● Let me check whether your local folder got linked to the Vercel project — that decides whether we can just do it
+  from the command line and skip the dashboard hunt.
+
+● Bash(cd "C:/Users/brand/Desktop/ToDo_Productivity"
+      echo "=== .vercel link ==="; cat .vercel/project.json 2>/dev/null || echo "NOT linked locally (no
+      .vercel/project.…)
+  ⎿  === .vercel link ===
+     {"projectId":"prj_ZtrHuZWANRuwBu7YurCgznlKeu1a","orgId":"team_oblbthwzHzRlyui5EtGaUAcE","projectName":"slo
+     mhub"}=== existing env (CLI view) ===
+     … +9 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● You're already linked to the slomhub project and it just has no env vars yet — so we can skip the dashboard
+  entirely and add them from the CLI. These are the public Supabase values (safe), so I'll add them for you now, to
+  all three environments:
+
+● Bash(cd "C:/Users/brand/Desktop/ToDo_Productivity"
+      URL="https://cntmsrztqgejgavrsdfp.supabase.co"…)
+  ⎿  - `vercel env pull`
+     - `vercel env pull`
+     - `vercel env pull`
+     … +12 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Both vars are landing. Let me confirm the full set across all environments:
+
+● Bash(cd "C:/Users/brand/Desktop/ToDo_Productivity"
+      npx vercel env ls 2>&1 | grep -E "VITE_SUPABASE|Environments|name" )
+  ⎿   name                       value               environments        created
+      VITE_SUPABASE_ANON_KEY     Encrypted           Development         13s ago
+      VITE_SUPABASE_URL          Encrypted           Development         16s ago
+     … +4 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● All six are set (both vars × Production/Preview/Development). Now the production build needs to re-run so Vite can
+  bake them in. I'll trigger the production redeploy:
+
+● Bash(cd "C:/Users/brand/Desktop/ToDo_Productivity"
+      npx vercel --prod --yes 2>&1 | tail -25)
+  ⎿    Production      https://slomhub-hhxp6b6ir-slomhub.vercel.app
+     Completing…
+     ▲ Aliased         https://slomhub.vercel.app
+     … +22 lines (ctrl+o to expand)
+  ⎿  (timeout 5m)
+  ⎿  Allowed by auto mode classifier
+
+● Production is live and aliased to https://slomhub.vercel.app (status READY). Let me verify the new build actually
+  baked in the Supabase config:
+
+● Bash(cd "C:/Users/brand/Desktop/ToDo_Productivity"
+      echo "=== homepage status ==="; curl -s -o /dev/null -w "%{http_code}\n" https://slomhub.vercel.app…)
+  ⎿  === homepage status ===
+     200
+     === find main JS bundle ===
+     … +4 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Frontend is fully done. ✅ Verified:
+  - https://slomhub.vercel.app returns 200
+  - the production bundle has cntmsrztqgejgavrsdfp.supabase.co baked in → env vars took effect
+
+  So the Vercel side is complete — and that "no Environment Variables section" problem is moot; we set all six (2
+  vars × Production/Preview/Development) straight from the CLI.
+
+  Where things stand
+
+  ┌─────────────────────────────────────────────────┬────────────────────────┐
+  │                      Piece                      │         Status         │
+  ├─────────────────────────────────────────────────┼────────────────────────┤
+  │ Code (security fixes + USDA serving fix)        │ ✅ done, builds clean  │
+  ├─────────────────────────────────────────────────┼────────────────────────┤
+  │ Vercel frontend live w/ env vars                │ ✅ done                │
+  ├─────────────────────────────────────────────────┼────────────────────────┤
+  │ Supabase Edge Functions deployed w/ new secrets │ ⛔ not yet — needs you │
+  ├─────────────────────────────────────────────────┼────────────────────────┤
+  │ Password-required login                         │ ⛔ pending             │
+  └─────────────────────────────────────────────────┴────────────────────────┘
+
+  Right now the app will load, but voice (Anthropic) and food search (USDA) won't work until the Edge Functions are
+  redeployed with the new auth + secrets. That part needs your rotated keys and a login I can't do for you:
+
+  1. Rotate the leaked Anthropic + USDA keys (Step 0 earlier) and grab the new values.
+  2. ! npx supabase login
+  3. Set the secrets (your rotated keys):
+  ! npx supabase secrets set "ANTHROPIC_API_KEY=sk-ant-NEW…" "USDA_API_KEY=NEW_USDA_KEY"
+  "ALLOWED_EMAIL=brandonmoran603@gmail.com" "ALLOWED_ORIGIN=https://slomhub.vercel.app,http://localhost:5173"
+  --project-ref cntmsrztqgejgavrsdfp
+
+  Once you've done 1–3, just tell me and I'll run the two functions deploy commands + verify for you (those don't
+  need secret values).
+
+  Want me to go ahead and prep the password-required login change (LoginScreen + the Supabase Auth dashboard toggle
+  to turn off magic-link/OTP) in the meantime, so it's ready to ship?
+
+✻ Baked for 2m 41s
+
+❯ yes, also explain to me how these APIs are safe now?
+
+● Let me read the current login flow so I make the right change.
+
+  Read 1 file (ctrl+o to expand)
+
+● Here's the password-required login change. I'm removing the magic-link/OTP path entirely so email + password is
+  the only way in.
+
+● Write(src\components\LoginScreen.tsx)
+  ⎿  Added 33 lines, removed 102 lines
+       2  import { useAuth } from '../hooks/useAuth';
+       3
+       4  export default function LoginScreen() {
+       5 -  const { signInWithPassword, signInWithEmail } = useAuth();
+       6 -  const [mode, setMode] = useState<'password' | 'link'>('password');
+       5 +  const { signInWithPassword } = useAuth();
+       6    const [email, setEmail] = useState('');
+       7    const [password, setPassword] = useState('');
+       9 -  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+       8 +  const [status, setStatus] = useState<'idle' | 'sending' | 'error'>('idle');
+       9    const [error, setError] = useState('');
+      10
+      12 -  async function handlePasswordSubmit(e: React.FormEvent) {
+      11 +  async function handleSubmit(e: React.FormEvent) {
+      12      e.preventDefault();
+      13      if (!email.trim() || !password) return;
+      14      setStatus('sending');
+     ...
+      22      }
+      23    }
+      24
+      26 -  async function handleLinkSubmit(e: React.FormEvent) {
+      27 -    e.preventDefault();
+      28 -    if (!email.trim()) return;
+      29 -    setStatus('sending');
+      30 -    setError('');
+      31 -    const { error } = await signInWithEmail(email.trim());
+      32 -    if (error) {
+      33 -      setStatus('error');
+      34 -      setError(error.message);
+      35 -    } else {
+      36 -      setStatus('sent');
+      37 -    }
+      38 -  }
+      39 -
+      40 -  function switchMode(next: 'password' | 'link') {
+      41 -    setMode(next);
+      42 -    setStatus('idle');
+      43 -    setError('');
+      44 -  }
+      45 -
+      25    return (
+      26      <div className="flex min-h-screen items-center justify-center px-4">
+      27        <div className="w-full max-w-sm animate-slide-up">
+     ...
+       33            </div>
+       34            <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
+       35            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+       57 -            {mode === 'password'
+       58 -              ? 'Sign in with your email and password.'
+       59 -              : 'We’ll email you a one-time sign-in link.'}
+       36 +            Sign in with your email and password.
+       37            </p>
+       38          </div>
+       39
+       63 -        {status === 'sent' ? (
+       64 -          <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-center text-sm t
+          -ext-green-800 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-300">
+       65 -            Check <span className="font-semibold">{email}</span> for a sign-in link.
+       66 -            {' '}Once you’re in, you can set a password from the header.
+       67 -          </div>
+       68 -        ) : mode === 'password' ? (
+       69 -          <form onSubmit={handlePasswordSubmit} className="space-y-3">
+       70 -            <input
+       71 -              type="email"
+       72 -              required
+       73 -              autoFocus
+       74 -              autoComplete="email"
+       75 -              value={email}
+       76 -              onChange={(e) => setEmail(e.target.value)}
+       77 -              placeholder="you@example.com"
+       78 -              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outli
+          -ne-none transition-colors focus:border-gray-500 focus:ring-2 focus:ring-gray-400/40 dark:border-gr
+          -ay-700 dark:bg-gray-900"
+       79 -            />
+       80 -            <input
+       81 -              type="password"
+       82 -              required
+       83 -              autoComplete="current-password"
+       84 -              value={password}
+       85 -              onChange={(e) => setPassword(e.target.value)}
+       86 -              placeholder="Password"
+       87 -              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outli
+          -ne-none transition-colors focus:border-gray-500 focus:ring-2 focus:ring-gray-400/40 dark:border-gr
+          -ay-700 dark:bg-gray-900"
+       88 -            />
+       89 -            <button
+       90 -              type="submit"
+       91 -              disabled={status === 'sending'}
+       92 -              className="w-full rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white
+          -transition-colors hover:bg-gray-700 disabled:opacity-60"
+       93 -            >
+       94 -              {status === 'sending' ? 'Signing in…' : 'Sign in'}
+       95 -            </button>
+       96 -            {status === 'error' && (
+       97 -              <p className="text-center text-sm text-red-500">{error}</p>
+       98 -            )}
+       99 -            <button
+      100 -              type="button"
+      101 -              onClick={() => switchMode('link')}
+      102 -              className="block w-full text-center text-xs text-gray-500 underline-offset-2 hover:u
+          -nderline dark:text-gray-400"
+      103 -            >
+      104 -              First time, or no password yet? Email me a sign-in link
+      105 -            </button>
+      106 -          </form>
+      107 -        ) : (
+      108 -          <form onSubmit={handleLinkSubmit} className="space-y-3">
+      109 -            <input
+      110 -              type="email"
+      111 -              required
+      112 -              autoFocus
+      113 -              autoComplete="email"
+      114 -              value={email}
+      115 -              onChange={(e) => setEmail(e.target.value)}
+      116 -              placeholder="you@example.com"
+      117 -              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outli
+          -ne-none transition-colors focus:border-gray-500 focus:ring-2 focus:ring-gray-400/40 dark:border-gr
+          -ay-700 dark:bg-gray-900"
+      118 -            />
+      119 -            <button
+      120 -              type="submit"
+      121 -              disabled={status === 'sending'}
+      122 -              className="w-full rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white
+          -transition-colors hover:bg-gray-700 disabled:opacity-60"
+      123 -            >
+      124 -              {status === 'sending' ? 'Sending…' : 'Send sign-in link'}
+      125 -            </button>
+      126 -            {status === 'error' && (
+      127 -              <p className="text-center text-sm text-red-500">{error}</p>
+      128 -            )}
+      129 -            <button
+      130 -              type="button"
+      131 -              onClick={() => switchMode('password')}
+      132 -              className="block w-full text-center text-xs text-gray-500 underline-offset-2 hover:u
+          -nderline dark:text-gray-400"
+      133 -            >
+      134 -              Back to password sign-in
+      135 -            </button>
+      136 -          </form>
+      137 -        )}
+       40 +        <form onSubmit={handleSubmit} className="space-y-3">
+       41 +          <input
+       42 +            type="email"
+       43 +            required
+       44 +            autoFocus
+       45 +            autoComplete="email"
+       46 +            value={email}
+       47 +            onChange={(e) => setEmail(e.target.value)}
+       48 +            placeholder="you@example.com"
+       49 +            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline
+          +-none transition-colors focus:border-gray-500 focus:ring-2 focus:ring-gray-400/40 dark:border-gray
+          +-700 dark:bg-gray-900"
+       50 +          />
+       51 +          <input
+       52 +            type="password"
+       53 +            required
+       54 +            autoComplete="current-password"
+       55 +            value={password}
+       56 +            onChange={(e) => setPassword(e.target.value)}
+       57 +            placeholder="Password"
+       58 +            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline
+          +-none transition-colors focus:border-gray-500 focus:ring-2 focus:ring-gray-400/40 dark:border-gray
+          +-700 dark:bg-gray-900"
+       59 +          />
+       60 +          <button
+       61 +            type="submit"
+       62 +            disabled={status === 'sending'}
+       63 +            className="w-full rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white tr
+          +ansition-colors hover:bg-gray-700 disabled:opacity-60"
+       64 +          >
+       65 +            {status === 'sending' ? 'Signing in…' : 'Sign in'}
+       66 +          </button>
+       67 +          {status === 'error' && <p className="text-center text-sm text-red-500">{error}</p>}
+       68 +        </form>
+       69        </div>
+       70      </div>
+       71    );
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● signInWithEmail is now unused in the app. I'll remove it from the hook so the OTP path isn't reachable from the
+  frontend at all:
+
+● Update(src\hooks\useAuth.ts)
+  ⎿  Removed 10 lines
+      36      return supabase.auth.signInWithPassword({ email, password });
+      37    }
+      38
+      39 -  /** Send a magic link to the given email (first-time / password recovery). */
+      40 -  async function signInWithEmail(email: string) {
+      41 -    return supabase.auth.signInWithOtp({
+      42 -      email,
+      43 -      options: {
+      44 -        emailRedirectTo: window.location.origin,
+      45 -      },
+      46 -    });
+      47 -  }
+      48 -
+      39    /** Set or change the password on the currently signed-in account. */
+      40    async function setPassword(password: string) {
+      41      return supabase.auth.updateUser({ password });
+
+● Update(src\hooks\useAuth.ts)
+  ⎿  Removed 1 line
+      50      user: state.session?.user ?? null,
+      51      loading: state.loading,
+      52      signInWithPassword,
+      53 -    signInWithEmail,
+      53      setPassword,
+      54      signOut,
+      55    };
+
+● PowerShell(npm run lint 2>&1 | Select-Object -Last 20)
+  ⎿  > s-hub@1.0.0 lint
+     > tsc --noEmit
+  ⎿  Allowed by auto mode classifier
+
+● Done — password-only login is in and type-checks clean. Here's everything.
+
+  - useAuth.ts — deleted signInWithEmail (the signInWithOtp magic-link call) entirely, so the passwordless path
+  isn't even reachable from the frontend anymore.
+
+  Two things before this ships:
+  1. Make sure brandonmoran603@gmail.com actually has a password set in Supabase — otherwise password-only login
+  locks you out. (Your Pass.txt suggests you have one; if unsure, set it in the Supabase dashboard → Authentication
+  → Users → your user → "Send password recovery" or set directly.)
+  2. Disable OTP server-side (the frontend change is just UX — the real switch is server-side): Supabase Dashboard →
+  Authentication → Sign In / Providers → Email → turn off "Email OTP" / magic links, keep "Password" on. Without
+  this, someone could still trigger an OTP by calling the API directly.
+
+  It's not deployed yet — I'll fold it into the next npx vercel --prod whenever you're ready (or say the word and
+  I'll redeploy now).
+
+  ---
+  How the APIs are safe now
+
+  The whole design is "the browser never holds a usable secret, and only you can spend the keys." Here's the layered
+  picture for a request like voice or food search:
+
+  Your browser  →  Supabase Edge Function (proxy)  →  Anthropic / USDA
+  (no API key)     (adds the real key server-side)     (sees only the proxy)
+
+  1. The keys aren't in the browser at all.
+  Before, the Anthropic/USDA keys were compiled into the JavaScript bundle (VITE_… vars) — anyone could open
+  devtools and copy them. Now they live only as Supabase secrets (ANTHROPIC_API_KEY, USDA_API_KEY), encrypted
+  server-side. The function attaches the key inside the request, after it leaves your browser. I verified the live
+  bundle: it contains only the public Supabase URL/anon key — zero API keys.
+
+  2. The only thing the frontend has is meant to be public.
+  VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are designed to be exposed. They can't read or write data on their
+  own — Row-Level Security on every table restricts rows to their owner, so the anon key alone is useless to an
+  attacker.
+
+  3. Every proxy call must carry a valid login (→ 401).
+  supabase-js automatically attaches your session JWT to each function call. The function calls auth.getUser(token)
+  and rejects anything without a valid, unexpired token with 401 — before touching the paid key.
+
+  4. Even a valid login must be you (→ 403).
+  On top of the JWT check, the function compares the authenticated email against ALLOWED_EMAIL
+  (brandonmoran603@gmail.com). Anyone else — even if they sign up for their own account — gets 403. So the keys can
+  only be spent by you.
+
+  5. Requests must come from your site (CORS).
+  The functions only accept browser requests from https://slomhub.vercel.app (and localhost:5173 for dev). A
+  malicious page on another domain can't call your proxy from a victim's browser.
+
+  6. Defense in depth.
+  verify_jwt = true is also pinned at the Supabase gateway (a second JWT check before the function runs), and the
+  new password-only login removes the magic-link path as a way to obtain a session.
+
+  What an attacker can and can't do now
+
+  ┌───────────────────────────────────────────┬──────────────────────────┐
+  │                  Attempt                  │          Result          │
+  ├───────────────────────────────────────────┼──────────────────────────┤
+  │ Read the keys from the shipped JS         │ ❌ not there             │
+  ├───────────────────────────────────────────┼──────────────────────────┤
+  │ Call your proxy with no login             │ ❌ 401                   │
+  ├───────────────────────────────────────────┼──────────────────────────┤
+  │ Sign up their own account and call it     │ ❌ 403 (not whitelisted) │
+  ├───────────────────────────────────────────┼──────────────────────────┤
+  │ Call the proxy from another website       │ ❌ blocked by CORS       │
+  ├───────────────────────────────────────────┼──────────────────────────┤
+  │ Use the public anon key to read your data │ ❌ blocked by RLS        │
+  └───────────────────────────────────────────┴──────────────────────────┘
+
+  The one thing still outstanding
+
+  This all holds only after you rotate the leaked keys. The old sk-ant-… and USDA keys were sitting in plaintext in
+  Context/*.txt (and possibly synced/backed up) — redaction doesn't un-leak them. Until you revoke the old Anthropic
+  key and set the new one as the secret, anyone who saw that file can still spend on the old key directly (that
+  path doesn't go through any of the protections above). Rotating is step 1 of the Supabase deploy that's still
+  pending.
+
+  Want me to redeploy the frontend now with the password-only login, or hold until you've rotated the keys and set
+  the Supabase secrets so we ship it all together?
+
+✻ Churned for 2m 2s
+
+※ recap: Goal: secure the app's APIs and ship the USDA fix to production. Frontend is live on Vercel and
+  password-only login is coded. Next: rotate the leaked Anthropic/USDA keys, run supabase login, and set the secrets
+  so I can deploy the Edge Functions. (disable recaps in /config)
+
+❯ how to install the PWA on my pc? and how to set the keys?
+
+● Good questions. Let me first check whether the app is actually set up as an installable PWA (manifest + service
+  worker), so I don't send you chasing an install button that isn't there.
+
+● Bash(cd "C:/Users/brand/Desktop/ToDo_Productivity"
+      echo "=== index.html ==="; cat index.html…)
+  ⎿  === index.html ===
+     <!doctype html>
+     <html lang="en">
+     … +54 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● It's a real, installable PWA (manifest + sw.js service worker + icons). Let me confirm the manifest has what
+  Chrome needs for the install prompt:
+
+  Read 1 file (ctrl+o to expand)
+
+● Yes — it's a proper installable PWA (valid manifest, display: standalone, 192/512 + maskable icons, service
+  worker, served over HTTPS on Vercel). Here's both.
+
+  1. Install the PWA on your PC (Chrome or Edge)
+
+  1. Open https://slomhub.vercel.app in Chrome or Edge (not Incognito).
+  2. Look at the right end of the address bar for an install icon — a little monitor/screen with a down-arrow
+  (Chrome) or a ⊞ "Apps" icon (Edge). Click it → Install.
+    - No icon? Use the menu instead:
+        - Chrome: ⋮ → Cast, save and share → Install page as app… (or it may say "Install S Hub…")
+      - Edge: ⋯ → Apps → Install this site as an app
+  3. Confirm. It opens in its own window, adds a Start-menu / desktop icon, and runs standalone (no browser chrome).
+  You can pin it to the taskbar.
+
+  If the install option doesn't appear: hard-refresh with Ctrl+Shift+R (I redeployed a few minutes ago, so the
+  service worker needs to pick up the new build), and make sure you're on https://, not Incognito. To check it
+  registered: F12 → Application tab → Manifest and Service Workers should both show entries. To remove later: visit
+  chrome://apps (or edge://apps) → right-click → Uninstall.
+
+  ▎ Note: the app will install fine right now, but voice + food search won't work until the Edge Functions below are
+  ▎ deployed.
+
+  2. Set the keys (Supabase secrets)
+
+  Step A — Rotate first (get fresh values):
+  - Anthropic: console.anthropic.com → API Keys → Create Key (copy the new sk-ant-…), then disable/delete the old
+  leaked one.
+  - USDA: https://fdc.nal.usda.gov/api-key-signup.html → sign up → key is emailed to you.
+
+  Step B — Set them. Two ways, pick one:
+
+  CLI (recommended): after ! npx supabase login, run this single command with your new values (each pair quoted so
+  PowerShell handles the comma):
+  ! npx supabase secrets set "ANTHROPIC_API_KEY=sk-ant-NEW…" "USDA_API_KEY=NEW_USDA_KEY"
+  "ALLOWED_EMAIL=brandonmoran603@gmail.com" "ALLOWED_ORIGIN=https://slomhub.vercel.app,http://localhost:5173"
+  --project-ref cntmsrztqgejgavrsdfp
+
+  Dashboard (no CLI): Supabase → your project → Project Settings → Edge Functions → Secrets (also reachable from the
+  Edge Functions page → Manage secrets). Add four entries:
+
+  ┌───────────────────┬──────────────────────────────────────────────────┐
+  │       Name        │                      Value                       │
+  ├───────────────────┼──────────────────────────────────────────────────┤
+  │ ANTHROPIC_API_KEY │ your new sk-ant-…                                │
+  ├───────────────────┼──────────────────────────────────────────────────┤
+  │ USDA_API_KEY      │ your new USDA key                                │
+  ├───────────────────┼──────────────────────────────────────────────────┤
+  │ ALLOWED_EMAIL     │ brandonmoran603@gmail.com                        │
+  ├───────────────────┼──────────────────────────────────────────────────┤
+  │ ALLOWED_ORIGIN    │ https://slomhub.vercel.app,http://localhost:5173 │
+  └───────────────────┴──────────────────────────────────────────────────┘
+
+  Step C — Deploy the functions so they pick up the secrets (secrets alone do nothing until the functions are live):
+  ! npx supabase functions deploy anthropic-proxy --project-ref cntmsrztqgejgavrsdfp
+  ! npx supabase functions deploy usda-search --project-ref cntmsrztqgejgavrsdfp
+
+  No frontend rebuild needed for any of this — the keys are server-side only.
+
+  ---
+  Same standing offer: once you've logged in and set the secrets (Steps A–B), tell me and I'll run Step C's deploys
+  + verify for you. And whenever you're ready I'll redeploy the frontend to ship the password-only login. Which do
+  you want to tackle first?
+
+✻ Cooked for 1m 5s
+
+※ recap: Goal: ship slomhub securely. Frontend is live on Vercel and password-only login plus all code fixes are
+  done. Next: rotate the Anthropic and USDA keys, then set the four Supabase secrets so I can deploy the Edge
+  Functions. (disable recaps in /config)
+
+! npx supabase login
+  ⎿  {
+       "_tag": "Error",
+       "error": {
+         "code": "LegacyLoginMissingTokenError",
+         "message": "Cannot use automatic login flow inside non-TTY environments. Please provide --token flag or set
+     the SUPABASE_ACCESS_TOKEN environment variable."
+       }
+     }
+
+  ⎿  Interrupted · What should Claude do instead?
+
+※ recap: Goal: ship the secured slomhub app with working Anthropic/USDA proxies. Code, Vercel frontend, and
+  password-only login are done; the Edge Functions still need deploying. Next: rotate the keys, run npx supabase
+  login, and set the secrets so I can deploy the functions.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents

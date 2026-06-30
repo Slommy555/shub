@@ -1,0 +1,11 @@
+work on the template building, need to be able to add individual sets and warm up designation or failure designation, as well as rep and weight counts for each set and specific rest times per-set, the create template section should look the same as it does when im in the workout itself, so i can move around sets specificially. 
+
+muscle diagram looks weird, make sure all the muscles fit into the human outline and dont escape. 
+
+dont have so many subtasks when i make tasks with claude, keep it as minimal as possible. 
+
+need to be able to click on tasks and have them expand, also have the text wrap on tasks if they get cutoff on the week view or whatever view, and if they fill up the panel have it scroll
+
+when im adding a new workout, theres a scroll bar in front of the muscle groups which is weird, shouldn't have that happen. 
+
+allow claude to re-arrange tasks if i add a new task that interferes with stuff

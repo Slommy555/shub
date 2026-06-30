@@ -1,0 +1,2248 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
+
+PS C:\Users\brand\Desktop\ToDo_Productivity> claude
+╭─── Claude Code v2.1.191 ─────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting started                                        │
+│                  Welcome back Me!                  │ Run /init to create a CLAUDE.md file with instructions for Cla… │
+│                                                    │ ─────────────────────────────────────────────────────────────── │
+│                       ▐▛███▜▌                      │ What's new                                                      │
+│                      ▝▜█████▛▘                     │ Added `/rewind` support for resuming a conversation from befor… │
+│                        ▘▘ ▝▝                       │ Fixed scroll position jumping to the bottom while reading earl… │
+│   Opus 4.8 · Claude Pro · tracidyann@gmail.com's   │ Fixed background agents resurrecting after being stopped — sto… │
+│   Organization                                     │ /release-notes for more                                         │
+│             ~\Desktop\ToDo_Productivity            │                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+❯ okay, need to get rid of the schedule view, the day view should be the schedule view, also, on the weekly tab, the
+  time-range needs to exist there as well, including any tasks that dont have a time range.
+
+● I'll explore the project structure first to understand how the views are organized.
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && ls -la)
+  ⎿  total 231
+     drwxr-xr-x 1 brand 197609      0 Jun 24 22:02 .
+     drwxr-xr-x 1 brand 197609      0 Jun 23 16:13 ..
+     … +22 lines (ctrl+o to expand)
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && find src -type f | head -100)
+  ⎿  src/App.tsx
+     src/components/AddTaskForm.tsx
+     src/components/CategoryManager.tsx
+     … +63 lines (ctrl+o to expand)
+
+  Read 8 files (ctrl+o to expand)
+
+● Now I have a full picture. Let me make the changes. First, add a shared time-range formatter to dates.ts:
+
+● Update(src\lib\dates.ts)
+●
+  ⎿  Addedg14(lines · ↑ 3.0k tokens)
+      100    const days = weekDates(anchor);
+───── 101    return `${formatShort(days[0])} – ${formatShort(days[6])}`;────────────────────────────────────────────────
+      102  }
+  ─── 103 +                                                                                                      ───────
+      104 +/** "HH:MM" → "9:00 AM". */
+      105 +export function formatTime(t: string): string {
+      106 +  const [h, m] = t.split(':').map(Number);
+      107 +  const ampm = h < 12 ? 'AM' : 'PM';
+      108 +  const h12 = h % 12 === 0 ? 12 : h % 12;
+      109 +  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+      110 +}
+      111 +
+      112 +/** "9:00 AM – 10:30 AM" from two "HH:MM" strings, or null if incomplete. */
+      113 +export function formatTimeRange(start: string | null, end: string | null): string | null {
+      114 +  if (!start) return null;
+      115 +  return end ? `${formatTime(start)} – ${formatTime(end)}` : formatTime(start);
+      116 +}
+
+❯ also, need a way to delete custom exersises.
+
+● Noted — I'll handle the "delete custom exercises" request after finishing the schedule/weekly changes.
+
+  Now update TodoView.tsx to remove the Schedule tab and make Day render the timeline:
+
+● Update(src\components\todo\TodoView.tsx)
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+      103 +
+      104 +/** "HH:MM" → "9:00 AM". */
+      105 +export function formatTime(t: string): string {
+      106 +  const [h, m] = t.split(':').map(Number);
+      107 +  const ampm = h < 12 ? 'AM' : 'PM';
+      108 +  const h12 = h % 12 === 0 ? 12 : h % 12;
+      109 +  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+      110 +}
+      111 +
+      112 +/** "9:00 AM – 10:30 AM" from two "HH:MM" strings, or null if incomplete. */
+      113 +export function formatTimeRange(start: string | null, end: string | null): string | null {
+      114 +  if (!start) return null;
+      115 +  return end ? `${formatTime(start)} – ${formatTime(end)}` : formatTime(start);
+      116 +}
+
+❯ also, need a way to delete custom exersises.
+
+● Noted — I'll handle the "delete custom exercises" request after finishing the schedule/weekly changes.
+
+  Now update TodoView.tsx to remove the Schedule tab and make Day render the timeline:
+
+● Update(src\components\todo\TodoView.tsx)
+  ⎿  Added 1 line, removed 3 lines
+       9    todayISO,
+      10  } from '../../lib/dates';
+      11  import AddTaskForm from '../AddTaskForm';
+      12 -import DailyView from './DailyView';
+      12  import WeeklyView from './WeeklyView';
+      13  import MonthlyView from './MonthlyView';
+      14  import ScheduleView from './ScheduleView';
+      15
+      17 -type Mode = 'day' | 'week' | 'month' | 'schedule';
+      16 +type Mode = 'day' | 'week' | 'month';
+      17
+      18  const MODES: { id: Mode; label: string }[] = [
+      19    { id: 'day', label: 'Day' },
+      20    { id: 'week', label: 'Week' },
+      21    { id: 'month', label: 'Month' },
+      23 -  { id: 'schedule', label: 'Schedule' },
+      22  ];
+      23
+      24  export default function TodoView({ api }: { api: UseTasks }) {
+
+● Update(src\components\todo\TodoView.tsx)
+  ⎿  Added 1 line, removed 1 line
+      36    }
+      37
+      38    const title =
+      39 -    mode === 'day' || mode === 'schedule'
+      39 +    mode === 'day'
+      40        ? formatDayLong(anchor)
+      41        : mode === 'week'
+      42          ? formatWeekRange(anchor)
+
+● Update(src\components\todo\TodoView.tsx)
+  ⎿  Added 1 line, removed 12 lines
+      100          {api.loading ? (
+      101            <div className="py-16 text-center text-sm text-gray-400">Loading…</div>
+      102          ) : mode === 'day' ? (
+      103 -          <DailyView
+      104 -            tasks={api.tasks}
+      105 -            anchor={anchor}
+      106 -            onUpdate={api.updateTask}
+      107 -            onDelete={api.deleteTask}
+      108 -            onReorder={api.reorderTasks}
+      109 -            onAddSubtask={api.addSubtask}
+      110 -            onToggleSubtask={(id, done) => api.updateSubtask(id, { done })}
+      111 -            onDeleteSubtask={api.deleteSubtask}
+      112 -          />
+      103 +          <ScheduleView tasks={api.tasks} anchor={anchor} onUpdate={api.updateTask} />
+      104          ) : mode === 'week' ? (
+      105            <WeeklyView tasks={api.tasks} anchor={anchor} onMove={move} onToggle={toggle} />
+      115 -        ) : mode === 'schedule' ? (
+      116 -          <ScheduleView tasks={api.tasks} anchor={anchor} onUpdate={api.updateTask} />
+      106          ) : (
+      107            <MonthlyView tasks={api.tasks} anchor={anchor} onMove={move} onToggle={toggle} />
+      108          )}
+
+● Now let me check if DailyView is used anywhere else before removing it:
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && rm src/components/todo/DailyView.tsx && echo deleted)
+  ⎿  deleted
+
+● Now add the time-range chip to the ScheduleCard so it shows in the weekly view:
+
+● Update(src\components\todo\ScheduleParts.tsx)
+  ⎿  Added 1 line, removed 1 line
+      1  import { useState } from 'react';
+      2  import { useDraggable, useDroppable } from '@dnd-kit/core';
+      3  import { PRIORITY_DOT, type Task } from '../../types';
+      4 -import { dayOfMonth, formatShort, isToday, weekdayShort } from '../../lib/dates';
+      4 +import { dayOfMonth, formatShort, formatTimeRange, isToday, weekdayShort } from '../../lib/dates';
+      5  import { titleCase } from '../../lib/text';
+      6  import { listDate } from '../../lib/taskOrder';
+      7  import { useApp } from '../../context/AppContext';
+
+● Update(src\components\todo\ScheduleParts.tsx)
+  ⎿  Added 1 line
+      29
+      30    const subs = task.subtasks ?? [];
+      31    const doneCount = subs.filter((s) => s.done).length;
+      32 +  const timeRange = formatTimeRange(task.start_time, task.end_time);
+      33    // Show the hard deadline when it differs from the day this card sits on.
+      34    const deadline = task.due_date && task.due_date !== listDate(task) ? task.due_date : null;
+      35    // Subtasks show inline by default in some boards, or whenever expanded.
+
+● Now add a time-range line to the card. I'll place it below the main row, showing the range when set and "Anytime" when
+  not:
+
+● Update(src\components\todo\ScheduleParts.tsx)
+  ⎿  Added 13 lines
+      110          )}
+      111        </div>
+      112
+      113 +      {/* Time range (or "Anytime" when the task has no time set) */}
+      114 +      {!overlay && (
+      115 +        <div className="flex items-center gap-1 pl-2.5 text-[10px] font-medium">
+      116 +          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidt
+          +h="2.2" strokeLinecap="round" strokeLinejoin="round" className={timeRange ? 'text-gray-400' : 'text-gr
+          +ay-300 dark:text-gray-600'}>
+      117 +            <circle cx="12" cy="12" r="9" />
+      118 +            <path d="M12 7v5l3 2" />
+      119 +          </svg>
+      120 +          <span className={timeRange ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-g
+          +ray-500'}>
+      121 +            {timeRange ?? 'Anytime'}
+      122 +          </span>
+      123 +        </div>
+      124 +      )}
+      125 +
+      126        {/* Indented subtasks */}
+      127        {showSubs && (
+      128          <div className="ml-3 flex flex-col gap-0.5 border-l border-gray-200 pl-2 dark:border-gray-700"
+           >
+
+● Let me typecheck the todo changes:
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && npx tsc --noEmit 2>&1 | head -40)
+  ⎿  (No output)
+  ⎿  Allowed by auto mode classifier
+
+● Todo changes are done and typecheck passes. Now to the exercises request. Let me look at how exercises work:
+
+  Read 1 file (ctrl+o to expand)
+
+● A deleteExercise function already exists in the hook. Let me see where the exercise list/modal UI is to find where to
+  wire up delete:
+
+  Read 1 file (ctrl+o to expand)
+
+● The delete logic exists; it's just not exposed in the list UI. Let me add a delete button for custom exercises in the
+  list. I'll restructure the row so the pick action and delete button aren't nested buttons:
+
+● Update(src\components\workout\ExerciseModal.tsx)
+  ⎿  Added 33 lines, removed 9 lines
+      136              </p>
+      137            )}
+      138            {filtered.map((e) => (
+      139 -            <button
+      139 +            <div
+      140                key={e.id}
+      141 -              type="button"
+      142 -              onClick={() => onPick(e)}
+      143 -              className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-le
+          -ft hover:bg-gray-50 dark:hover:bg-gray-800"
+      141 +              className="flex items-center gap-1 rounded-xl pr-1 hover:bg-gray-50 dark:hover:bg-gray-8
+          +00"
+      142              >
+      145 -              <span className="min-w-0">
+      146 -                <span className="block truncate text-sm font-medium">{e.name}</span>
+      147 -              </span>
+      143 +              <button
+      144 +                type="button"
+      145 +                onClick={() => onPick(e)}
+      146 +                className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2.5 text-lef
+          +t"
+      147 +              >
+      148 +                <span className="min-w-0">
+      149 +                  <span className="block truncate text-sm font-medium">{e.name}</span>
+      150 +                </span>
+      151 +                {e.is_custom && (
+      152 +                  <span className="shrink-0 text-[10px] font-medium text-gray-400">custom</span>
+      153 +                )}
+      154 +              </button>
+      155                {e.is_custom && (
+      149 -                <span className="shrink-0 text-[10px] font-medium text-gray-400">custom</span>
+      156 +                <button
+      157 +                  type="button"
+      158 +                  aria-label={`Delete ${e.name}`}
+      159 +                  title="Delete custom exercise"
+      160 +                  onClick={() => {
+      161 +                    if (window.confirm(`Delete custom exercise “${e.name}”? This can’t be undone.`)) {
+      162 +                      onDeleteExercise(e.id);
+      163 +                    }
+      164 +                  }}
+      165 +                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-gray-400 transit
+          +ion-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+      166 +                >
+      167 +                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" st
+          +rokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      168 +                    <path d="M3 6h18" />
+      169 +                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1
+          +2 2v2" />
+      170 +                    <line x1="10" y1="11" x2="10" y2="17" />
+      171 +                    <line x1="14" y1="11" x2="14" y2="17" />
+      172 +                  </svg>
+      173 +                </button>
+      174                )}
+      151 -            </button>
+      175 +            </div>
+      176            ))}
+      177          </div>
+      178
+
+● Let me verify onDeleteExercise is already wired from the parent and that everything typechecks:
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Already fully wired through. Let me typecheck and build to confirm everything is good:
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && npx tsc --noEmit 2>&1 | head -30 && echo "---done---")
+  ⎿  ---done---
+  ⎿  Allowed by auto mode classifier
+
+● All changes are done and the project typechecks cleanly.
+
+  Summary
+
+  1. Schedule view removed; Day view is now the schedule view (TodoView.tsx)
+  - Removed the separate "Schedule" tab from the view switcher — modes are now just Day / Week / Month.
+  - The Day tab now renders the timeline ScheduleView (work block + timed events + now-line + untimed list) instead of
+  the old plain list.
+  - Deleted the now-unused DailyView.tsx.
+
+  2. Time ranges on the Weekly tab (ScheduleParts.tsx + dates.ts)
+  - Added shared formatTime / formatTimeRange helpers to lib/dates.ts.
+  - Every ScheduleCard (used by the weekly board) now shows a clock line with its time range, e.g. 9:00 AM – 10:30 AM.
+  Tasks without a time range still appear and show "Anytime", so the whole day is represented. This also applies to the
+  monthly board and the schedule's untimed list, all of which share the card.
+
+  3. Deleting custom exercises (ExerciseModal.tsx)
+  - The hook already had deleteExercise wired all the way through; it just wasn't exposed in the picker list. Each
+  custom exercise row now has a trash button that confirms (Delete custom exercise "…"? This can't be undone.) and
+  deletes. Default catalog exercises have no delete button. The row was restructured so the pick action and delete
+  button aren't nested.
+
+  Want me to launch the dev server so you can eyeball the new Day timeline and weekly time chips?
+
+✻ Worked for 3m 4s
+
+❯ rename the whole thing to S Hub
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && cat package.json index.html)
+  ⎿  {
+       "name": "todo-productivity",
+       "private": true,
+     … +54 lines (ctrl+o to expand)
+
+❯ instead of tasks
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● The user-facing name is "Tasks". Let me find where it's shown in the UI (login, sidebar, header):
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● The app name "Tasks" mainly shows in the browser title; the sidebar logo has no text. I'll rename it to "S Hub" across
+  the user-facing title, project metadata, and add the name under the sidebar logo so it's actually visible in-app.
+
+● Update(index.html)
+  ⎿  File must be read first
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(index.html)
+  ⎿  Added 1 line, removed 1 line
+       5      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+       6      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+       7      <meta name="theme-color" content="#0f172a" />
+       8 -    <title>Tasks</title>
+       8 +    <title>S Hub</title>
+       9      <script>
+      10        // Apply theme before first paint to avoid a flash of the wrong theme.
+      11        (function () {
+
+● Now add the brand name under the sidebar logo:
+
+● Update(src\components\Sidebar.tsx)
+  ⎿  Added 7 lines, removed 4 lines
+      38  export default function Sidebar({ active, onSelect }: Props) {
+      39    return (
+      40      <aside className="sticky top-0 flex h-screen w-20 shrink-0 flex-col gap-1.5 border-r border-gray-20
+          0 bg-white px-2 py-4 dark:border-gray-800 dark:bg-gray-950">
+      41 -      <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-2xl bg-gray-800 shadow-lg
+         -shadow-gray-500/30">
+      42 -        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" str
+         -okeLinecap="round" strokeLinejoin="round">
+      43 -          <path d="M7 12.5l3.2 3.2L17 9" />
+      44 -        </svg>
+      41 +      <div className="mb-3 flex flex-col items-center gap-1">
+      42 +        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-800 shadow-lg shadow-gray
+         +-500/30">
+      43 +          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" s
+         +trokeLinecap="round" strokeLinejoin="round">
+      44 +            <path d="M7 12.5l3.2 3.2L17 9" />
+      45 +          </svg>
+      46 +        </div>
+      47 +        <span className="text-[11px] font-bold tracking-tight text-gray-700 dark:text-gray-200">S Hub</
+         +span>
+      48        </div>
+      49
+      50        <NavButton active={active === 'todo'} label="To-Do" onClick={() => onSelect('todo')}>
+
+● Now the project metadata. Let me read the files I'll edit:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(Open Tasks.bat)
+  ⎿  Added 2 lines, removed 2 lines
+      1  @echo off
+      2 -title Tasks app
+      2 +title S Hub
+      3  cd /d "%~dp0"
+      4  echo ============================================
+      5 -echo   Starting your Tasks app...
+      5 +echo   Starting your S Hub app...
+      6  echo   Your browser will open automatically.
+      7  echo.
+      8  echo   KEEP THIS WINDOW OPEN while using the app.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(package.json)
+  ⎿  Added 1 line, removed 1 line
+      1  {
+      2 -  "name": "todo-productivity",
+      2 +  "name": "s-hub",
+      3    "private": true,
+      4    "version": "1.0.0",
+      5    "type": "module",
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && sed -i 's/"name": "todo-productivity"/"name": "s-hub"/g'
+      package-lock.json && grep -n '"name": "s-hub"' package…)
+  ⎿  2:  "name": "s-hub",
+     8:      "name": "s-hub",
+  ⎿  Allowed by auto mode classifier
+
+● Now the doc headings:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(README.md)
+  ⎿  Added 4 lines, removed 3 lines
+      1 -# Tasks — a personal to-do app
+      1 +# S Hub — a personal productivity app
+      2
+      3 -A mobile-first personal to-do app with magic-link auth, real-time sync,
+      4 -drag-to-reorder, subtasks, search/filter, due-date reminders, and dark mode.
+      3 +A mobile-first personal productivity hub (to-do, voice, workout, focus) with
+      4 +magic-link auth, real-time sync, drag-to-reorder, subtasks, search/filter,
+      5 +due-date reminders, and dark mode.
+      6
+      7  **Stack:** React + Vite (TypeScript) · Supabase (auth + Postgres + realtime) ·
+      8  Tailwind CSS · `@dnd-kit` · deploys to Vercel.
+
+❯ there needs to be the time scale on the vertical of the weekly page as there is on the daily page.
+
+● Let me finish the rename (PROJECT_STATUS heading), then address the weekly time-scale request.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(PROJECT_STATUS.md)
+  ⎿  Added 1 line, removed 1 line
+      1 -# Project Status — Tasks app
+      1 +# Project Status — S Hub app
+      2
+      3  _Last updated: 2026-06-23_
+      4
+
+● Rename is complete. Now for the weekly time-scale request — let me look at the grouping helpers so the weekly timeline
+  stays consistent with the daily one:
+
+  Read 1 file (ctrl+o to expand)
+
+● Now I'll rebuild the Weekly view as a 7-day timeline with a shared vertical hour scale (like the daily schedule),
+  keeping drag-to-reschedule and the untimed/unscheduled tasks. Let me check the settings shape used by the daily
+  schedule:
+
+  Read 1 file (ctrl+o to expand)
+
+● Now I'll rewrite WeeklyView.tsx as a 7-day timeline with a shared vertical hour axis:
+
+● Write(src\components\todo\WeeklyView.tsx)
+  ⎿  Added 282 lines, removed 20 lines
+       1 -import { useState } from 'react';
+       1 +import { useEffect, useState } from 'react';
+       2  import {
+       3    DndContext,
+       4    DragOverlay,
+       5    PointerSensor,
+       6 +  useDraggable,
+       7    useSensor,
+       8    useSensors,
+       9    type DragEndEvent,
+      10    type DragStartEvent,
+      11  } from '@dnd-kit/core';
+      12  import type { Task } from '../../types';
+      12 -import { weekDates } from '../../lib/dates';
+      13 -import { groupByDay } from '../../lib/taskOrder';
+      14 -import { DayColumn, Droppable, ScheduleCard } from './ScheduleParts';
+      13 +import {
+      14 +  dayOfMonth,
+      15 +  formatTime,
+      16 +  isToday,
+      17 +  parseISO,
+      18 +  weekDates,
+      19 +  weekdayShort,
+      20 +} from '../../lib/dates';
+      21 +import { groupByDay, listDate } from '../../lib/taskOrder';
+      22 +import { titleCase } from '../../lib/text';
+      23 +import { useApp } from '../../context/AppContext';
+      24 +import { useVoiceSettings } from '../../hooks/useVoiceSettings';
+      25 +import { Droppable, ScheduleCard } from './ScheduleParts';
+      26
+      27 +const DEFAULT_START_HOUR = 6;
+      28 +const DEFAULT_END_HOUR = 24;
+      29 +const HOUR_PX = 48;
+      30 +
+      31  interface Props {
+      32    tasks: Task[];
+      33    anchor: string;
+     ...
+       35    onToggle: (id: string, done: boolean) => void;
+       36  }
+       37
+       38 +/** "HH:MM" → minutes since midnight. */
+       39 +function toMin(t: string): number {
+       40 +  const [h, m] = t.split(':').map(Number);
+       41 +  return h * 60 + m;
+       42 +}
+       43 +
+       44 +interface Ev {
+       45 +  task: Task;
+       46 +  startMin: number;
+       47 +  endMin: number;
+       48 +  col: number;
+       49 +  cols: number;
+       50 +}
+       51 +
+       52 +/** Pack overlapping events into side-by-side columns within one day. */
+       53 +function pack(tasks: Task[]): Ev[] {
+       54 +  const sorted = tasks
+       55 +    .map((task) => {
+       56 +      const s = toMin(task.start_time!);
+       57 +      let e = toMin(task.end_time!);
+       58 +      if (e <= s) e = 24 * 60;
+       59 +      return { task, startMin: s, endMin: e };
+       60 +    })
+       61 +    .sort((a, b) => a.startMin - b.startMin);
+       62 +
+       63 +  const colEnds: number[] = [];
+       64 +  const colOf = new Map<string, number>();
+       65 +  for (const ev of sorted) {
+       66 +    let col = colEnds.findIndex((end) => end <= ev.startMin);
+       67 +    if (col === -1) {
+       68 +      col = colEnds.length;
+       69 +      colEnds.push(ev.endMin);
+       70 +    } else {
+       71 +      colEnds[col] = ev.endMin;
+       72 +    }
+       73 +    colOf.set(ev.task.id, col);
+       74 +  }
+       75 +  const cols = Math.max(1, colEnds.length);
+       76 +  return sorted.map((ev) => ({ ...ev, col: colOf.get(ev.task.id)!, cols }));
+       77 +}
+       78 +
+       79 +/** A timed task rendered as a positioned, draggable block in the timeline. */
+       80 +function TimedBlock({
+       81 +  ev,
+       82 +  top,
+       83 +  height,
+       84 +  className,
+       85 +  onClick,
+       86 +}: {
+       87 +  ev: Ev;
+       88 +  top: number;
+       89 +  height: number;
+       90 +  className: string;
+       91 +  onClick: () => void;
+       92 +}) {
+       93 +  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: ev.task.id });
+       94 +  const widthPct = 100 / ev.cols;
+       95 +  return (
+       96 +    <button
+       97 +      ref={setNodeRef}
+       98 +      type="button"
+       99 +      onClick={onClick}
+      100 +      {...listeners}
+      101 +      {...attributes}
+      102 +      className={`absolute z-10 overflow-hidden rounded-md border px-1 py-0.5 text-left shadow-sm tran
+          +sition-shadow hover:shadow ${className} ${
+      103 +        isDragging ? 'opacity-30' : ''
+      104 +      } ${ev.task.done ? 'opacity-50' : ''}`}
+      105 +      style={{
+      106 +        top,
+      107 +        height,
+      108 +        left: `calc(${ev.col * widthPct}% + 1px)`,
+      109 +        width: `calc(${widthPct}% - 2px)`,
+      110 +      }}
+      111 +      title={`${titleCase(ev.task.text)} · ${formatTime(ev.task.start_time!)} – ${formatTime(ev.task.e
+          +nd_time!)}`}
+      112 +    >
+      113 +      <p className="truncate text-[11px] font-semibold leading-tight">{titleCase(ev.task.text)}</p>
+      114 +      {height > 28 && (
+      115 +        <p className="truncate text-[9px] opacity-80">{formatTime(ev.task.start_time!)}</p>
+      116 +      )}
+      117 +    </button>
+      118 +  );
+      119 +}
+      120 +
+      121  export default function WeeklyView({ tasks, anchor, onMove, onToggle }: Props) {
+      122 +  const { categories, openEditTask } = useApp();
+      123 +  const { settings } = useVoiceSettings();
+      124    const [activeId, setActiveId] = useState<string | null>(null);
+       25 -  const sensors = useSensors(
+       26 -    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+       27 -  );
+      125 +  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+      126
+      127 +  // Re-render the "now" line every minute when the current week is showing.
+      128 +  const [, setTick] = useState(0);
+      129    const days = weekDates(anchor);
+      130 +  const showsToday = days.some(isToday);
+      131 +  useEffect(() => {
+      132 +    if (!showsToday) return;
+      133 +    const id = window.setInterval(() => setTick((n) => n + 1), 60_000);
+      134 +    return () => window.clearInterval(id);
+      135 +  }, [showsToday]);
+      136 +
+      137    const byDay = groupByDay(tasks);
+      138    const unscheduled = byDay.get('none') ?? [];
+      139    const active = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
+      140
+       34 -  function handleStart(e: DragStartEvent) {
+       35 -    setActiveId(String(e.active.id));
+      141 +  // Per-day split into timed (positioned) and untimed (chips below the grid).
+      142 +  const perDay = days.map((iso) => {
+      143 +    const all = byDay.get(iso) ?? [];
+      144 +    const timed = all.filter((t) => t.start_time && t.end_time);
+      145 +    const untimed = all.filter((t) => !(t.start_time && t.end_time));
+      146 +    const dow = parseISO(iso).getDay();
+      147 +    const shift = settings.workDays.includes(dow) ? settings.shifts[dow] : undefined;
+      148 +    return { iso, events: pack(timed), untimed, shift };
+      149 +  });
+      150 +
+      151 +  // Visible hour window — expand to fit any event or shift outside the default.
+      152 +  const allMins: number[] = [];
+      153 +  for (const d of perDay) {
+      154 +    for (const ev of d.events) allMins.push(ev.startMin, ev.endMin);
+      155 +    if (d.shift) {
+      156 +      const s = toMin(d.shift.start);
+      157 +      let e = toMin(d.shift.end);
+      158 +      if (e <= s) e = 24 * 60;
+      159 +      allMins.push(s, e);
+      160 +    }
+      161    }
+      162 +  const startHour = allMins.length
+      163 +    ? Math.min(DEFAULT_START_HOUR, Math.floor(Math.min(...allMins) / 60))
+      164 +    : DEFAULT_START_HOUR;
+      165 +  const endHour = allMins.length
+      166 +    ? Math.max(DEFAULT_END_HOUR, Math.ceil(Math.max(...allMins) / 60))
+      167 +    : DEFAULT_END_HOUR;
+      168 +  const winStart = startHour * 60;
+      169 +  const totalH = (endHour - startHour) * HOUR_PX;
+      170 +  const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
+      171 +  const topFor = (min: number) => ((min - winStart) / 60) * HOUR_PX;
+      172
+      173 +  const nowMin = showsToday ? (() => {
+      174 +    const n = new Date();
+      175 +    return n.getHours() * 60 + n.getMinutes();
+      176 +  })() : null;
+      177 +  const nowVisible = nowMin != null && nowMin >= winStart && nowMin <= endHour * 60;
+      178 +
+      179    function handleEnd(e: DragEndEvent) {
+      180      setActiveId(null);
+       40 -    const { active, over } = e;
+      181 +    const { active: a, over } = e;
+      182      if (!over) return;
+      183      const overId = String(over.id);
+       43 -    if (!overId.startsWith('day:')) return;
+       44 -    const target = overId.slice(4);
+       45 -    const due = target === 'none' ? null : target;
+       46 -    const task = tasks.find((t) => t.id === String(active.id));
+       47 -    if (task && (task.due_date ?? null) !== due) onMove(String(active.id), due);
+      184 +    let target: string | null;
+      185 +    if (overId.startsWith('track:')) target = overId.slice(6);
+      186 +    else if (overId.startsWith('any:')) target = overId.slice(4);
+      187 +    else if (overId === 'day:none') target = null;
+      188 +    else return;
+      189 +    const task = tasks.find((t) => t.id === String(a.id));
+      190 +    if (task && listDate(task) !== target) onMove(String(a.id), target);
+      191    }
+      192
+      193    return (
+      194      <DndContext
+      195        sensors={sensors}
+       53 -      onDragStart={handleStart}
+      196 +      onDragStart={(e: DragStartEvent) => setActiveId(String(e.active.id))}
+      197        onDragEnd={handleEnd}
+      198        onDragCancel={() => setActiveId(null)}
+      199      >
+       57 -      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+       58 -        {days.map((iso) => (
+       59 -          <DayColumn key={iso} iso={iso} tasks={byDay.get(iso) ?? []} onToggle={onToggle} />
+       60 -        ))}
+      200 +      {/* Weekday header, aligned with the columns below. */}
+      201 +      <div className="flex">
+      202 +        <div className="w-12 shrink-0" />
+      203 +        <div className="grid flex-1 grid-cols-7">
+      204 +          {days.map((iso) => {
+      205 +            const today = isToday(iso);
+      206 +            return (
+      207 +              <div key={iso} className="flex items-baseline justify-center gap-1 pb-1.5">
+      208 +                <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+      209 +                  {weekdayShort(iso)}
+      210 +                </span>
+      211 +                <span
+      212 +                  className={[
+      213 +                    'grid h-5 min-w-[1.25rem] place-items-center rounded-full px-1 text-xs font-semibo
+          +ld',
+      214 +                    today ? 'bg-gray-800 text-white' : 'text-gray-500 dark:text-gray-400',
+      215 +                  ].join(' ')}
+      216 +                >
+      217 +                  {dayOfMonth(iso)}
+      218 +                </span>
+      219 +              </div>
+      220 +            );
+      221 +          })}
+      222 +        </div>
+      223        </div>
+      224
+      225 +      {/* Timeline grid: hour gutter + 7 day tracks. */}
+      226 +      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800
+          + dark:bg-gray-900">
+      227 +        <div className="flex">
+      228 +          {/* hour gutter */}
+      229 +          <div className="relative w-12 shrink-0" style={{ height: totalH }}>
+      230 +            {hours.map((h) => (
+      231 +              <div
+      232 +                key={h}
+      233 +                className="absolute right-1.5 -translate-y-1/2 text-[10px] font-medium text-gray-400"
+      234 +                style={{ top: topFor(h * 60) }}
+      235 +              >
+      236 +                {formatTime(`${String(h % 24).padStart(2, '0')}:00`).replace(':00', '')}
+      237 +              </div>
+      238 +            ))}
+      239 +          </div>
+      240 +
+      241 +          {/* day tracks */}
+      242 +          <div className="relative grid flex-1 grid-cols-7" style={{ height: totalH }}>
+      243 +            {/* hour gridlines spanning all columns */}
+      244 +            {hours.map((h) => (
+      245 +              <div
+      246 +                key={h}
+      247 +                className="pointer-events-none absolute inset-x-0 border-t border-gray-100 dark:border
+          +-gray-800/80"
+      248 +                style={{ top: topFor(h * 60) }}
+      249 +              />
+      250 +            ))}
+      251 +
+      252 +            {perDay.map((d) => (
+      253 +              <Droppable
+      254 +                key={d.iso}
+      255 +                id={`track:${d.iso}`}
+      256 +                className="relative border-l border-gray-200 transition-colors first:border-l-0 dark:b
+          +order-gray-800"
+      257 +                overClassName="bg-gray-100/70 dark:bg-gray-500/10"
+      258 +              >
+      259 +                {/* work shift (behind events) */}
+      260 +                {d.shift && (() => {
+      261 +                  const s = toMin(d.shift.start);
+      262 +                  let e = toMin(d.shift.end);
+      263 +                  if (e <= s) e = 24 * 60;
+      264 +                  return (
+      265 +                    <div
+      266 +                      className="absolute inset-x-0.5 z-0 overflow-hidden rounded-md border border-gra
+          +y-300 bg-gray-200/70 px-1 py-0.5 dark:border-gray-600 dark:bg-gray-700/50"
+      267 +                      style={{ top: topFor(s) + 1, height: Math.max(16, topFor(e) - topFor(s) - 2) }}
+      268 +                    >
+      269 +                      <p className="truncate text-[10px] font-semibold leading-tight text-gray-600 dar
+          +k:text-gray-300">
+      270 +                        Work
+      271 +                      </p>
+      272 +                    </div>
+      273 +                  );
+      274 +                })()}
+      275 +
+      276 +                {/* timed task blocks */}
+      277 +                {d.events.map((ev) => (
+      278 +                  <TimedBlock
+      279 +                    key={ev.task.id}
+      280 +                    ev={ev}
+      281 +                    top={topFor(ev.startMin) + 1}
+      282 +                    height={Math.max(16, topFor(ev.endMin) - topFor(ev.startMin) - 2)}
+      283 +                    className={categories.colorFor(ev.task.category)}
+      284 +                    onClick={() => openEditTask(ev.task)}
+      285 +                  />
+      286 +                ))}
+      287 +              </Droppable>
+      288 +            ))}
+      289 +
+      290 +            {/* now line across the whole week */}
+      291 +            {nowVisible && (
+      292 +              <div className="pointer-events-none absolute inset-x-0 z-20" style={{ top: topFor(nowMin
+          +!) }}>
+      293 +                <span className="absolute -left-1 -top-1 h-2 w-2 rounded-full bg-red-500" />
+      294 +                <div className="border-t border-red-500" />
+      295 +              </div>
+      296 +            )}
+      297 +          </div>
+      298 +        </div>
+      299 +
+      300 +        {/* Anytime band: untimed tasks per day (drag between days). */}
+      301 +        <div className="flex border-t border-gray-200 dark:border-gray-800">
+      302 +          <div className="grid w-12 shrink-0 place-items-center px-0.5 text-center text-[9px] font-sem
+          +ibold uppercase leading-tight tracking-wide text-gray-400">
+      303 +            Any time
+      304 +          </div>
+      305 +          <div className="grid flex-1 grid-cols-7">
+      306 +            {perDay.map((d) => (
+      307 +              <Droppable
+      308 +                key={d.iso}
+      309 +                id={`any:${d.iso}`}
+      310 +                className="min-h-[3rem] border-l border-gray-200 p-1 transition-colors first:border-l-
+          +0 dark:border-gray-800"
+      311 +                overClassName="bg-gray-100/70 dark:bg-gray-500/10"
+      312 +              >
+      313 +                <div className="flex flex-col gap-1">
+      314 +                  {d.untimed.map((t) => (
+      315 +                    <ScheduleCard key={t.id} task={t} onToggle={onToggle} />
+      316 +                  ))}
+      317 +                </div>
+      318 +              </Droppable>
+      319 +            ))}
+      320 +          </div>
+      321 +        </div>
+      322 +      </div>
+      323 +
+      324 +      {/* Unscheduled — drag onto a day */}
+      325        <Droppable
+      326          id="day:none"
+      327          className="mt-3 rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-2 transition-c
+           olors dark:border-gray-700 dark:bg-gray-900/40"
+
+● Let me check tsconfig for unused-checks, since DayColumn in ScheduleParts may now be unused:
+
+  Read 1 file (ctrl+o to expand)
+
+● DayColumn in ScheduleParts is now orphaned (Weekly no longer uses it). Let me remove it and trim its now-unused
+  imports:
+
+● Update(src\components\todo\ScheduleParts.tsx)
+  ⎿  Added 1 line, removed 1 line
+      1  import { useState } from 'react';
+      2  import { useDraggable, useDroppable } from '@dnd-kit/core';
+      3  import { PRIORITY_DOT, type Task } from '../../types';
+      4 -import { dayOfMonth, formatShort, formatTimeRange, isToday, weekdayShort } from '../../lib/dates';
+      4 +import { formatShort, formatTimeRange } from '../../lib/dates';
+      5  import { titleCase } from '../../lib/text';
+      6  import { listDate } from '../../lib/taskOrder';
+      7  import { useApp } from '../../context/AppContext';
+
+● Update(src\components\todo\ScheduleParts.tsx)
+  ⎿  Removed 39 lines
+      178      </div>
+      179    );
+      180  }
+      181 -
+      182 -/** A single day column for the weekly board. */
+      183 -export function DayColumn({
+      184 -  iso,
+      185 -  tasks,
+      186 -  onToggle,
+      187 -}: {
+      188 -  iso: string;
+      189 -  tasks: Task[];
+      190 -  onToggle: (id: string, done: boolean) => void;
+      191 -}) {
+      192 -  const today = isToday(iso);
+      193 -  return (
+      194 -    <Droppable
+      195 -      id={`day:${iso}`}
+      196 -      className="flex max-h-[78vh] min-h-[65vh] flex-col rounded-xl border border-gray-200 bg-gray-50/
+          -50 p-2 transition-colors dark:border-gray-800 dark:bg-gray-900/40"
+      197 -      overClassName="border-gray-400 bg-gray-100/70 dark:bg-gray-500/10"
+      198 -    >
+      199 -      <div className="mb-1.5 flex items-baseline justify-between px-0.5">
+      200 -        <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+      201 -          {weekdayShort(iso)}
+      202 -        </span>
+      203 -        <span
+      204 -          className={[
+      205 -            'grid h-5 min-w-[1.25rem] place-items-center rounded-full px-1 text-xs font-semibold',
+      206 -            today ? 'bg-gray-800 text-white' : 'text-gray-500 dark:text-gray-400',
+      207 -          ].join(' ')}
+      208 -        >
+      209 -          {dayOfMonth(iso)}
+      210 -        </span>
+      211 -      </div>
+      212 -      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+      213 -        {tasks.map((t) => (
+      214 -          <ScheduleCard key={t.id} task={t} onToggle={onToggle} showSubtasks />
+      215 -        ))}
+      216 -      </div>
+      217 -    </Droppable>
+      218 -  );
+      219 -}
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && npx tsc --noEmit 2>&1 | head -30 && echo "---done---")
+  ⎿  ---done---
+  ⎿  Allowed by auto mode classifier
+
+● Typecheck passes. Let me confirm no stray references remain and do a quick build:
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && npx vite build 2>&1 | tail -15)
+  ⎿  vite v5.4.21 building for production...
+     transforming...
+     ✓ 710 modules transformed.
+     … +12 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Build succeeds. Here's everything from this turn:
+
+  Rename → "S Hub"
+
+  - index.html title: Tasks → S Hub (browser tab / PWA name).
+  - Sidebar.tsx: added an "S Hub" label under the logo so the name is visible in-app.
+  - package.json + package-lock.json: project name → s-hub.
+  - Open Tasks.bat: window title and startup message → S Hub (left the filename alone so any existing desktop shortcut
+  keeps working).
+  - README.md / PROJECT_STATUS.md: headings updated.
+
+  Weekly view now has a vertical time scale (like the daily/schedule view)
+
+  Rewrote WeeklyView.tsx into a 7-day timeline:
+  - Shared hour gutter on the left with the same 6 AM–midnight default window, auto-expanding to fit any earlier/later
+  event or work shift.
+  - 7 day-column tracks with hour gridlines; timed tasks render as positioned blocks (overlaps pack side-by-side), work
+  shifts show behind them, and a red now-line spans the week when today is in view.
+  - Timed blocks are click-to-edit and draggable between days (drops keep the task's time, just change the day).
+  - "Any time" band below the grid: one cell per day holding tasks with no time range (still draggable between days) —
+  so untimed tasks remain visible and reschedulable.
+  - Kept the Unscheduled drop zone.
+  - Removed the now-orphaned DayColumn from ScheduleParts.tsx.
+
+  Both tsc --noEmit and vite build pass clean.
+
+  One note: dragging a timed block onto another day keeps its existing start/end times (it only changes the date) —
+  there's no drag-to-a-specific-hour rescheduling. Let me know if you want that.
+
+✻ Cooked for 4m 59s
+
+❯ display the "anytime" part on top of the day instead of the bottom, and show the add task thing as a small plus
+  button next to the arrrows up top to minimize space taken up, also make sure the area is tall enough to show the
+  whole timerange without cutting off. allow me to change colors of everything in settings like text, background,
+  accesnts, foregrounds.
+
+● I'll tackle these one at a time. Let me first look at the relevant files.
+
+  Read 5 files (ctrl+o to expand)
+
+❯ also when i click on "work" or another timed event i need to be able to edit it and add notes and whatnot the same as
+  i can with tasks .
+
+● I have several requests now. Let me read a couple more files to plan the theming and the "Work"/event editing
+  properly.
+
+  Read 1 file (ctrl+o to expand)
+
+● I now have a clear picture. There are five things to do: (1) move "Any time" to the top in Weekly, (2) collapse the
+  add-task form into a small + button by the nav arrows, (3) make the timeline tall enough not to clip, (4) custom
+  colors in Settings, (5) make the Work block (and events) editable with notes. Timed task events already open the full
+  editor with notes — the gap is the Work block.
+
+  Let me start. First, add an optional notes field to work shifts:
+
+● Update(src\hooks\useVoiceSettings.ts)
+  ⎿  Added 2 lines
+       4  export interface WorkShift {
+       5    start: string;
+       6    end: string;
+       7 +  /** Free-form notes for the shift (shown/edited like a task's notes). */
+       8 +  notes?: string;
+       9  }
+      10
+      11  export interface VoiceSettings {
+
+● Now create an appearance hook for custom colors:
+
+● Write(src\hooks\useAppearance.ts)
+  ⎿  Wrote 97 lines to src\hooks\useAppearance.ts
+       1 import { useCallback, useEffect, useState } from 'react';
+       2
+       3 /** Semantic colors the user can customize. Hex strings. */
+       4 export interface Appearance {
+       5   bg: string; // page background
+       6   surface: string; // cards / panels (foreground surfaces)
+       7   text: string; // primary text
+       8   muted: string; // secondary / muted text
+       9   border: string; // borders & dividers
+      10   accent: string; // primary buttons, active states, highlights
+     … +87 lines (ctrl+o to expand)
+
+● Now add the CSS variable overrides. I'll append a scoped override block to index.css that maps the common utility
+  classes to the custom variables (only active when custom theming is on):
+
+● Update(src\index.css)
+  ⎿  Added 65 lines
+       58  .no-scrollbar::-webkit-scrollbar {
+       59    display: none;
+       60  }
+       61 +
+       62 +/* ---------------------------------------------------------------------------
+       63 +   Custom color theming. When the user enables custom colors (Settings →
+       64 +   Appearance), <html> gets data-theme-custom="on" and the CSS variables below
+       65 +   are set inline. These rules remap the app's common Tailwind color utilities
+       66 +   onto those variables so the whole UI recolors at once. Category/priority
+       67 +   accent colors (blue/red/etc.) are intentionally left untouched.
+       68 +--------------------------------------------------------------------------- */
+       69 +html[data-theme-custom] body {
+       70 +  background-color: var(--c-bg) !important;
+       71 +  color: var(--c-text) !important;
+       72 +}
+       73 +
+       74 +/* Page background */
+       75 +html[data-theme-custom] [class~='bg-gray-50'],
+       76 +html[data-theme-custom] [class~='dark:bg-gray-950'],
+       77 +html[data-theme-custom] [class~='bg-gray-950'] {
+       78 +  background-color: var(--c-bg) !important;
+       79 +}
+       80 +
+       81 +/* Foreground surfaces: cards, panels, inputs, popovers */
+       82 +html[data-theme-custom] [class~='bg-white'],
+       83 +html[data-theme-custom] [class~='dark:bg-gray-900'],
+       84 +html[data-theme-custom] [class~='bg-gray-900'],
+       85 +html[data-theme-custom] [class~='dark:bg-gray-950'][class~='bg-white'] {
+       86 +  background-color: var(--c-surface) !important;
+       87 +}
+       88 +
+       89 +/* Accent: primary buttons, active tabs, today badge, selected chips */
+       90 +html[data-theme-custom] [class~='bg-gray-800'],
+       91 +html[data-theme-custom] [class~='dark:bg-gray-200'],
+       92 +html[data-theme-custom] [class~='dark:bg-gray-100'] {
+       93 +  background-color: var(--c-accent) !important;
+       94 +}
+       95 +html[data-theme-custom] [class~='text-white'],
+       96 +html[data-theme-custom] [class~='dark:text-gray-900'] {
+       97 +  color: var(--c-accent-text) !important;
+       98 +}
+       99 +
+      100 +/* Primary text */
+      101 +html[data-theme-custom] [class~='text-gray-900'],
+      102 +html[data-theme-custom] [class~='text-gray-800'],
+      103 +html[data-theme-custom] [class~='text-gray-700'],
+      104 +html[data-theme-custom] [class~='dark:text-gray-100'],
+      105 +html[data-theme-custom] [class~='dark:text-gray-200'] {
+      106 +  color: var(--c-text) !important;
+      107 +}
+      108 +
+      109 +/* Muted / secondary text */
+      110 +html[data-theme-custom] [class~='text-gray-600'],
+      111 +html[data-theme-custom] [class~='text-gray-500'],
+      112 +html[data-theme-custom] [class~='text-gray-400'],
+      113 +html[data-theme-custom] [class~='dark:text-gray-300'],
+      114 +html[data-theme-custom] [class~='dark:text-gray-400'] {
+      115 +  color: var(--c-muted) !important;
+      116 +}
+      117 +
+      118 +/* Borders & dividers */
+      119 +html[data-theme-custom] [class~='border-gray-100'],
+      120 +html[data-theme-custom] [class~='border-gray-200'],
+      121 +html[data-theme-custom] [class~='border-gray-300'],
+      122 +html[data-theme-custom] [class~='dark:border-gray-700'],
+      123 +html[data-theme-custom] [class~='dark:border-gray-800'] {
+      124 +  border-color: var(--c-border) !important;
+      125 +}
+
+● Now wire the appearance hook into the app shell and pass it to Settings:
+
+● Update(src\App.tsx)
+  ⎿  Added 1 line
+      2
+      3  import { useAuth } from './hooks/useAuth';
+      4  import { useTheme } from './hooks/useTheme';
+      5 +import { useAppearance } from './hooks/useAppearance';
+      6  import { useTasks } from './hooks/useTasks';
+      7  import { useCategories } from './hooks/useCategories';
+      8  import { useReminders } from './hooks/useReminders';
+
+● Update(src\App.tsx)
+  ⎿  Added 1 line
+      24    const [tab, setTab] = useState<Tab>('todo');
+      25    const [editing, setEditing] = useState<Task | null>(null);
+      26    const { theme, toggleTheme } = useTheme();
+      27 +  const appearance = useAppearance();
+      28    const api = useTasks(userId);
+      29    const categories = useCategories(userId);
+      30    const { dueTasks, permission, requestPermission } = useReminders(api.tasks);
+
+● Update(src\App.tsx)
+  ⎿  Added 3 lines, removed 1 line
+      56              {tab === 'voice' && <VoiceTab />}
+      57              {tab === 'workout' && <WorkoutTab userId={userId} />}
+      58              {tab === 'productivity' && <ProductivityView />}
+      59 -            {tab === 'settings' && <SettingsView theme={theme} onToggleTheme={toggleTheme} />}
+      59 +            {tab === 'settings' && (
+      60 +              <SettingsView theme={theme} onToggleTheme={toggleTheme} appearance={appearance} />
+      61 +            )}
+      62            </main>
+      63
+      64            <DueDateReminder
+
+● Now add the Appearance color controls to SettingsView:
+
+● Update(src\components\SettingsView.tsx)
+  ⎿  Added 3 lines, removed 1 line
+      1  import { useState } from 'react';
+      2  import { useAuth } from '../hooks/useAuth';
+      3 +import { APPEARANCE_FIELDS, type useAppearance } from '../hooks/useAppearance';
+      4  import ThemeToggle from './ThemeToggle';
+      5  import SetPasswordDialog from './SetPasswordDialog';
+      6  import CategoryManager from './CategoryManager';
+     ...
+       8  interface Props {
+       9    theme: 'light' | 'dark';
+      10    onToggleTheme: () => void;
+      11 +  appearance: ReturnType<typeof useAppearance>;
+      12  }
+      13
+      12 -export default function SettingsView({ theme, onToggleTheme }: Props) {
+      14 +export default function SettingsView({ theme, onToggleTheme, appearance }: Props) {
+      15    const { user, signOut } = useAuth();
+      16    const [showPassword, setShowPassword] = useState(false);
+      17
+
+● Update(src\components\SettingsView.tsx)
+  ⎿  Added 55 lines
+      32              </div>
+      33              <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+      34            </div>
+      35 +
+      36 +          {/* Custom colors */}
+      37 +          <div className="mt-4 border-t border-gray-100 pt-3 dark:border-gray-800">
+      38 +            <div className="flex items-center justify-between">
+      39 +              <div>
+      40 +                <p className="text-sm">Custom colors</p>
+      41 +                <p className="text-xs text-gray-400">
+      42 +                  Override the palette for text, background, accents and more.
+      43 +                </p>
+      44 +              </div>
+      45 +              <label className="inline-flex cursor-pointer items-center gap-2">
+      46 +                <input
+      47 +                  type="checkbox"
+      48 +                  checked={appearance.enabled}
+      49 +                  onChange={(e) => appearance.setEnabled(e.target.checked)}
+      50 +                  className="h-4 w-4 cursor-pointer rounded border-gray-300 text-gray-600 focus:ring-gr
+         +ay-400/40 dark:border-gray-600 dark:bg-gray-800"
+      51 +                />
+      52 +                <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+      53 +                  {appearance.enabled ? 'On' : 'Off'}
+      54 +                </span>
+      55 +              </label>
+      56 +            </div>
+      57 +
+      58 +            {appearance.enabled && (
+      59 +              <>
+      60 +                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      61 +                  {APPEARANCE_FIELDS.map((f) => (
+      62 +                    <label
+      63 +                      key={f.key}
+      64 +                      className="flex items-center gap-3 rounded-lg border border-gray-200 p-2 dark:bor
+         +der-gray-800"
+      65 +                    >
+      66 +                      <input
+      67 +                        type="color"
+      68 +                        value={appearance.colors[f.key]}
+      69 +                        onChange={(e) => appearance.setColor(f.key, e.target.value)}
+      70 +                        className="h-8 w-10 shrink-0 cursor-pointer rounded border border-gray-200 bg-t
+         +ransparent dark:border-gray-700"
+      71 +                        aria-label={f.label}
+      72 +                      />
+      73 +                      <span className="min-w-0">
+      74 +                        <span className="block text-xs font-medium">{f.label}</span>
+      75 +                        <span className="block truncate text-[11px] text-gray-400">{f.hint}</span>
+      76 +                      </span>
+      77 +                    </label>
+      78 +                  ))}
+      79 +                </div>
+      80 +                <button
+      81 +                  type="button"
+      82 +                  onClick={appearance.reset}
+      83 +                  className="mt-3 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium tex
+         +t-gray-600 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gr
+         +ay-800"
+      84 +                >
+      85 +                  Reset to default
+      86 +                </button>
+      87 +              </>
+      88 +            )}
+      89 +          </div>
+      90          </section>
+      91
+      92          {/* Account */}
+
+● Now create a dialog to edit a Work shift (times + notes):
+
+● Write(src\components\WorkShiftDialog.tsx)
+  ⎿  Wrote 94 lines to src\components\WorkShiftDialog.tsx
+       2 import { WEEKDAY_LABELS } from '../lib/dates';
+       3 import { useVoiceSettings } from '../hooks/useVoiceSettings';
+       4
+       5 const inputCls =
+       6   'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-gray-50
+         0 dark:border-gray-700 dark:bg-gray-950';
+       7
+       8 /** Edit a recurring work shift (times + notes) for a given weekday. */
+       9 export default function WorkShiftDialog({ dow, onClose }: { dow: number; onClose: () => void }) {
+      10   const { settings, setWorkShift, setShift, toggleWorkDay } = useVoiceSettings();
+     … +92 lines (ctrl+o to expand)
+
+● Now wire the Work-block click in ScheduleView (daily). Let me update it to open the dialog and show notes:
+
+● Update(src\components\todo\ScheduleView.tsx)
+  ⎿  Added 1 line
+       5  import { titleCase } from '../../lib/text';
+       6  import { useApp } from '../../context/AppContext';
+       7  import { useVoiceSettings } from '../../hooks/useVoiceSettings';
+       8 +import WorkShiftDialog from '../WorkShiftDialog';
+       9  import { ScheduleCard } from './ScheduleParts';
+      10
+      11  const DEFAULT_START_HOUR = 6;
+
+● Update(src\components\todo\ScheduleView.tsx)
+  ⎿  Added 1 line
+      47  export default function ScheduleView({ tasks, anchor, onUpdate }: Props) {
+      48    const { categories, openEditTask } = useApp();
+      49    const { settings } = useVoiceSettings();
+      50 +  const [editWorkDow, setEditWorkDow] = useState<number | null>(null);
+      51
+      52    // Re-render the "now" line every minute when viewing today.
+      53    const [, setTick] = useState(0);
+
+● Update(src\components\todo\ScheduleView.tsx)
+  ⎿  Added 9 lines, removed 3 lines
+      174              {blocks
+      175                .filter((b) => b.kind === 'work')
+      176                .map((b) => (
+      177 -                <div
+      177 +                <button
+      178                    key={b.id}
+      179 -                  className={`absolute inset-x-1.5 z-0 overflow-hidden rounded-lg border px-2 py-1 ${b
+          -.className}`}
+      179 +                  type="button"
+      180 +                  onClick={() => setEditWorkDow(parseISO(anchor).getDay())}
+      181 +                  className={`absolute inset-x-1.5 z-0 overflow-hidden rounded-lg border px-2 py-1 tex
+          +t-left transition-shadow hover:shadow ${b.className}`}
+      182                    style={{ top: topFor(b.startMin) + 1, height: Math.max(22, topFor(b.endMin) - topFor
+           (b.startMin) - 2) }}
+      183 +                  title="Edit work shift"
+      184                  >
+      185                    <p className="text-xs font-semibold leading-tight">{b.label}</p>
+      186                    <p className="text-[10px] opacity-80">{b.sub}</p>
+      184 -                </div>
+      187 +                  {workCfg?.notes && (
+      188 +                    <p className="truncate text-[10px] opacity-70">{workCfg.notes}</p>
+      189 +                  )}
+      190 +                </button>
+      191                ))}
+      192
+      193              {/* event blocks (columns, on top) */}
+
+● Update(src\components\todo\ScheduleView.tsx)
+  ⎿  Added 4 lines
+      244            </div>
+      245          )}
+      246        </div>
+      247 +
+      248 +      {editWorkDow != null && (
+      249 +        <WorkShiftDialog dow={editWorkDow} onClose={() => setEditWorkDow(null)} />
+      250 +      )}
+      251      </div>
+      252    );
+      253  }
+
+● Now Weekly: bump row height, make Work clickable, and move the "Any time" band to the top. First the imports,
+  constant, and state:
+
+● Update(src\components\todo\WeeklyView.tsx)
+  ⎿  Added 2 lines, removed 1 line
+      22  import { titleCase } from '../../lib/text';
+      23  import { useApp } from '../../context/AppContext';
+      24  import { useVoiceSettings } from '../../hooks/useVoiceSettings';
+      25 +import WorkShiftDialog from '../WorkShiftDialog';
+      26  import { Droppable, ScheduleCard } from './ScheduleParts';
+      27
+      28  const DEFAULT_START_HOUR = 6;
+      29  const DEFAULT_END_HOUR = 24;
+      29 -const HOUR_PX = 48;
+      30 +const HOUR_PX = 56;
+      31
+      32  interface Props {
+      33    tasks: Task[];
+
+● Update(src\components\todo\WeeklyView.tsx)
+  ⎿  Added 1 line
+      123    const { categories, openEditTask } = useApp();
+      124    const { settings } = useVoiceSettings();
+      125    const [activeId, setActiveId] = useState<string | null>(null);
+      126 +  const [editWorkDow, setEditWorkDow] = useState<number | null>(null);
+      127    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+      128
+      129    // Re-render the "now" line every minute when the current week is showing.
+
+● Update(src\components\todo\WeeklyView.tsx)
+  ⎿  Added 11 lines, removed 3 lines
+      264                    let e = toMin(d.shift.end);
+      265                    if (e <= s) e = 24 * 60;
+      266                    return (
+      267 -                    <div
+      268 -                      className="absolute inset-x-0.5 z-0 overflow-hidden rounded-md border border-gra
+          -y-300 bg-gray-200/70 px-1 py-0.5 dark:border-gray-600 dark:bg-gray-700/50"
+      267 +                    <button
+      268 +                      type="button"
+      269 +                      onClick={() => setEditWorkDow(parseISO(d.iso).getDay())}
+      270 +                      title="Edit work shift"
+      271 +                      className="absolute inset-x-0.5 z-0 overflow-hidden rounded-md border border-gra
+          +y-300 bg-gray-200/70 px-1 py-0.5 text-left transition-shadow hover:shadow dark:border-gray-600 dark:bg
+          +-gray-700/50"
+      272                        style={{ top: topFor(s) + 1, height: Math.max(16, topFor(e) - topFor(s) - 2) }}
+      273                      >
+      274                        <p className="truncate text-[10px] font-semibold leading-tight text-gray-600 dar
+           k:text-gray-300">
+      275                          Work
+      276                        </p>
+      274 -                    </div>
+      277 +                      {d.shift.notes && (
+      278 +                        <p className="truncate text-[9px] leading-tight text-gray-500 dark:text-gray-4
+          +00">
+      279 +                          {d.shift.notes}
+      280 +                        </p>
+      281 +                      )}
+      282 +                    </button>
+      283                    );
+      284                  })()}
+      285
+
+● Now move the "Any time" band above the timeline grid. Let me view the current band/grid region:
+
+  Read 1 file (ctrl+o to expand)
+
+● I'll cut the band from the bottom and insert it at the top with a bottom border:
+
+● Update(src\components\todo\WeeklyView.tsx)
+  ⎿  Added 23 lines
+      226
+      227        {/* Timeline grid: hour gutter + 7 day tracks. */}
+      228        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800
+            dark:bg-gray-900">
+      229 +        {/* Anytime band: untimed tasks per day (drag between days). On top. */}
+      230 +        <div className="flex border-b border-gray-200 dark:border-gray-800">
+      231 +          <div className="grid w-12 shrink-0 place-items-center px-0.5 text-center text-[9px] font-sem
+          +ibold uppercase leading-tight tracking-wide text-gray-400">
+      232 +            Any time
+      233 +          </div>
+      234 +          <div className="grid flex-1 grid-cols-7">
+      235 +            {perDay.map((d) => (
+      236 +              <Droppable
+      237 +                key={d.iso}
+      238 +                id={`any:${d.iso}`}
+      239 +                className="min-h-[3rem] border-l border-gray-200 p-1 transition-colors first:border-l-
+          +0 dark:border-gray-800"
+      240 +                overClassName="bg-gray-100/70 dark:bg-gray-500/10"
+      241 +              >
+      242 +                <div className="flex flex-col gap-1">
+      243 +                  {d.untimed.map((t) => (
+      244 +                    <ScheduleCard key={t.id} task={t} onToggle={onToggle} />
+      245 +                  ))}
+      246 +                </div>
+      247 +              </Droppable>
+      248 +            ))}
+      249 +          </div>
+      250 +        </div>
+      251 +
+      252          <div className="flex">
+      253            {/* hour gutter */}
+      254            <div className="relative w-12 shrink-0" style={{ height: totalH }}>
+
+● Now remove the old band at the bottom and add the dialog render:
+
+● Update(src\components\todo\WeeklyView.tsx)
+  ⎿  Removed 23 lines
+      329              )}
+      330            </div>
+      331          </div>
+      332 -
+      333 -        {/* Anytime band: untimed tasks per day (drag between days). */}
+      334 -        <div className="flex border-t border-gray-200 dark:border-gray-800">
+      335 -          <div className="grid w-12 shrink-0 place-items-center px-0.5 text-center text-[9px] font-sem
+          -ibold uppercase leading-tight tracking-wide text-gray-400">
+      336 -            Any time
+      337 -          </div>
+      338 -          <div className="grid flex-1 grid-cols-7">
+      339 -            {perDay.map((d) => (
+      340 -              <Droppable
+      341 -                key={d.iso}
+      342 -                id={`any:${d.iso}`}
+      343 -                className="min-h-[3rem] border-l border-gray-200 p-1 transition-colors first:border-l-
+          -0 dark:border-gray-800"
+      344 -                overClassName="bg-gray-100/70 dark:bg-gray-500/10"
+      345 -              >
+      346 -                <div className="flex flex-col gap-1">
+      347 -                  {d.untimed.map((t) => (
+      348 -                    <ScheduleCard key={t.id} task={t} onToggle={onToggle} />
+      349 -                  ))}
+      350 -                </div>
+      351 -              </Droppable>
+      352 -            ))}
+      353 -          </div>
+      354 -        </div>
+      332        </div>
+      333
+      334        {/* Unscheduled — drag onto a day */}
+
+● Update(src\components\todo\WeeklyView.tsx)
+  ⎿  Added 4 lines
+      356        <DragOverlay dropAnimation={null}>
+      357          {active ? <ScheduleCard task={active} onToggle={onToggle} overlay /> : null}
+      358        </DragOverlay>
+      359 +
+      360 +      {editWorkDow != null && (
+      361 +        <WorkShiftDialog dow={editWorkDow} onClose={() => setEditWorkDow(null)} />
+      362 +      )}
+      363      </DndContext>
+      364    );
+      365  }
+
+● Now requirement 2 — collapse the add-task form into a small + button by the nav arrows in TodoView:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(src\components\todo\TodoView.tsx)
+  ⎿  Added 1 line
+      24  export default function TodoView({ api }: { api: UseTasks }) {
+      25    const [mode, setMode] = useState<Mode>('week');
+      26    const [anchor, setAnchor] = useState<string>(todayISO());
+      27 +  const [showAdd, setShowAdd] = useState(false);
+      28
+      29    // Dragging changes the completion (plan) day, not the hard deadline.
+      30    const move = (id: string, day: string | null) => api.updateTask(id, { scheduled_date: day });
+
+● Update(src\components\todo\TodoView.tsx)
+  ⎿  Added 28 lines, removed 4 lines
+      47      <div className="w-full px-4 py-6 sm:px-6">
+      48        <h1 className="mb-4 text-xl font-bold tracking-tight">To-Do List</h1>
+      49
+      50 -      <AddTaskForm onAdd={api.addTask} />
+      51 -
+      52 -      {/* Toolbar: date nav + view switch */}
+      53 -      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+      50 +      {/* Toolbar: date nav + add + view switch */}
+      51 +      <div className="flex flex-wrap items-center justify-between gap-3">
+      52          <div className="flex items-center gap-1.5">
+      53            <button
+      54              type="button"
+     ...
+       73            >
+       74              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWi
+           dth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+       75            </button>
+       76 +          <button
+       77 +            type="button"
+       78 +            onClick={() => setShowAdd((v) => !v)}
+       79 +            aria-label={showAdd ? 'Close add task' : 'Add task'}
+       80 +            aria-expanded={showAdd}
+       81 +            title="Add task"
+       82 +            className={[
+       83 +              'grid h-8 w-8 place-items-center rounded-lg border transition-colors',
+       84 +              showAdd
+       85 +                ? 'border-gray-800 bg-gray-800 text-white'
+       86 +                : 'border-gray-200 text-gray-500 hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-
+          +gray-800',
+       87 +            ].join(' ')}
+       88 +          >
+       89 +            <svg
+       90 +              width="16"
+       91 +              height="16"
+       92 +              viewBox="0 0 24 24"
+       93 +              fill="none"
+       94 +              stroke="currentColor"
+       95 +              strokeWidth="2.4"
+       96 +              strokeLinecap="round"
+       97 +              className={`transition-transform ${showAdd ? 'rotate-45' : ''}`}
+       98 +            >
+       99 +              <path d="M12 5v14M5 12h14" />
+      100 +            </svg>
+      101 +          </button>
+      102            <span className="ml-1 text-sm font-semibold text-gray-700 dark:text-gray-200">{title}</span>
+      103          </div>
+      104
+
+● Update(src\components\todo\TodoView.tsx)
+  ⎿  Added 6 lines
+      121          </div>
+      122        </div>
+      123
+      124 +      {showAdd && (
+      125 +        <div className="mt-3">
+      126 +          <AddTaskForm onAdd={api.addTask} />
+      127 +        </div>
+      128 +      )}
+      129 +
+      130        <div className="mt-4">
+      131          {api.loading ? (
+      132            <div className="py-16 text-center text-sm text-gray-400">Loading…</div>
+
+● Now let me typecheck and build:
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && npx tsc --noEmit 2>&1 | head -30 && echo "---done---")
+  ⎿  ---done---
+  ⎿  Allowed by auto mode classifier
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && npx vite build 2>&1 | tail -6)
+  ⎿  
+     (!) Some chunks are larger than 500 kB after minification. Consider:
+     - Using dynamic import() to code-split the application
+     … +4 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● All changes compile and build cleanly. Here's what I did for each request:
+
+  1. "Any time" row moved to the top (Weekly)
+
+  The untimed-tasks band now sits above the timeline grid (with a bottom border) instead of below it. Untimed tasks per
+  day are still draggable between days.
+
+  2. Add-task is now a small + button
+
+  In the To-Do toolbar, the always-open add-task form is gone. There's a compact + button right after the ◀ Today ▶
+  arrows; clicking it toggles the full add-task form open/closed (the icon rotates to an ✕ when open). Saves vertical
+  space.
+
+  3. Timeline tall enough, no cut-off
+
+  Weekly row height bumped (48→56px) and the visible hour window auto-expands to include the earliest/latest event or
+  work shift. The grid renders at full height with no inner max-height/scroll, so the whole range shows without clipping
+  (daily view already did this).
+
+  4. Custom colors in Settings
+
+  New Appearance → Custom colors section with an on/off toggle and color pickers for Background, Foreground
+  (cards/panels), Text, Muted text, Borders, Accent, and Accent text, plus Reset to default. Implemented via:
+  - useAppearance hook (persists to localStorage, applies CSS variables on <html data-theme-custom>).
+  - Scoped CSS in index.css that remaps the app's common gray/white utility classes onto those variables, so the whole
+  UI recolors at once.
+
+  Caveats: category/priority dot colors (blue/red/etc.) are intentionally left alone, and while custom colors are on,
+  hover-shade feedback is muted. Default appearance is untouched until you enable it.
+
+  5. Edit "Work" blocks (and events) with notes
+
+  - Timed task events already opened the full editor (with notes) — confirmed working in both day and week views.
+  - The Work block was previously static. It's now clickable in both the daily and weekly views and opens a new Edit
+  work shift dialog where you can change start/end times, add notes, or remove the shift for that weekday. Notes show on
+  the block. (Work shifts are recurring per-weekday, so edits apply every week — stored in your work-schedule
+  settings.)
+
+  Want me to start the dev server so you can try the new + button, weekly layout, color pickers, and work-shift editing?
+
+✻ Worked for 8m 2s
+
+❯ display the next sunday not the previous sunday on the weekly screen.
+
+● The week currently starts on the Sunday on/before the anchor (the previous Sunday). I'll make the Weekly screen start
+  on the upcoming Sunday instead — without touching startOfWeek, since the Month grid relies on it.
+
+● Update(src\lib\dates.ts)
+  ⎿  Added 14 lines
+      44    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+      45  }
+      46
+      47 +/** The Sunday on or after `anchor` (the upcoming week start). */
+      48 +export function startOfUpcomingWeek(iso: string): string {
+      49 +  const d = parseISO(iso);
+      50 +  const diff = (WEEK_STARTS_ON - d.getDay() + 7) % 7;
+      51 +  d.setDate(d.getDate() + diff);
+      52 +  return toISODate(d);
+      53 +}
+      54 +
+      55 +/** The 7 ISO dates of the week starting on the Sunday on or after `anchor`. */
+      56 +export function upcomingWeekDates(anchor: string): string[] {
+      57 +  const start = startOfUpcomingWeek(anchor);
+      58 +  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+      59 +}
+      60 +
+      61  /** Weeks (arrays of 7 ISO dates) covering the month containing `anchor`. */
+      62  export function monthMatrix(anchor: string): string[][] {
+      63    const d = parseISO(anchor);
+
+❯ allow recurring events to be made by me and cladue
+
+● I'll finish the Sunday change, then address recurring events. Add a matching range formatter:
+
+● Update(src\lib\dates.ts)
+  ⎿  Added 5 lines
+      115    return `${formatShort(days[0])} – ${formatShort(days[6])}`;
+      116  }
+      117
+      118 +export function formatUpcomingWeekRange(anchor: string): string {
+      119 +  const days = upcomingWeekDates(anchor);
+      120 +  return `${formatShort(days[0])} – ${formatShort(days[6])}`;
+      121 +}
+      122 +
+      123  /** "HH:MM" → "9:00 AM". */
+      124  export function formatTime(t: string): string {
+      125    const [h, m] = t.split(':').map(Number);
+
+● Now update WeeklyView and TodoView's week title to use the upcoming week:
+
+● Update(src\components\todo\WeeklyView.tsx)
+  ⎿  Added 1 line, removed 1 line
+      15    formatTime,
+      16    isToday,
+      17    parseISO,
+      18 -  weekDates,
+      18 +  upcomingWeekDates,
+      19    weekdayShort,
+      20  } from '../../lib/dates';
+      21  import { groupByDay, listDate } from '../../lib/taskOrder';
+
+● Update(src\components\todo\WeeklyView.tsx)
+  ⎿  Added 1 line, removed 1 line
+      128
+      129    // Re-render the "now" line every minute when the current week is showing.
+      130    const [, setTick] = useState(0);
+      131 -  const days = weekDates(anchor);
+      131 +  const days = upcomingWeekDates(anchor);
+      132    const showsToday = days.some(isToday);
+      133    useEffect(() => {
+      134      if (!showsToday) return;
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(src\components\todo\TodoView.tsx)
+  ⎿  Added 1 line, removed 1 line
+       5    addMonths,
+       8 +  formatUpcomingWeekRange,
+       9    todayISO,
+      10  } from '../../lib/dates';
+      11  import AddTaskForm from '../AddTaskForm';
+
+● Update(src\components\todo\TodoView.tsx)
+  ⎿  Added 1 line, removed 1 line
+      40      mode === 'day'
+      41        ? formatDayLong(anchor)
+      42        : mode === 'week'
+      43 -        ? formatWeekRange(anchor)
+      43 +        ? formatUpcomingWeekRange(anchor)
+      44          : formatMonthYear(anchor);
+      45
+      46    return (
+
+❯ make sure the unscheduled section is the proper color tomatch the page when i change settings
+
+● The upcoming-Sunday change is in. Now let me handle the unscheduled-section color and then recurring events. First,
+  let me look at the task-creation path (for Claude) and the DB schema:
+
+  Read 3 files (ctrl+o to expand)
+
+❯ display the end time on the title thing of events as well.
+
+● Let me check for additional migrations (the schema has columns beyond 001):
+
+● Bash(cd "C:\Users\brand\Desktop\ToDo_Productivity" && ls supabase/migrations/)
+  ⎿  001_init.sql
+     002_categories.sql
+     003_completion_date.sql
+     … +5 lines (ctrl+o to expand)
+
+  Searched for 1 pattern, read 3 files (ctrl+o to expand)
+
+● This is a big batch. Let me knock out the two quick items first, then build the recurring-events feature.
+
+  #4 — show end time on weekly event blocks:
+
+● Update(src\components\todo\WeeklyView.tsx)
+  ⎿  Added 3 lines, removed 1 line
+      113      >
+      114        <p className="truncate text-[11px] font-semibold leading-tight">{titleCase(ev.task.text)}</p>
+      115        {height > 28 && (
+      116 -        <p className="truncate text-[9px] opacity-80">{formatTime(ev.task.start_time!)}</p>
+      116 +        <p className="truncate text-[9px] opacity-80">
+      117 +          {formatTime(ev.task.start_time!)} – {formatTime(ev.task.end_time!)}
+      118 +        </p>
+      119        )}
+      120      </button>
+      121    );
+
+● #2 — make translucent panel backgrounds (incl. Unscheduled) follow the custom theme:
+
+● Update(src\index.css)
+  ⎿  Added 7 lines, removed 1 line
+      71    color: var(--c-text) !important;
+      72  }
+      73
+      74 -/* Page background */
+      74 +/* Page background (incl. the translucent panels used for unscheduled /
+      75 +   out-of-month areas, so they match the page). */
+      76  html[data-theme-custom] [class~='bg-gray-50'],
+      77 +html[data-theme-custom] [class~='bg-gray-50/50'],
+      78 +html[data-theme-custom] [class~='bg-gray-50/60'],
+      79  html[data-theme-custom] [class~='dark:bg-gray-950'],
+      80 +html[data-theme-custom] [class~='dark:bg-gray-950/60'],
+      81 +html[data-theme-custom] [class~='dark:bg-gray-900/40'],
+      82 +html[data-theme-custom] [class~='bg-gray-900/40'],
+      83  html[data-theme-custom] [class~='bg-gray-950'] {
+      84    background-color: var(--c-bg) !important;
+      85  }
+
+❯ when i tel claude about work shifts its not adding it to the scheduel and not adding it to the claude info page in
+  the voice settings.
+
+● The two quick fixes are in. Now let me look at the work-shift bug. Let me check the voice settings UI and how proposed
+  work shifts are confirmed:
+
+● Reading 2 files… (ctrl+o to expand)
+  ⎿  src\components\voice\VoicePopup.tsx
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Settings  Status   Config   Usage   Stats
+
+  Session
+
+  Total cost:            $8.27
+  Total duration (API):  20m 9s
+  Total duration (wall): 26m 53s
+  Total code changes:    811 lines added, 140 lines removed
+  Usage by model:
+      claude-haiku-4-5:  546 input, 17 output, 0 cache read, 0 cache write ($0.0006)
+       claude-opus-4-8:  5.9k input, 77.2k output, 9.4m cache read, 161.8k cache write ($8.27)
+
+  Current session
+  ██████████████████████████████████████████████     92% used
+  Resets 1:09am (America/Los_Angeles)
+
+      77 +html[data-theme-custom] [class~='bg-gray-50/50'],
+      78 +html[data-theme-custom] [class~='bg-gray-50/60'],
+      79  html[data-theme-custom] [class~='dark:bg-gray-950'],
+      80 +html[data-theme-custom] [class~='dark:bg-gray-950/60'],
+      81 +html[data-theme-custom] [class~='dark:bg-gray-900/40'],
+      82 +html[data-theme-custom] [class~='bg-gray-900/40'],
+      83  html[data-theme-custom] [class~='bg-gray-950'] {
+      84    background-color: var(--c-bg) !important;
+      85  }
+
+❯ when i tel claude about work shifts its not adding it to the scheduel and not adding it to the claude info page in
+  the voice settings.
+
+● The two quick fixes are in. Now let me look at the work-shift bug. Let me check the voice settings UI and how proposed
+  work shifts are confirmed:
+
+  Read 2 files (ctrl+o to expand)
+
+❯ /usage
+  ⎿  Settings dialog dismissed
+
+● The voice popup/confirm flow looks correct. The likely bug: Claude sometimes returns weekdays as names ("Tuesday")
+  instead of numbers, and mapResult silently drops those (its filter keeps only typeof n === 'number'), so the shift
+  never appears to confirm. Let me confirm the types and AppContext signatures before fixing:
+
+  Read 1 file (ctrl+o to expand)
+
+❯ need it to display the COMINNG sunday not the previous, so for this week show the 28th not the 21st
+
+● The Sunday clarification — my startOfUpcomingWeek already returns the Sunday on or after the anchor (Wed Jun 24 → Jun
+  28), so that's handled; I'll verify in the final build. Let me check the AppContext and ProposedTaskCard before
+  implementing recurrence + the work-shift fix:
+
+  Read 2 files (ctrl+o to expand)
+
+● I have everything I need. Let me build the recurring-events feature and fix the work-shift bug. Start with the types:
+
+● Update(src\types\index.ts)
+  ⎿  Added 12 lines
+       3  /** A category is now just a name string referencing a user-defined category. */
+       4  export type Category = string;
+       5
+       6 +/** How a task/event repeats. null = does not repeat. */
+       7 +export type Recurrence = 'daily' | 'weekdays' | 'weekly' | 'monthly';
+       8 +
+       9 +export const RECURRENCES: Recurrence[] = ['daily', 'weekdays', 'weekly', 'monthly'];
+      10 +
+      11 +export const RECURRENCE_LABEL: Record<Recurrence, string> = {
+      12 +  daily: 'Every day',
+      13 +  weekdays: 'Every weekday',
+      14 +  weekly: 'Every week',
+      15 +  monthly: 'Every month',
+      16 +};
+      17 +
+      18  export interface Subtask {
+      19    id: string;
+      20    task_id: string;
+
+● Update(src\types\index.ts)
+  ⎿  Added 3 lines
+      35    scheduled_date: string | null; // ISO date — the day to work on / list under
+      36    start_time: string | null; // "HH:MM" — when set with end_time, renders as a timed block
+      37    end_time: string | null; // "HH:MM"
+      38 +  recurrence: Recurrence | null; // null = one-off; otherwise repeats from its scheduled day
+      39    position: number;
+      40    created_at: string;
+      41    /** Hydrated client-side; not a column on the tasks table. */
+      42    subtasks: Subtask[];
+      43 +  /** Set only on virtual repeat occurrences; holds the real (base) task id. */
+      44 +  occurrence_of?: string;
+      45  }
+      46
+      47  /** A user-defined category row (categories table). */
+
+● Now the recurrence expansion helper:
+
+● Write(src\lib\recurrence.ts)
+  ⎿  Wrote 51 lines to src\lib\recurrence.ts
+       1 import type { Task } from '../types';
+       2 import { parseISO } from './dates';
+       3 import { listDate } from './taskOrder';
+       4
+       5 /** Does a recurring `task` (with base day `baseISO`) also fall on `dateISO`? */
+       6 function occursOn(task: Task, baseISO: string, dateISO: string): boolean {
+       7   if (dateISO <= baseISO) return false; // occurrences only go forward from the base day
+       8   const base = parseISO(baseISO);
+       9   const d = parseISO(dateISO);
+      10   switch (task.recurrence) {
+     … +41 lines (ctrl+o to expand)
+
+❯ i cant remove the shift from the weekly view, delete doesnt work
+
+● New bug: removing a shift from the Weekly view doesn't persist. I see the root cause — WorkShiftDialog calls a setter
+  then immediately closes (unmounts), so its useVoiceSettings instance never runs the persisting effect. The robust fix
+  is to make useVoiceSettings persist synchronously in its setters. Let me rewrite that hook:
+
+● Update(src\hooks\useVoiceSettings.ts)
+  ⎿  Added 31 lines, removed 19 lines
+      56  export function useVoiceSettings() {
+      57    const [settings, setSettings] = useState<VoiceSettings>(load);
+      58
+      59 -  useEffect(() => {
+      60 -    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      61 -    // Notify other instances in this tab (the 'storage' event only fires cross-tab).
+      62 -    window.dispatchEvent(new Event(SYNC_EVENT));
+      63 -  }, [settings]);
+      64 -
+      59    // Keep every mounted instance in sync — voice can update the work schedule
+      60    // while the Settings drawer or Schedule view are also reading it. Only adopt
+      61    // the stored value when it actually differs, so an instance's own write (which
+     ...
+       74      };
+       75    }, []);
+       76
+       83 -  const setStartKeyword = useCallback((startKeyword: string) => {
+       84 -    setSettings((s) => ({ ...s, startKeyword }));
+       77 +  // Persist synchronously inside the setter so a change survives even when the
+       78 +  // component that triggered it unmounts in the same tick (e.g. a dialog that
+       79 +  // saves and immediately closes). Other mounted instances re-read on the event.
+       80 +  const mutate = useCallback((updater: (s: VoiceSettings) => VoiceSettings) => {
+       81 +    setSettings((cur) => {
+       82 +      const next = updater(cur);
+       83 +      try {
+       84 +        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+       85 +      } catch {
+       86 +        /* ignore quota/availability errors */
+       87 +      }
+       88 +      // Defer the cross-instance notification so we don't dispatch mid-render.
+       89 +      queueMicrotask(() => window.dispatchEvent(new Event(SYNC_EVENT)));
+       90 +      return next;
+       91 +    });
+       92    }, []);
+       93
+       94 +  const setStartKeyword = useCallback((startKeyword: string) => {
+       95 +    mutate((s) => ({ ...s, startKeyword }));
+       96 +  }, [mutate]);
+       97 +
+       98    const setStopKeyword = useCallback((stopKeyword: string) => {
+       88 -    setSettings((s) => ({ ...s, stopKeyword }));
+       89 -  }, []);
+       99 +    mutate((s) => ({ ...s, stopKeyword }));
+      100 +  }, [mutate]);
+      101
+      102    const toggleWorkDay = useCallback((day: number) => {
+       92 -    setSettings((s) => {
+      103 +    mutate((s) => {
+      104        const isOn = s.workDays.includes(day);
+      105        const workDays = isOn ? s.workDays.filter((d) => d !== day) : [...s.workDays, day].sort((a, b) =
+           > a - b);
+      106        // Seed a default shift the first time a day is enabled.
+     ...
+      108        if (!isOn && !shifts[day]) shifts[day] = { ...DEFAULT_SHIFT };
+      109        return { ...s, workDays, shifts };
+      110      });
+      100 -  }, []);
+      111 +  }, [mutate]);
+      112
+      113    const setShift = useCallback((day: number, patch: Partial<WorkShift>) => {
+      103 -    setSettings((s) => ({
+      114 +    mutate((s) => ({
+      115        ...s,
+      116        shifts: { ...s.shifts, [day]: { ...(s.shifts[day] ?? DEFAULT_SHIFT), ...patch } },
+      117      }));
+      107 -  }, []);
+      118 +  }, [mutate]);
+      119
+      120    const setSleepHours = useCallback((sleepHours: number) => {
+      110 -    setSettings((s) => ({ ...s, sleepHours: Math.max(0, Math.min(24, sleepHours)) }));
+      111 -  }, []);
+      121 +    mutate((s) => ({ ...s, sleepHours: Math.max(0, Math.min(24, sleepHours)) }));
+      122 +  }, [mutate]);
+      123
+      124    /** Enable a work day (if needed) and set its shift in one step — used when
+      125     *  applying a confirmed work directive from voice input. */
+      126    const setWorkShift = useCallback((day: number, start: string, end: string) => {
+      116 -    setSettings((s) => {
+      127 +    mutate((s) => {
+      128        const workDays = s.workDays.includes(day)
+      129          ? s.workDays
+      130          : [...s.workDays, day].sort((a, b) => a - b);
+      120 -      return { ...s, workDays, shifts: { ...s.shifts, [day]: { start, end } } };
+      131 +      const prev = s.shifts[day];
+      132 +      return { ...s, workDays, shifts: { ...s.shifts, [day]: { ...prev, start, end } } };
+      133      });
+      122 -  }, []);
+      134 +  }, [mutate]);
+      135
+      136    return {
+      137      settings,
+
+❯ move the days i work tab to the to do area, just add a small button next to the plus button for it, as well as the
+  sleep, add a small sleep button nect to the work button
+
+● Now the migration for the recurrence column:
+
+● Write(supabase\migrations\008_task_recurrence.sql)
+  ⎿  Wrote 10 lines to supabase\migrations\008_task_recurrence.sql
+       1 -- ============================================================================
+       2 -- 008_task_recurrence.sql — Optional repeat rule for a task/event, so things
+       3 -- like classes, work-adjacent routines, or weekly events show on every matching
+       4 -- day. NULL means a one-off task (existing rows unaffected).
+       5 -- Run this in the Supabase SQL Editor. Safe to run once.
+       6 -- ============================================================================
+       7
+       8 alter table public.tasks
+       9   add column if not exists recurrence text
+      10     check (recurrence in ('daily', 'weekdays', 'weekly', 'monthly'));
+
+● Now wire recurrence through useTasks:
+
+● Update(src\hooks\useTasks.ts)
+  ⎿  Added 2 lines, removed 1 line
+      1  import { useCallback, useEffect, useRef, useState } from 'react';
+      2  import { supabase } from '../lib/supabase';
+      3 -import type { Category, Priority, Subtask, Task } from '../types';
+      3 +import type { Category, Priority, Recurrence, Subtask, Task } from '../types';
+      4
+      5  interface NewTaskInput {
+      6    text: string;
+     ...
+      10    scheduled_date?: string | null;
+      11    start_time?: string | null;
+      12    end_time?: string | null;
+      13 +  recurrence?: Recurrence | null;
+      14    /** Optional subtask texts to create alongside the task (used by voice input). */
+      15    subtasks?: string[];
+      16  }
+
+● Update(src\hooks\useTasks.ts)
+  ⎿  Added 1 line
+      193          scheduled_date: input.scheduled_date ?? null,
+      194          start_time: input.start_time ?? null,
+      195          end_time: input.end_time ?? null,
+      196 +        recurrence: input.recurrence ?? null,
+      197          position: 0,
+      198          created_at: new Date().toISOString(),
+      199          subtasks,
+
+● Update(src\hooks\useTasks.ts)
+  ⎿  Added 1 line
+      213          scheduled_date: newTask.scheduled_date,
+      214          start_time: newTask.start_time,
+      215          end_time: newTask.end_time,
+      216 +        recurrence: newTask.recurrence,
+      217          position: 0,
+      218        });
+      219        if (error) {
+
+● Now the addTasks path:
+
+● Update(src\hooks\useTasks.ts)
+  ⎿  Added 1 line
+      264            scheduled_date: input.scheduled_date ?? null,
+      265            start_time: input.start_time ?? null,
+      266            end_time: input.end_time ?? null,
+      267 +          recurrence: input.recurrence ?? null,
+      268            position: idx,
+      269            created_at: new Date().toISOString(),
+      270            subtasks,
+
+● Update(src\hooks\useTasks.ts)
+  ⎿  Added 1 line
+      290            scheduled_date: t.scheduled_date,
+      291            start_time: t.start_time,
+      292            end_time: t.end_time,
+      293 +          recurrence: t.recurrence,
+      294            position: t.position,
+      295          }))
+      296        );
+
+● Now update the AppContext signatures to include recurrence:
+
+● Update(src\context\AppContext.tsx)
+  ⎿  Added 1 line, removed 1 line
+      1  import { createContext, useContext } from 'react';
+      2 -import type { Category, Priority, Task } from '../types';
+      2 +import type { Category, Priority, Recurrence, Task } from '../types';
+      3  import type { UseCategories } from '../hooks/useCategories';
+      4
+      5  export interface AppContextValue {
+
+● Update(src\context\AppContext.tsx)
+  ⎿  Added 2 lines
+      16      scheduled_date?: string | null;
+      17      start_time?: string | null;
+      18      end_time?: string | null;
+      19 +    recurrence?: Recurrence | null;
+      20      subtasks?: string[];
+      21    }) => void;
+      22    addTasks: (
+     ...
+      28        scheduled_date?: string | null;
+      29        start_time?: string | null;
+      30        end_time?: string | null;
+      31 +      recurrence?: Recurrence | null;
+      32        subtasks?: string[];
+      33      }[]
+      34    ) => void;
+
+● Now add a Repeat control to the EditTaskDialog:
+
+● Update(src\components\EditTaskDialog.tsx)
+  ⎿  Added 3 lines
+       2  import {
+       3    PRIORITIES,
+       4    PRIORITY_LABEL,
+       5 +  RECURRENCES,
+       6 +  RECURRENCE_LABEL,
+       7    type Priority,
+       8 +  type Recurrence,
+       9    type Task,
+      10  } from '../types';
+      11  import { useApp } from '../context/AppContext';
+
+● Update(src\components\EditTaskDialog.tsx)
+  ⎿  Added 1 line
+      25    const [completionDate, setCompletionDate] = useState(task.scheduled_date ?? '');
+      26    const [startTime, setStartTime] = useState(task.start_time ?? '');
+      27    const [endTime, setEndTime] = useState(task.end_time ?? '');
+      28 +  const [recurrence, setRecurrence] = useState<Recurrence | ''>(task.recurrence ?? '');
+      29    const [notes, setNotes] = useState(task.notes ?? '');
+      30
+      31    function save() {
+
+● Update(src\components\EditTaskDialog.tsx)
+  ⎿  Added 1 line
+      41        scheduled_date: completionDate || null,
+      42        start_time: timed ? startTime : null,
+      43        end_time: timed ? endTime : null,
+      44 +      recurrence: recurrence || null,
+      45        notes: notes.trim() ? notes : null,
+      46      });
+      47      onClose();
+
+● Update(src\components\EditTaskDialog.tsx)
+  ⎿  Added 16 lines
+      151            </div>
+      152
+      153            <div>
+      154 +            <label className="mb-1 block text-xs font-medium text-gray-500">Repeat</label>
+      155 +            <select
+      156 +              value={recurrence}
+      157 +              onChange={(e) => setRecurrence(e.target.value as Recurrence | '')}
+      158 +              className={selectCls}
+      159 +            >
+      160 +              <option value="">Does not repeat</option>
+      161 +              {RECURRENCES.map((r) => (
+      162 +                <option key={r} value={r}>
+      163 +                  {RECURRENCE_LABEL[r]}
+      164 +                </option>
+      165 +              ))}
+      166 +            </select>
+      167 +          </div>
+      168 +
+      169 +          <div>
+      170              <label className="mb-1 block text-xs font-medium text-gray-500">Subtasks</label>
+      171              <SubtaskList
+      172                subtasks={task.subtasks}
+
+● Now add a Repeat select to AddTaskForm:
+
+● Update(src\components\AddTaskForm.tsx)
+  ⎿  Added 3 lines
+       2  import {
+       3    PRIORITIES,
+       4    PRIORITY_LABEL,
+       5 +  RECURRENCES,
+       6 +  RECURRENCE_LABEL,
+       7    type Category,
+       8    type Priority,
+       9 +  type Recurrence,
+      10  } from '../types';
+      11  import { useApp } from '../context/AppContext';
+      12
+
+● Update(src\components\AddTaskForm.tsx)
+  ⎿  Added 1 line
+      17      priority: Priority;
+      18      due_date: string | null;
+      19      scheduled_date?: string | null;
+      20 +    recurrence?: Recurrence | null;
+      21    }) => void;
+      22    /** Optional default due date (e.g. the day being viewed). */
+      23    defaultDue?: string;
+
+● Update(src\components\AddTaskForm.tsx)
+  ⎿  Added 1 line
+      32    const [priority, setPriority] = useState<Priority>('med');
+      33    const [dueDate, setDueDate] = useState('');
+      34    const [completionDate, setCompletionDate] = useState(defaultDue ?? '');
+      35 +  const [recurrence, setRecurrence] = useState<Recurrence | ''>('');
+      36
+      37    // Default the category to the first available once categories load.
+      38    useEffect(() => {
+
+● Update(src\components\AddTaskForm.tsx)
+  ⎿  Added 2 lines
+      52        priority,
+      53        due_date: dueDate || null,
+      54        scheduled_date: completionDate || null,
+      55 +      recurrence: recurrence || null,
+      56      });
+      57      setText('');
+      58      setDueDate('');
+      59      setCompletionDate(defaultDue ?? '');
+      60 +    setRecurrence('');
+      61    }
+      62
+      63    function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+
+● Update(src\components\AddTaskForm.tsx)
+  ⎿  Added 15 lines
+      141              aria-label="Due date (deadline)"
+      142            />
+      143          </label>
+      144 +
+      145 +        <select
+      146 +          value={recurrence}
+      147 +          onChange={(e) => setRecurrence(e.target.value as Recurrence | '')}
+      148 +          className={selectCls}
+      149 +          aria-label="Repeat"
+      150 +          title="Repeat"
+      151 +        >
+      152 +          <option value="">No repeat</option>
+      153 +          {RECURRENCES.map((r) => (
+      154 +            <option key={r} value={r}>
+      155 +              {RECURRENCE_LABEL[r]}
+      156 +            </option>
+      157 +          ))}
+      158 +        </select>
+      159        </div>
+      160      </div>
+      161    );
+
+● Now make ScheduleCard recurrence-aware (occurrences shouldn't drag, and their actions target the base task):
+
+● Update(src\components\todo\ScheduleParts.tsx)
+  ⎿  Added 8 lines, removed 2 lines
+      19    overlay?: boolean;
+      20    showSubtasks?: boolean;
+      21  }) {
+      22 +  const { categories, openEditTask, deleteTask, updateSubtask, tasks } = useApp();
+      23 +  // Virtual repeat occurrences point back to their real (base) task; all edits,
+      24 +  // deletes and toggles act on that base, and the occurrence can't be dragged.
+      25 +  const isOccurrence = Boolean(task.occurrence_of);
+      26 +  const baseTask = task.occurrence_of
+      27 +    ? tasks.find((t) => t.id === task.occurrence_of) ?? task
+      28 +    : task;
+      29    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+      30      id: task.id,
+      24 -    disabled: overlay,
+      31 +    disabled: overlay || isOccurrence,
+      32    });
+      26 -  const { categories, openEditTask, deleteTask, updateSubtask } = useApp();
+      33    const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+      34    const [expanded, setExpanded] = useState(false);
+      35
+
+● Update(src\components\todo\ScheduleParts.tsx)
+  ⎿  Added 7 lines, removed 3 lines
+      67            y={menu.y}
+      68            onClose={() => setMenu(null)}
+      69            items={[
+      70 -            { label: 'Edit…', onClick: () => openEditTask(task) },
+      70 +            { label: 'Edit…', onClick: () => openEditTask(baseTask) },
+      71              {
+      72                label: task.done ? 'Mark as not done' : 'Mark as done',
+      73 -              onClick: () => onToggle(task.id, !task.done),
+      73 +              onClick: () => onToggle(baseTask.id, !task.done),
+      74              },
+      75 -            { label: 'Delete', danger: true, onClick: () => deleteTask(task.id) },
+      75 +            {
+      76 +              label: isOccurrence ? 'Delete series' : 'Delete',
+      77 +              danger: true,
+      78 +              onClick: () => deleteTask(baseTask.id),
+      79 +            },
+      80            ]}
+      81          />
+      82        )}
+
+● Update(src\components\todo\ScheduleParts.tsx)
+  ⎿  Added 1 line, removed 1 line
+      87          <input
+      88            type="checkbox"
+      89            checked={task.done}
+      90 -          onChange={(e) => onToggle(task.id, e.target.checked)}
+      90 +          onChange={(e) => onToggle(baseTask.id, e.target.checked)}
+      91            onPointerDown={(e) => e.stopPropagation()}
+      92            aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
+      93            className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded border-gray-300 text-gray-600 focus:ri
+          ng-gray-400/40 dark:border-gray-600 dark:bg-gray-800"
+
+● Update(src\components\todo\ScheduleParts.tsx)
+  ⎿  Added 10 lines
+      105              {titleCase(task.text)}
+      106            </span>
+      107          </button>
+      108 +        {task.recurrence && (
+      109 +          <svg
+      110 +            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      111 +            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      112 +            className="shrink-0 text-gray-400"
+      113 +            aria-label="Repeats"
+      114 +          >
+      115 +            <path d="M17 2l4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3" />
+      116 +          </svg>
+      117 +        )}
+      118          {deadline && (
+      119            <span
+      120              className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700 dark:
+           bg-amber-500/20 dark:text-amber-300"
+  ⎿  You've hit your session limit · resets 1:10am (America/Los_Angeles)
+     /upgrade to increase your usage limit.
+
+✻ Cooked for 11m 7s
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents
