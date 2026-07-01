@@ -59,7 +59,7 @@ export default function HabitCard({ habit, done, today, onToggle, onChangeColor,
       {/* Name + stats */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+          <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100 max-sm:overflow-visible max-sm:whitespace-normal max-sm:break-words">
             {habit.name}
           </p>
           <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400 ring-1 ring-inset ring-gray-200 dark:ring-gray-700">
@@ -107,7 +107,7 @@ export default function HabitCard({ habit, done, today, onToggle, onChangeColor,
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
           aria-label="Habit options"
-          className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+          className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 max-sm:h-11 max-sm:w-11"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="12" cy="5" r="1.6" />

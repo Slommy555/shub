@@ -25,6 +25,22 @@
           if (dark) {
             document.documentElement.classList.add('dark');
           }
+          // Apply cached custom colors too, so a custom-themed user doesn't flash
+          // the default palette before useAppearance's effect runs. Mirrors the
+          // CSS-var names set in src/hooks/useAppearance.ts.
+          var appearance = JSON.parse(localStorage.getItem('appearance') || 'null');
+          if (appearance && appearance.enabled && appearance.colors) {
+            var c = appearance.colors;
+            var root = document.documentElement;
+            root.setAttribute('data-theme-custom', 'on');
+            root.style.setProperty('--c-bg', c.bg);
+            root.style.setProperty('--c-surface', c.surface);
+            root.style.setProperty('--c-text', c.text);
+            root.style.setProperty('--c-muted', c.muted);
+            root.style.setProperty('--c-border', c.border);
+            root.style.setProperty('--c-accent', c.accent);
+            root.style.setProperty('--c-accent-text', c.accentText);
+          }
         } catch (e) {}
       })();
     </script>

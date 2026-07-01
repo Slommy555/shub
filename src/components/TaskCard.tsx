@@ -214,7 +214,7 @@ export default function TaskCard({
                   />
                   <span
                     className={[
-                      'min-w-0 flex-1 truncate text-sm',
+                      'min-w-0 flex-1 truncate text-sm max-sm:overflow-visible max-sm:whitespace-normal max-sm:break-words',
                       s.done ? 'text-gray-400 line-through' : 'text-gray-600 dark:text-gray-300',
                     ].join(' ')}
                     title={s.text}
@@ -233,7 +233,7 @@ export default function TaskCard({
             type="button"
             onClick={() => setExpanded((v) => !v)}
             aria-label={expanded ? 'Collapse' : 'Expand'}
-            className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 max-sm:h-11 max-sm:w-11"
           >
             <svg
               width="18" height="18" viewBox="0 0 24 24" fill="none"
@@ -247,7 +247,7 @@ export default function TaskCard({
             type="button"
             onClick={() => onDelete(task.id)}
             aria-label="Delete task"
-            className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+            className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 max-sm:h-11 max-sm:w-11"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
