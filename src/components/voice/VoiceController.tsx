@@ -22,12 +22,17 @@ import {
 import { addDays, parseISO, todayISO } from '../../lib/dates';
 import { listDate } from '../../lib/taskOrder';
 import { gatherIntentContext, parseIntents } from '../../lib/intent';
-import { emptyReview, prepareReview, type ReviewModel } from '../../lib/claudeRouter';
-import { matchScore } from '../../lib/fuzzy';
+import {
+  emptyReview,
+  prepareReview,
+  type NoteReviewModel,
+  type ReviewModel,
+} from '../../lib/claudeRouter';
+import { setPendingNote } from '../../lib/noteHandoff';
 import {
   handleCompleteHabits,
   handleLogWeight,
-  handleSetReminder,
+  handleWriteNote,
   handleStartWorkout,
 } from '../../lib/claudeActions';
 import SettingsDrawer from '../SettingsDrawer';
@@ -70,7 +75,7 @@ export default function VoiceController({
 }: {
   children: React.ReactNode;
   userId: string;
-  onNavigate: (tab: 'workout') => void;
+  onNavigate: (tab: 'workout' | 'notes') => void;
 }) {
   const { categories, tasks, addTasks, updateTask, deleteTask } = useApp();
   const cats = categories.categories;
@@ -280,16 +285,7 @@ export default function VoiceController({
         showToast('Couldn’t parse that — your transcript is saved, try again.');
       }
 
-      // The reminder system owns reminders; if the actions pass captured any,
-      // drop a task the task pass produced that's really the same reminder.
-      let proposedTasks = mapped.tasks;
-      if (review.reminders.length) {
-        proposedTasks = proposedTasks.filter(
-          (t) => !review.reminders.some((r) => matchScore(t.text, r.text) >= 0.5)
-        );
-      }
-
-      setProposed(proposedTasks);
+      setProposed(mapped.tasks);
       setReschedules(mapped.moves);
       setDeletions(mapped.removals);
       setWorkShifts(mapped.shifts);
@@ -433,6 +429,22 @@ export default function VoiceController({
     setExtras((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  // "Edit before saving" on a proposed note: stash it, jump to the Notes tab
+  // (NotesTab creates + opens it in the full editor), and clear the review.
+  const editNote = useCallback(
+    (note: NoteReviewModel) => {
+      setPendingNote({
+        pageId: note.pageId,
+        pageName: note.pageName,
+        title: note.title,
+        content: note.content,
+      });
+      reset();
+      onNavigate('notes');
+    },
+    [onNavigate, reset]
+  );
+
   const dismissReschedule = useCallback((id: string) => {
     setReschedules((prev) => prev.filter((r) => r.id !== id));
   }, []);
@@ -494,9 +506,9 @@ export default function VoiceController({
       await handleLogWeight(extras.weight, userId);
       parts.push('weight');
     }
-    if (extras.reminders.length) {
-      for (const rem of extras.reminders) await handleSetReminder(rem, userId);
-      parts.push(`${extras.reminders.length} reminder${extras.reminders.length === 1 ? '' : 's'}`);
+    if (extras.notes.length) {
+      for (const note of extras.notes) await handleWriteNote(note, userId);
+      parts.push(`${extras.notes.length} note${extras.notes.length === 1 ? '' : 's'}`);
     }
     // Workout last — it navigates to the Workout tab.
     const startWorkout = extras.workout;
@@ -561,6 +573,7 @@ export default function VoiceController({
           onChangeWorkShift={updateWorkShift}
           onDismissWorkShift={dismissWorkShift}
           onChangeExtras={updateExtras}
+          onEditNote={editNote}
           onReset={reset}
           onConfirm={addToList}
         />

@@ -4,7 +4,7 @@ import type {
   ProposedTask,
   ProposedWorkShift,
 } from '../../types/voice';
-import { reviewHasContent, type ReviewModel } from '../../lib/claudeRouter';
+import { reviewHasContent, type NoteReviewModel, type ReviewModel } from '../../lib/claudeRouter';
 import VoiceTranscript from '../VoiceTranscript';
 import ProposedTaskCard from '../ProposedTaskCard';
 import NewActionSections from './NewActionSections';
@@ -21,7 +21,7 @@ interface Props {
   reschedules: ProposedReschedule[];
   deletions: ProposedDeletion[];
   workShifts: ProposedWorkShift[];
-  /** Habit/workout/weight/reminder sections from the app-wide actions pass. */
+  /** Habit/workout/weight/note sections from the app-wide actions pass. */
   extras: ReviewModel;
   stopKeyword: string;
   /** Mobile uses tap-to-stop, so the "say [keyword]" hint is replaced. */
@@ -36,6 +36,7 @@ interface Props {
   onChangeWorkShift: (id: string, patch: Partial<ProposedWorkShift>) => void;
   onDismissWorkShift: (id: string) => void;
   onChangeExtras: (patch: Partial<ReviewModel>) => void;
+  onEditNote: (note: NoteReviewModel) => void;
   onReset: () => void;
   onConfirm: () => void;
 }
@@ -312,8 +313,12 @@ export default function VoicePopup(props: Props) {
                 </div>
               )}
 
-              {/* App-wide actions: habits, workout, weight, reminders */}
-              <NewActionSections review={extras} onChange={props.onChangeExtras} />
+              {/* App-wide actions: habits, workout, weight, notes */}
+              <NewActionSections
+                review={extras}
+                onChange={props.onChangeExtras}
+                onEditNote={props.onEditNote}
+              />
             </>
           )}
         </div>

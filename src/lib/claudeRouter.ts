@@ -8,7 +8,12 @@
 import { supabase } from './supabase';
 import { todayISO } from './dates';
 import { rankMatches } from './fuzzy';
+import { textToTiptap } from './notes/contentParser';
+import type { TiptapDoc } from '../types/notes';
 import type { IntentContext, RawAction } from './intent';
+
+/** The page a voice note defaults to when the user names no page. */
+export const DEFAULT_NOTE_PAGE = 'Quick Notes';
 
 export interface HabitReviewModel {
   all: boolean;
@@ -31,18 +36,24 @@ export interface WeightReviewModel {
   notes: string | null;
 }
 
-export interface ReminderReviewModel {
+export interface NoteReviewModel {
   id: string;
-  text: string;
-  datetime: string | null; // ISO
-  recurring: 'daily' | 'weekly' | null;
+  title: string;
+  /** Parsed Tiptap document, ready to save or preview. */
+  content: TiptapDoc;
+  /** Target page title (an existing page's title, or a new page to create). */
+  pageName: string;
+  /** Matched existing page id, or null when a new page should be created. */
+  pageId: string | null;
+  /** The user's existing pages, for the review card's page picker. */
+  pages: { id: string; title: string }[];
 }
 
 export interface ReviewModel {
   habits: HabitReviewModel | null;
   workout: WorkoutReviewModel | null;
   weight: WeightReviewModel | null;
-  reminders: ReminderReviewModel[];
+  notes: NoteReviewModel[];
 }
 
 export function emptyReview(): ReviewModel {
@@ -50,7 +61,7 @@ export function emptyReview(): ReviewModel {
     habits: null,
     workout: null,
     weight: null,
-    reminders: [],
+    notes: [],
   };
 }
 
@@ -60,7 +71,7 @@ export function reviewHasContent(r: ReviewModel): boolean {
     (r.habits != null && r.habits.targets.length > 0) ||
     r.workout != null ||
     r.weight != null ||
-    r.reminders.length > 0
+    r.notes.length > 0
   );
 }
 
@@ -86,18 +97,23 @@ export async function prepareReview(
 
   // Supporting data fetched once if any action needs it.
   const needHabits = actions.some((a) => a.type === 'complete_habits');
+  const needNotes = actions.some((a) => a.type === 'write_note');
 
-  const [habitRows, todayLogs] = await Promise.all([
+  const [habitRows, todayLogs, pageRows] = await Promise.all([
     needHabits
       ? supabase.from('habits').select('id, name').eq('archived', false)
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     needHabits
       ? supabase.from('habit_logs').select('habit_id').eq('date', todayISO())
       : Promise.resolve({ data: [] as { habit_id: string }[] }),
+    needNotes
+      ? supabase.from('note_pages').select('id, title')
+      : Promise.resolve({ data: [] as { id: string; title: string }[] }),
   ]);
 
   const habits = (habitRows.data ?? []) as { id: string; name: string }[];
   const doneHabitIds = new Set((todayLogs.data ?? []).map((r) => r.habit_id));
+  const pages = (pageRows.data ?? []) as { id: string; title: string }[];
 
   for (const action of actions) {
     switch (action.type) {
@@ -154,13 +170,36 @@ export async function prepareReview(
         break;
       }
 
-      case 'set_reminder': {
-        const d = (action.data ?? {}) as { text?: unknown; datetime?: unknown; recurring?: unknown };
-        const text = asString(d.text);
-        if (!text) break;
-        const recurring =
-          d.recurring === 'daily' || d.recurring === 'weekly' ? d.recurring : null;
-        review.reminders.push({ id: uid(), text, datetime: asString(d.datetime), recurring });
+      case 'write_note': {
+        const d = (action.data ?? {}) as {
+          page_name?: unknown;
+          title?: unknown;
+          content?: unknown;
+        };
+        const body = asString(d.content);
+        if (!body) break;
+        const rawTitle = asString(d.title);
+        const content = textToTiptap(body);
+
+        // Resolve the target page: explicit name → fuzzy match, else fall back
+        // to the default "Quick Notes" page (matched if it already exists).
+        const requested = asString(d.page_name);
+        let pageName = requested ?? DEFAULT_NOTE_PAGE;
+        let pageId: string | null = null;
+        const matched = rankMatches(pageName, pages, (p) => p.title)[0]?.item ?? null;
+        if (matched) {
+          pageId = matched.id;
+          pageName = matched.title;
+        }
+
+        review.notes.push({
+          id: uid(),
+          title: rawTitle ?? 'Untitled',
+          content,
+          pageName,
+          pageId,
+          pages,
+        });
         break;
       }
 

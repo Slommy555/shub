@@ -6,7 +6,6 @@ import { useAppearance } from './hooks/useAppearance';
 import { useTasks } from './hooks/useTasks';
 import { useCategories } from './hooks/useCategories';
 import { useReminders } from './hooks/useReminders';
-import { useScheduledReminders } from './hooks/useScheduledReminders';
 import { AppProvider } from './context/AppContext';
 import type { Task } from './types';
 
@@ -17,7 +16,7 @@ import VoiceTab from './components/VoiceTab';
 import VoiceController from './components/voice/VoiceController';
 import WorkoutTab from './components/workout/WorkoutTab';
 import ProductivityView from './components/ProductivityView';
-import RemindersView from './components/reminders/RemindersView';
+import NotesTab from './components/notes/NotesTab';
 import SettingsView from './components/SettingsView';
 import DueDateReminder from './components/DueDateReminder';
 import EditTaskDialog from './components/EditTaskDialog';
@@ -30,8 +29,6 @@ function Shell({ userId }: { userId: string }) {
   const api = useTasks(userId);
   const categories = useCategories(userId);
   const { dueTasks, upcomingEvents, permission, requestPermission } = useReminders(api.tasks);
-  // Instantiated here (not in the page) so reminders fire on any tab.
-  const reminders = useScheduledReminders(userId);
 
   // Keep the open editor in sync with the latest task data (realtime edits).
   const editingTask = editing ? api.tasks.find((t) => t.id === editing.id) ?? editing : null;
@@ -60,7 +57,7 @@ function Shell({ userId }: { userId: string }) {
             {tab === 'voice' && <VoiceTab />}
             {tab === 'workout' && <WorkoutTab userId={userId} />}
             {tab === 'productivity' && <ProductivityView userId={userId} />}
-            {tab === 'reminders' && <RemindersView api={reminders} />}
+            {tab === 'notes' && <NotesTab userId={userId} />}
             {tab === 'settings' && (
               <SettingsView theme={resolvedTheme} onToggleTheme={toggleTheme} appearance={appearance} />
             )}

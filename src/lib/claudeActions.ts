@@ -8,7 +8,7 @@ import { todayISO } from './dates';
 import { setPendingWorkout } from './workoutHandoff';
 import type {
   HabitReviewModel,
-  ReminderReviewModel,
+  NoteReviewModel,
   WeightReviewModel,
   WorkoutReviewModel,
 } from './claudeRouter';
@@ -62,21 +62,46 @@ export async function handleLogWeight(model: WeightReviewModel, userId: string):
   if (error) console.error('handleLogWeight failed:', error.message);
 }
 
-// 4. Reminders (reuse existing Supabase reminders system) ------------------
-export async function handleSetReminder(
-  model: ReminderReviewModel,
-  userId: string
-): Promise<void> {
-  // Default to one hour out if no time was given (the card lets the user edit).
-  const remindAt = model.datetime
-    ? new Date(model.datetime)
-    : new Date(Date.now() + 60 * 60 * 1000);
-  const { error } = await supabase.from('reminders').insert({
+// 4. Notes -----------------------------------------------------------------
+/**
+ * Save a voice-proposed note. Resolves the target page — using the matched
+ * existing page, an existing page whose title matches (case-insensitive), or a
+ * newly created page — then inserts the note with its parsed Tiptap content.
+ */
+export async function handleWriteNote(model: NoteReviewModel, userId: string): Promise<void> {
+  let pageId = model.pageId;
+
+  if (!pageId) {
+    // Re-check for an existing page by title (the user may have created it since
+    // parsing, or it's the default "Quick Notes" page) before making a new one.
+    const wanted = model.pageName.trim();
+    const { data: existing } = await supabase
+      .from('note_pages')
+      .select('id, title')
+      .ilike('title', wanted);
+    pageId = existing?.[0]?.id ?? null;
+
+    if (!pageId) {
+      const newPageId = uid();
+      const { error: pErr } = await supabase.from('note_pages').insert({
+        id: newPageId,
+        user_id: userId,
+        title: wanted || 'Untitled',
+      });
+      if (pErr) {
+        console.error('handleWriteNote: create page failed:', pErr.message);
+        return;
+      }
+      pageId = newPageId;
+    }
+  }
+
+  const { error } = await supabase.from('notes').insert({
     id: uid(),
     user_id: userId,
-    title: model.text,
-    remind_at: remindAt.toISOString(),
-    repeat: model.recurring ?? 'none',
+    page_id: pageId,
+    title: model.title.trim() || 'Untitled',
+    content: model.content,
   });
-  if (error) console.error('handleSetReminder failed:', error.message);
+  if (error) console.error('handleWriteNote failed:', error.message);
 }

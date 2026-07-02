@@ -136,7 +136,7 @@ export default function TodoView({ api }: { api: UseTasks }) {
         ) : mode === 'day' ? (
           <ScheduleView tasks={api.tasks} anchor={anchor} onUpdate={api.updateTask} />
         ) : mode === 'week' ? (
-          <WeeklyView tasks={api.tasks} anchor={anchor} onMove={move} onToggle={toggle} />
+          <WeeklyView tasks={api.tasks} anchor={anchor} onMove={move} onToggle={toggle} onAnchorChange={setAnchor} />
         ) : (
           <MonthlyView tasks={api.tasks} anchor={anchor} onMove={move} onToggle={toggle} />
         )}

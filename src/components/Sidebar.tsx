@@ -1,4 +1,4 @@
-export type Tab = 'todo' | 'voice' | 'workout' | 'productivity' | 'reminders' | 'settings';
+export type Tab = 'todo' | 'voice' | 'workout' | 'productivity' | 'notes' | 'settings';
 
 interface Props {
   active: Tab;
@@ -80,13 +80,10 @@ export default function Sidebar({ active, onSelect }: Props) {
         </svg>
       </NavButton>
 
-      <NavButton
-        active={active === 'reminders'}
-        label="Reminders"
-        onClick={() => onSelect('reminders')}
-      >
+      <NavButton active={active === 'notes'} label="Notes" onClick={() => onSelect('notes')}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6M8 13h8M8 17h5" />
         </svg>
       </NavButton>
 

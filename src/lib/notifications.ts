@@ -31,47 +31,9 @@ export function isStandalone(): boolean {
   return window.matchMedia('(display-mode: standalone)').matches || iosStandalone === true;
 }
 
-async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) return null;
-  try {
-    return await navigator.serviceWorker.ready;
-  } catch {
-    return null;
-  }
-}
-
-interface ShowOpts {
-  id: string;
-  title: string;
-  body?: string | null;
-}
-
-/** Show a reminder notification right now (foreground delivery). */
-export async function showReminderNow({ id, title, body }: ShowOpts): Promise<void> {
-  if (notifPermission() !== 'granted') return;
-  const options: NotificationOptions = {
-    body: body || undefined,
-    tag: `reminder-${id}`,
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    data: { url: '/', id },
-  };
-  const reg = await getRegistration();
-  if (reg) {
-    await reg.showNotification(title, options);
-  } else {
-    try {
-      new Notification(title, options);
-    } catch {
-      /* construction blocked in some contexts; nothing more we can do */
-    }
-  }
-}
-
 /**
  * True when the Notification Triggers API is available (Chromium on Windows /
- * Android). It lets us schedule a notification that fires even if the app is
- * closed — a progressive enhancement over the in-app timer.
+ * Android). Surfaced in the notifications settings panel as a delivery hint.
  */
 export function triggersSupported(): boolean {
   return (
@@ -79,32 +41,4 @@ export function triggersSupported(): boolean {
     'showTrigger' in (Notification.prototype as object) &&
     typeof (window as unknown as { TimestampTrigger?: unknown }).TimestampTrigger !== 'undefined'
   );
-}
-
-/** Schedule a reminder to fire at `timestamp` via the Triggers API. No-op when
- *  unsupported. Re-scheduling with the same tag replaces the previous one. */
-export async function scheduleReminderTrigger({
-  id,
-  title,
-  body,
-  timestamp,
-}: ShowOpts & { timestamp: number }): Promise<void> {
-  if (!triggersSupported() || notifPermission() !== 'granted') return;
-  const reg = await getRegistration();
-  if (!reg) return;
-  const Trigger = (window as unknown as { TimestampTrigger: new (t: number) => unknown })
-    .TimestampTrigger;
-  try {
-    await reg.showNotification(title, {
-      body: body || undefined,
-      tag: `reminder-${id}`,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      data: { url: '/', id },
-      // Experimental field not in the TS DOM types.
-      showTrigger: new Trigger(timestamp),
-    } as NotificationOptions);
-  } catch {
-    /* ignore scheduling failures */
-  }
 }

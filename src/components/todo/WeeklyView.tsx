@@ -11,17 +11,21 @@ import {
 } from '@dnd-kit/core';
 import { COLOR_STYLES, type Task } from '../../types';
 import {
+  addDays,
   dayOfMonth,
+  formatDayLong,
   formatTime,
   isToday,
   mondayWeekDates,
   parseISO,
+  todayISO,
   weekdayShort,
 } from '../../lib/dates';
 import { groupByDay, listDate } from '../../lib/taskOrder';
 import { titleCase } from '../../lib/text';
 import { useApp } from '../../context/AppContext';
 import { useVoiceSettings } from '../../hooks/useVoiceSettings';
+import { useWindowSize } from '../../hooks/useWindowSize';
 import WorkShiftDialog from '../WorkShiftDialog';
 import { Droppable, ScheduleCard } from './ScheduleParts';
 
@@ -34,6 +38,27 @@ interface Props {
   anchor: string;
   onMove: (id: string, due: string | null) => void;
   onToggle: (id: string, done: boolean) => void;
+  /**
+   * Called when the responsive (1- or 3-day) layout navigates a focused day
+   * outside the anchor's week, so the parent's week anchor can follow along and
+   * keep the toolbar title in sync.
+   */
+  onAnchorChange?: (iso: string) => void;
+}
+
+/** How many day columns to render at the current viewport width. */
+function columnsFor(width: number): 1 | 3 | 7 {
+  if (width < 640) return 1; // phones — one day at a time
+  if (width < 1024) return 3; // tablet / narrow desktop — three days
+  return 7; // full week
+}
+
+function Chevron({ dir }: { dir: 'left' | 'right' }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {dir === 'left' ? <path d="m15 18-6-6 6-6" /> : <path d="m9 18 6-6-6-6" />}
+    </svg>
+  );
 }
 
 /** "HH:MM" → minutes since midnight. */
@@ -121,16 +146,51 @@ function TimedBlock({
   );
 }
 
-export default function WeeklyView({ tasks, anchor, onMove, onToggle }: Props) {
+export default function WeeklyView({ tasks, anchor, onMove, onToggle, onAnchorChange }: Props) {
   const { categories, openEditTask } = useApp();
   const { settings } = useVoiceSettings();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [editWorkDow, setEditWorkDow] = useState<number | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  // Re-render the "now" line every minute when the current week is showing.
+  const { width } = useWindowSize();
+  const cols = columnsFor(width);
+
+  // The 7 days of the anchor's Monday→Sunday week (the full-desktop layout).
+  const weekDays = mondayWeekDates(anchor);
+
+  // On narrow layouts (1 or 3 columns) we render around a single focused day.
+  // Default to today; if the anchor week doesn't contain today, fall back to
+  // the first day of that week.
+  const [focus, setFocus] = useState<string>(() =>
+    weekDays.includes(todayISO()) ? todayISO() : weekDays[0]
+  );
+
+  // When the parent changes the week (toolbar arrows / "Today"), pull the
+  // focused day back into the visible week.
+  useEffect(() => {
+    setFocus((f) => {
+      if (weekDays.includes(f)) return f;
+      return weekDays.includes(todayISO()) ? todayISO() : weekDays[0];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchor]);
+
+  // Move the focused day; if it leaves the anchor week, ask the parent to
+  // follow so the toolbar's week title stays correct.
+  function focusDay(iso: string) {
+    setFocus(iso);
+    if (onAnchorChange && !weekDays.includes(iso)) onAnchorChange(iso);
+  }
+  const stepDay = (dir: -1 | 1) => focusDay(addDays(focus, dir));
+
+  // The days actually rendered as columns for the current breakpoint.
+  const days =
+    cols === 7 ? weekDays : cols === 3 ? [addDays(focus, -1), focus, addDays(focus, 1)] : [focus];
+  const colTemplate = { gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` };
+
+  // Re-render the "now" line every minute when today is visible.
   const [, setTick] = useState(0);
-  const days = mondayWeekDates(anchor);
   const showsToday = days.some(isToday);
   useEffect(() => {
     if (!showsToday) return;
@@ -201,10 +261,68 @@ export default function WeeklyView({ tasks, anchor, onMove, onToggle }: Props) {
       onDragEnd={handleEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      {/* Weekday header, aligned with the columns below. */}
-      <div className="flex">
+      {/* Narrow-layout day navigation (phone: 1 day, tablet: 3 days). */}
+      {cols < 7 && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => stepDay(-1)}
+              aria-label="Previous day"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-gray-800"
+            >
+              <Chevron dir="left" />
+            </button>
+            <p className="min-w-0 truncate text-center text-base font-bold tracking-tight text-gray-800 dark:text-gray-100">
+              {formatDayLong(focus)}
+            </p>
+            <button
+              type="button"
+              onClick={() => stepDay(1)}
+              aria-label="Next day"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-gray-800"
+            >
+              <Chevron dir="right" />
+            </button>
+          </div>
+
+          {/* Mini week navigator (phone only): tap a day to jump to it. */}
+          {cols === 1 && (
+            <div className="mt-2 grid grid-cols-7 gap-1">
+              {mondayWeekDates(focus).map((iso) => {
+                const sel = iso === focus;
+                const today = isToday(iso);
+                return (
+                  <button
+                    key={iso}
+                    type="button"
+                    onClick={() => focusDay(iso)}
+                    aria-label={formatDayLong(iso)}
+                    aria-current={sel ? 'date' : undefined}
+                    className={[
+                      'flex h-11 flex-col items-center justify-center rounded-lg text-[11px] font-semibold uppercase transition-colors',
+                      sel
+                        ? 'bg-gray-800 text-white'
+                        : today
+                          ? 'text-gray-800 ring-1 ring-inset ring-gray-300 dark:text-gray-100 dark:ring-gray-600'
+                          : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800',
+                    ].join(' ')}
+                  >
+                    <span>{weekdayShort(iso)[0]}</span>
+                    <span className="text-[13px]">{dayOfMonth(iso)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Weekday header, aligned with the columns below. Hidden on phone where
+          the big day header above already names the day. */}
+      <div className={`flex ${cols === 1 ? 'hidden' : ''}`}>
         <div className="w-12 shrink-0" />
-        <div className="grid flex-1 grid-cols-7">
+        <div className="grid flex-1" style={colTemplate}>
           {days.map((iso) => {
             const today = isToday(iso);
             return (
@@ -233,7 +351,7 @@ export default function WeeklyView({ tasks, anchor, onMove, onToggle }: Props) {
           <div className="grid w-12 shrink-0 place-items-center px-0.5 text-center text-[9px] font-semibold uppercase leading-tight tracking-wide text-gray-400">
             Any time
           </div>
-          <div className="grid flex-1 grid-cols-7">
+          <div className="grid flex-1" style={colTemplate}>
             {perDay.map((d) => (
               <Droppable
                 key={d.iso}
@@ -266,7 +384,7 @@ export default function WeeklyView({ tasks, anchor, onMove, onToggle }: Props) {
           </div>
 
           {/* day tracks */}
-          <div className="relative grid flex-1 grid-cols-7" style={{ height: totalH }}>
+          <div className="relative grid flex-1" style={{ height: totalH, ...colTemplate }}>
             {/* hour gridlines spanning all columns */}
             {hours.map((h) => (
               <div

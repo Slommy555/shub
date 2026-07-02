@@ -49,6 +49,64 @@ body {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Tiptap rich-text editor (Notes). Scoped to `.tiptap` (ProseMirror root).
+--------------------------------------------------------------------------- */
+.tiptap {
+  @apply text-[15px] leading-relaxed text-gray-800 dark:text-gray-100;
+}
+.tiptap:focus {
+  outline: none;
+}
+.tiptap > * + * {
+  margin-top: 0.6em;
+}
+.tiptap h1 {
+  @apply mt-4 text-2xl font-bold tracking-tight;
+}
+.tiptap h2 {
+  @apply mt-3 text-xl font-bold tracking-tight;
+}
+.tiptap h3 {
+  @apply mt-3 text-lg font-semibold tracking-tight;
+}
+.tiptap ul {
+  @apply list-disc pl-5;
+}
+.tiptap ol {
+  @apply list-decimal pl-5;
+}
+.tiptap blockquote {
+  @apply border-l-2 border-gray-300 pl-3 italic text-gray-500 dark:border-gray-600 dark:text-gray-400;
+}
+.tiptap hr {
+  @apply my-4 border-t border-gray-200 dark:border-gray-700;
+}
+.tiptap a {
+  @apply text-blue-600 underline dark:text-blue-400;
+}
+/* Task lists (checkboxes) */
+.tiptap ul[data-type='taskList'] {
+  @apply list-none pl-0;
+}
+.tiptap ul[data-type='taskList'] li {
+  @apply flex items-start gap-2;
+}
+.tiptap ul[data-type='taskList'] li > label {
+  @apply mt-1 shrink-0 select-none;
+}
+.tiptap ul[data-type='taskList'] li > div {
+  @apply min-w-0 flex-1;
+}
+.tiptap ul[data-type='taskList'] input[type='checkbox'] {
+  @apply h-4 w-4 cursor-pointer rounded border-gray-300 text-gray-700 focus:ring-gray-400/40 dark:border-gray-600 dark:bg-gray-800;
+}
+/* Empty-editor placeholder */
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  @apply pointer-events-none float-left h-0 text-gray-400;
+}
+
 /* Horizontal scroll regions that should scroll without a visible scrollbar
    (e.g. the muscle-group filter chips). */
 .no-scrollbar {

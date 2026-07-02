@@ -5,7 +5,7 @@ import {
   requestNotifPermission,
   triggersSupported,
   type NotifPermission,
-} from '../../lib/notifications';
+} from '../lib/notifications';
 
 /**
  * Self-contained notifications panel for the global Settings tab: permission

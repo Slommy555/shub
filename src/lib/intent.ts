@@ -11,6 +11,7 @@ export interface IntentContext {
   now: Date;
   habitNames: string[];
   templateNames: string[];
+  notePageNames: string[];
 }
 
 /** A raw action object as returned by Claude (validated later by the router). */
@@ -46,18 +47,20 @@ Possible action types:
    data: { weight_lbs: number, notes: string | null }
    Use for: when user mentions their current weight or says they weighed themselves
 
-4. set_reminder
-   data: { text: string, datetime: string | null, recurring: string | null }
-   Use for: any reminders the user asks to be set
-   datetime: ISO string if a specific time is mentioned
-   recurring: 'daily', 'weekly', or null
+4. write_note
+   data: { page_name: string | null, title: string, content: string }
+   Use for: when the user asks to write, create, save, or jot down a note
+   page_name: the page they want it saved to, if mentioned (match against the existing note page names below). If not mentioned, set to null
+   title: a concise title for the note based on what they said. If they explicitly state a title, use that. Otherwise generate one from the content.
+   content: the body of the note, written out in clean readable prose or formatted as a list if the user is clearly listing items. Preserve the user's intent and specifics — don't summarize away details they want kept. You may use simple markdown: lines starting with '# ' for a heading and '- ' for bullet list items.
 
 Today's date and time is ${ctx.now.toString()} (ISO ${ctx.now.toISOString()}).
 The user's existing habit names are: ${list(ctx.habitNames)}.
 The user's existing workout template names are: ${list(ctx.templateNames)}.
+The user's existing note page names are: ${list(ctx.notePageNames)}.
 
 Return only a valid JSON object. No preamble, no markdown, no explanation.
-Example: { "actions": [ { "type": "complete_habits", "data": { "habit_names": ["meditation", "reading"], "all": false } }, { "type": "log_weight", "data": { "weight_lbs": 185, "notes": null } } ] }`;
+Example: { "actions": [ { "type": "complete_habits", "data": { "habit_names": ["meditation", "reading"], "all": false } }, { "type": "write_note", "data": { "page_name": "School", "title": "Midterm format", "content": "The midterm is 20 multiple choice and 2 essays.\n- Bring a blue book\n- No calculators" } } ] }`;
 }
 
 /** Pull the `actions` array out of Claude's text response, tolerant of fences. */
@@ -92,14 +95,16 @@ export async function parseIntents(transcript: string, ctx: IntentContext): Prom
 
 /** Fetch everything Claude needs to match spoken names to real records. */
 export async function gatherIntentContext(): Promise<IntentContext> {
-  const [habits, templates] = await Promise.all([
+  const [habits, templates, notePages] = await Promise.all([
     supabase.from('habits').select('name').eq('archived', false),
     supabase.from('workout_templates').select('name'),
+    supabase.from('note_pages').select('name:title'),
   ]);
 
   return {
     now: new Date(),
     habitNames: (habits.data ?? []).map((r) => r.name as string),
     templateNames: (templates.data ?? []).map((r) => r.name as string),
+    notePageNames: (notePages.data ?? []).map((r) => (r as { name: string }).name),
   };
 }

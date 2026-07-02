@@ -4,7 +4,7 @@ import { APPEARANCE_FIELDS, type useAppearance } from '../hooks/useAppearance';
 import ThemeToggle from './ThemeToggle';
 import SetPasswordDialog from './SetPasswordDialog';
 import CategoryManager from './CategoryManager';
-import NotificationSettings from './reminders/NotificationSettings';
+import NotificationSettings from './NotificationSettings';
 
 interface Props {
   theme: 'light' | 'dark';

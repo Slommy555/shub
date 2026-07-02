@@ -1,27 +1,29 @@
 import type {
-  ReminderReviewModel,
+  NoteReviewModel,
   ReviewModel,
   WeightReviewModel,
 } from '../../lib/claudeRouter';
 import HabitConfirmCard from './HabitConfirmCard';
 import WorkoutStartCard from './WorkoutStartCard';
 import WeightConfirmCard from './WeightConfirmCard';
-import ReminderConfirmCard from './ReminderConfirmCard';
+import NoteReviewCard from '../notes/NoteReviewCard';
 
 interface Props {
   review: ReviewModel;
   onChange: (patch: Partial<ReviewModel>) => void;
+  /** "Edit before saving" on a note — hands it off to the full Notes editor. */
+  onEditNote: (note: NoteReviewModel) => void;
 }
 
 /**
- * The habit / workout / weight / reminder sections of a voice review. Rendered
+ * The habit / workout / weight / note sections of a voice review. Rendered
  * inside VoicePopup alongside the existing task sections so the user reviews
  * everything in one place before confirming. Purely presentational — the parent
  * owns the ReviewModel state and runs the handlers on confirm.
  */
-export default function NewActionSections({ review, onChange }: Props) {
-  const patchReminder = (id: string, rp: Partial<ReminderReviewModel>) =>
-    onChange({ reminders: review.reminders.map((r) => (r.id === id ? { ...r, ...rp } : r)) });
+export default function NewActionSections({ review, onChange, onEditNote }: Props) {
+  const patchNote = (id: string, np: Partial<NoteReviewModel>) =>
+    onChange({ notes: review.notes.map((n) => (n.id === id ? { ...n, ...np } : n)) });
   const patchWeight = (wp: Partial<WeightReviewModel>) =>
     onChange({ weight: review.weight ? { ...review.weight, ...wp } : null });
 
@@ -61,16 +63,17 @@ export default function NewActionSections({ review, onChange }: Props) {
         </Section>
       )}
 
-      {/* Reminders */}
-      {review.reminders.length > 0 && (
-        <Section title="Reminders to set" onDismiss={() => onChange({ reminders: [] })}>
+      {/* Notes */}
+      {review.notes.length > 0 && (
+        <Section title="Note to save" onDismiss={() => onChange({ notes: [] })}>
           <div className="space-y-2">
-            {review.reminders.map((r) => (
-              <ReminderConfirmCard
-                key={r.id}
-                model={r}
-                onChange={(rp) => patchReminder(r.id, rp)}
-                onDismiss={() => onChange({ reminders: review.reminders.filter((x) => x.id !== r.id) })}
+            {review.notes.map((n) => (
+              <NoteReviewCard
+                key={n.id}
+                model={n}
+                onChange={(np) => patchNote(n.id, np)}
+                onDismiss={() => onChange({ notes: review.notes.filter((x) => x.id !== n.id) })}
+                onEdit={() => onEditNote(n)}
               />
             ))}
           </div>
