@@ -11,13 +11,14 @@ If it returns a duplicate key error, run:
 
 to identify which migrations are already applied, then skip those and only apply pending ones. Never re-run an already-applied migration.
 
-> **Known history quirk (2026-07):** two legacy files share version `005`
-> (`005_resync_default_muscles.sql` and `005_workout_sets_rest.sql`), so a bare
-> `db push` fails with `duplicate key value ... schema_migrations_pkey (version)=(005)`.
-> The remote schema itself is fully applied (the DDL uses `if not exists` guards);
-> only the tracking table is behind. Resolving this permanently (renaming the
-> duplicate + `supabase migration repair --status applied`) modifies remote
-> migration state, so get explicit user approval before doing it.
+> **History note (resolved 2026-07):** a duplicate version `005`
+> (`005_resync_default_muscles.sql` + a second `005_workout_sets_rest.sql`) had
+> silently broken `db push` for a long time, leaving `user_preferences`, `notes`,
+> `note_pages` and `show_rpe` unapplied on remote. Fixed by renaming the second
+> file to `018_workout_sets_rest.sql`, repairing the tracking table, and pushing
+> `012–018`. Local and remote history are now in sync through `018` and `db push`
+> works cleanly. Every migration is written idempotently (`if not exists` /
+> `if exists` guards), so re-running is safe.
 
 ## Auto Deploy
 After completing ANY change in a session — whether it's a bug fix, new feature, migration, or config change — always run the following before ending the session:
