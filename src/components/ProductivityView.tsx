@@ -27,7 +27,7 @@ export default function ProductivityView({ userId }: { userId: string }) {
   }, [habits, doneByHabit, today]);
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+    <div className="pb-fab mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
       <h1 className="text-xl font-bold tracking-tight">Focus</h1>
       <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
         Build habits and goals, check them off daily, and track how consistent you are.

@@ -10,8 +10,10 @@ import {
 import {
   SortableContext,
   arrayMove,
+  defaultAnimateLayoutChanges,
   useSortable,
   verticalListSortingStrategy,
+  type AnimateLayoutChanges,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -34,6 +36,8 @@ interface Props {
   onCreateCustom: (name: string, groups: MuscleGroup[]) => Promise<Exercise | null>;
   onDeleteExercise: (id: string) => void;
   onFinished: (summary: WorkoutSummary) => void;
+  /** Whether to show the RPE column in the set logger (Settings → Workout). */
+  showRpe: boolean;
 }
 
 const SET_TYPE_NEXT: Record<SetType, SetType> = {
@@ -46,6 +50,24 @@ const badge =
   'rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300';
 const numInput =
   'w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-center text-sm outline-none focus:border-gray-500 dark:border-gray-700 dark:bg-gray-950';
+
+/** Grid column template for the set table — the RPE column drops out when the
+ *  user has RPE display turned off. Shared by the header and every set row. */
+function gridColsFor(showRpe: boolean): string {
+  return showRpe
+    ? 'grid-cols-[1.5rem_1fr_1fr_1fr_2.75rem_1.5rem]'
+    : 'grid-cols-[1.5rem_1fr_1fr_2.75rem_1.5rem]';
+}
+
+/** An exercise is "complete" once it has sets and every set is checked off. */
+function isExerciseComplete(ex: SessionExercise): boolean {
+  return ex.sets.length > 0 && ex.sets.every((s) => s.done);
+}
+
+// Animate layout changes even when they're caused by a programmatic reorder
+// (e.g. an exercise completing and sliding to the bottom), not just dragging.
+const animateLayoutChanges: AnimateLayoutChanges = (args) =>
+  defaultAnimateLayoutChanges({ ...args, wasDragging: true });
 
 function formatTimer(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -102,12 +124,16 @@ const TYPE_CELL: Record<SetType, string> = {
 function SetRow({
   index,
   set,
+  gridCls,
+  showRpe,
   onChange,
   onDelete,
   onCompleted,
 }: {
   index: number;
   set: SessionSet;
+  gridCls: string;
+  showRpe: boolean;
   onChange: (patch: Partial<SessionSet>) => void;
   onDelete: () => void;
   onCompleted: () => void;
@@ -124,7 +150,7 @@ function SetRow({
         Delete
       </div>
       <div
-        className="relative grid grid-cols-[1.25rem_1fr_1fr_1fr_1.4fr_1.6rem_1.25rem] items-center gap-1 bg-white py-1 dark:bg-gray-900"
+        className={`relative grid ${gridCls} items-center gap-1 bg-white py-1 dark:bg-gray-900`}
         style={{ transform: `translateX(${dx}px)`, transition: startX.current === null ? 'transform 0.15s' : 'none' }}
         onTouchStart={(e) => {
           startX.current = e.touches[0].clientX;
@@ -165,24 +191,19 @@ function SetRow({
           className={numInput}
           aria-label={`Set ${index + 1} reps`}
         />
-        <input
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={10}
-          value={set.rpe ?? ''}
-          onChange={(e) => onChange({ rpe: num(e.target.value) })}
-          className={numInput}
-          aria-label={`Set ${index + 1} RPE`}
-        />
-        <input
-          type="text"
-          value={set.notes}
-          onChange={(e) => onChange({ notes: e.target.value })}
-          placeholder="—"
-          className="w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-sm outline-none focus:border-gray-500 dark:border-gray-700 dark:bg-gray-950"
-          aria-label={`Set ${index + 1} notes`}
-        />
+        {showRpe && (
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={10}
+            value={set.rpe ?? ''}
+            onChange={(e) => onChange({ rpe: num(e.target.value) })}
+            className={numInput}
+            aria-label={`Set ${index + 1} RPE`}
+          />
+        )}
+        {/* Completion checkbox — large tap target (44px) for mid-workout taps. */}
         <button
           type="button"
           onClick={() => {
@@ -191,20 +212,25 @@ function SetRow({
             if (next) onCompleted(); // finishing a set starts the rest timer
           }}
           aria-label="Mark set done"
-          className={`grid h-6 w-6 place-items-center rounded-md border text-xs ${
-            set.done
-              ? 'border-gray-800 bg-gray-800 text-white dark:border-gray-200 dark:bg-gray-200 dark:text-gray-900'
-              : 'border-gray-300 text-transparent dark:border-gray-600'
-          }`}
+          aria-pressed={set.done}
+          className="grid h-11 w-11 place-items-center justify-self-center rounded-md"
         >
-          ✓
+          <span
+            className={`grid h-7 w-7 place-items-center rounded-md border text-sm ${
+              set.done
+                ? 'border-gray-800 bg-gray-800 text-white dark:border-gray-200 dark:bg-gray-200 dark:text-gray-900'
+                : 'border-gray-300 text-transparent dark:border-gray-600'
+            }`}
+          >
+            ✓
+          </span>
         </button>
         {/* explicit delete (always visible; swipe-left also deletes on mobile) */}
         <button
           type="button"
           onClick={onDelete}
           aria-label="Delete set"
-          className="grid h-6 w-6 place-items-center rounded-md text-gray-300 hover:bg-gray-100 hover:text-red-500 dark:hover:bg-gray-800"
+          className="grid h-11 w-6 place-items-center justify-self-center rounded-md text-gray-300 hover:bg-gray-100 hover:text-red-500 dark:hover:bg-gray-800"
         >
           ×
         </button>
@@ -219,30 +245,49 @@ function ExerciseBlock({
   ex,
   api,
   startRest,
+  showRpe,
+  completed,
 }: {
   ex: SessionExercise;
   api: UseWorkoutSession;
   startRest: (seconds: number) => void;
+  showRpe: boolean;
+  completed: boolean;
 }) {
   const restSeconds = ex.restSeconds ?? DEFAULT_REST_SECONDS;
+  const gridCls = gridColsFor(showRpe);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const exNotes = ex.notes ?? '';
+  const showNote = noteOpen || exNotes.trim().length > 0;
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: ex.key,
+    animateLayoutChanges,
   });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.6 : 1,
+    opacity: isDragging ? 0.6 : undefined,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+      className={`rounded-2xl border border-gray-200 bg-white p-3 shadow-sm transition-opacity duration-300 dark:border-gray-800 dark:bg-gray-900 ${
+        completed && !isDragging ? 'opacity-40' : ''
+      }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold">{ex.exercise.name}</h3>
+          <h3 className="flex items-center gap-1.5 truncate text-sm font-semibold">
+            {completed && (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-green-600 dark:text-green-400" aria-label="Completed">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            )}
+            <span className="truncate">{ex.exercise.name}</span>
+          </h3>
           <div className="mt-1 flex flex-wrap gap-1">
             {ex.exercise.muscle_groups.map((m) => (
               <span key={m} className={badge}>
@@ -276,6 +321,30 @@ function ExerciseBlock({
         </div>
       </div>
 
+      {/* per-exercise note — one note for the whole exercise, collapsed until used */}
+      {showNote ? (
+        <textarea
+          value={exNotes}
+          onChange={(e) => api.setExerciseNotes(ex.key, e.target.value)}
+          placeholder="Notes for this exercise…"
+          rows={2}
+          autoFocus={noteOpen && !exNotes}
+          className="mt-2 w-full resize-y rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-gray-500 dark:border-gray-700 dark:bg-gray-950"
+          aria-label={`Notes for ${ex.exercise.name}`}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setNoteOpen(true)}
+          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Add note
+        </button>
+      )}
+
       {/* per-exercise rest (used by the rest timer; editable here or in templates) */}
       <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-500">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -296,12 +365,11 @@ function ExerciseBlock({
       </div>
 
       {/* column headers */}
-      <div className="mt-3 grid grid-cols-[1.25rem_1fr_1fr_1fr_1.4fr_1.6rem_1.25rem] gap-1 px-0 text-[10px] font-medium uppercase tracking-wide text-gray-400">
+      <div className={`mt-3 grid ${gridCls} gap-1 px-0 text-[10px] font-medium uppercase tracking-wide text-gray-400`}>
         <span className="text-center">#</span>
         <span className="text-center">lbs</span>
         <span className="text-center">reps</span>
-        <span className="text-center">rpe</span>
-        <span>notes</span>
+        {showRpe && <span className="text-center">rpe</span>}
         <span className="text-center">✓</span>
         <span />
       </div>
@@ -312,6 +380,8 @@ function ExerciseBlock({
             key={st.id}
             index={i}
             set={st}
+            gridCls={gridCls}
+            showRpe={showRpe}
             onChange={(patch) => api.updateSet(ex.key, st.id, patch)}
             onDelete={() => api.deleteSet(ex.key, st.id)}
             onCompleted={() => startRest(st.rest ?? restSeconds)}
@@ -338,6 +408,7 @@ export default function ActiveWorkoutSession({
   onCreateCustom,
   onDeleteExercise,
   onFinished,
+  showRpe,
 }: Props) {
   const session = api.session!;
   const [now, setNow] = useState(Date.now());
@@ -372,13 +443,28 @@ export default function ActiveWorkoutSession({
     [session.exercises, session.startedAt]
   );
 
+  // Display order: incomplete exercises first (in their user-defined order),
+  // completed ones sink to the bottom. This is a *view* — the session's stored
+  // order is untouched (Fix 7).
+  const displayExercises = useMemo(() => {
+    const incomplete: SessionExercise[] = [];
+    const complete: SessionExercise[] = [];
+    for (const ex of session.exercises) {
+      (isExerciseComplete(ex) ? complete : incomplete).push(ex);
+    }
+    return [...incomplete, ...complete];
+  }, [session.exercises]);
+
+  const allComplete =
+    session.exercises.length > 0 && session.exercises.every(isExerciseComplete);
+
   function onDragEnd(e: DragEndEvent) {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
-    const oldIndex = session.exercises.findIndex((x) => x.key === active.id);
-    const newIndex = session.exercises.findIndex((x) => x.key === over.id);
+    const oldIndex = displayExercises.findIndex((x) => x.key === active.id);
+    const newIndex = displayExercises.findIndex((x) => x.key === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
-    api.reorderExercises(arrayMove(session.exercises, oldIndex, newIndex));
+    api.reorderExercises(arrayMove(displayExercises, oldIndex, newIndex));
   }
 
   async function confirmFinish() {
@@ -433,7 +519,7 @@ export default function ActiveWorkoutSession({
   }
 
   return (
-    <div className="mx-auto max-w-app p-4 pb-28">
+    <div className="pb-fab mx-auto max-w-app p-4 pb-28">
       {/* header */}
       <div className="sticky top-0 z-10 -mx-4 mb-3 flex items-center justify-between border-b border-gray-200 bg-gray-50/90 px-4 py-3 backdrop-blur dark:border-gray-800 dark:bg-gray-950/90">
         <div>
@@ -443,6 +529,24 @@ export default function ActiveWorkoutSession({
         <div className="font-mono text-lg tabular-nums">{formatTimer(elapsed)}</div>
       </div>
 
+      {/* all-done banner */}
+      {allComplete && (
+        <div className="mb-3 flex items-center gap-3 rounded-2xl border border-green-200 bg-green-50 p-3 dark:border-green-500/30 dark:bg-green-500/10">
+          <span className="text-2xl">🎉</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-green-800 dark:text-green-300">Workout complete!</p>
+            <p className="text-xs text-green-700/80 dark:text-green-400/80">Every exercise is done. Ready to log it?</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReviewing(true)}
+            className="shrink-0 rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
+          >
+            Finish
+          </button>
+        </div>
+      )}
+
       {/* exercises */}
       {session.exercises.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
@@ -451,12 +555,19 @@ export default function ActiveWorkoutSession({
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext
-            items={session.exercises.map((x) => x.key)}
+            items={displayExercises.map((x) => x.key)}
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-3">
-              {session.exercises.map((ex) => (
-                <ExerciseBlock key={ex.key} ex={ex} api={api} startRest={startRest} />
+              {displayExercises.map((ex) => (
+                <ExerciseBlock
+                  key={ex.key}
+                  ex={ex}
+                  api={api}
+                  startRest={startRest}
+                  showRpe={showRpe}
+                  completed={isExerciseComplete(ex)}
+                />
               ))}
             </div>
           </SortableContext>

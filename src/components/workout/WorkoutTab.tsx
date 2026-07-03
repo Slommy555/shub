@@ -18,7 +18,7 @@ const SUBTABS: { id: SubTab; label: string }[] = [
   { id: 'weight', label: 'Weight' },
 ];
 
-export default function WorkoutTab({ userId }: { userId: string }) {
+export default function WorkoutTab({ userId, showRpe }: { userId: string; showRpe: boolean }) {
   const exercisesApi = useExercises(userId);
   const templatesApi = useTemplates(userId, exercisesApi.exercises);
   const sessionApi = useWorkoutSession(userId);
@@ -90,6 +90,7 @@ export default function WorkoutTab({ userId }: { userId: string }) {
             createCustom={exercisesApi.createCustom}
             deleteExercise={exercisesApi.deleteExercise}
             onWorkoutFinished={onWorkoutFinished}
+            showRpe={showRpe}
           />
         )}
         {sub === 'templates' && (

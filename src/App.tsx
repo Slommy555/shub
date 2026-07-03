@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useTheme } from './hooks/useTheme';
 import { useAppearance } from './hooks/useAppearance';
+import { useWorkoutPrefs } from './hooks/workout/useWorkoutPrefs';
 import { useTasks } from './hooks/useTasks';
 import { useCategories } from './hooks/useCategories';
 import { useReminders } from './hooks/useReminders';
@@ -27,6 +28,7 @@ function Shell({ userId }: { userId: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { resolvedTheme, toggleTheme } = useTheme(userId);
   const appearance = useAppearance(userId);
+  const workoutPrefs = useWorkoutPrefs(userId);
   const api = useTasks(userId);
   const categories = useCategories(userId);
   const { dueTasks, upcomingEvents, permission, requestPermission } = useReminders(api.tasks);
@@ -76,11 +78,16 @@ function Shell({ userId }: { userId: string }) {
           <main className="min-w-0 flex-1">
             {tab === 'todo' && <TodoView api={api} />}
             {tab === 'voice' && <VoiceTab />}
-            {tab === 'workout' && <WorkoutTab userId={userId} />}
+            {tab === 'workout' && <WorkoutTab userId={userId} showRpe={workoutPrefs.showRpe} />}
             {tab === 'productivity' && <ProductivityView userId={userId} />}
             {tab === 'notes' && <NotesTab userId={userId} />}
             {tab === 'settings' && (
-              <SettingsView theme={resolvedTheme} onToggleTheme={toggleTheme} appearance={appearance} />
+              <SettingsView
+                theme={resolvedTheme}
+                onToggleTheme={toggleTheme}
+                appearance={appearance}
+                workoutPrefs={workoutPrefs}
+              />
             )}
           </main>
 

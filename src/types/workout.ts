@@ -231,6 +231,9 @@ export interface SessionExercise {
   exercise: Exercise;
   /** Rest between sets in seconds; null falls back to DEFAULT_REST_SECONDS. */
   restSeconds: number | null;
+  /** One free-text note for the whole exercise (not per set). Persisted onto the
+   *  first saved set's `notes` column on finish (no exercise-level table). */
+  notes: string;
   sets: SessionSet[];
 }
 

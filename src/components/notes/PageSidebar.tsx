@@ -63,7 +63,7 @@ export default function PageSidebar(props: Props) {
         <h2 className="text-sm font-bold tracking-tight">Pages</h2>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <div className="pb-fab min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {pages.length === 0 && !creating && (
           <p className="px-2 py-6 text-center text-xs text-gray-400">
             No pages yet. Create one below.

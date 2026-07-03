@@ -109,7 +109,7 @@ export default function TemplatesTab({
   }
 
   return (
-    <div className="mx-auto max-w-app space-y-4 p-4">
+    <div className="pb-fab mx-auto max-w-app space-y-4 p-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold">Templates</h1>
         <button

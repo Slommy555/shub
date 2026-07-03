@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { APPEARANCE_FIELDS, type useAppearance } from '../hooks/useAppearance';
+import type { UseWorkoutPrefs } from '../hooks/workout/useWorkoutPrefs';
 import ThemeToggle from './ThemeToggle';
 import SetPasswordDialog from './SetPasswordDialog';
 import CategoryManager from './CategoryManager';
@@ -10,14 +11,15 @@ interface Props {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   appearance: ReturnType<typeof useAppearance>;
+  workoutPrefs: UseWorkoutPrefs;
 }
 
-export default function SettingsView({ theme, onToggleTheme, appearance }: Props) {
+export default function SettingsView({ theme, onToggleTheme, appearance, workoutPrefs }: Props) {
   const { user, signOut } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
+    <div className="pb-fab mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
       <h1 className="mb-5 text-xl font-bold tracking-tight">Settings</h1>
 
       <div className="space-y-4">
@@ -87,6 +89,30 @@ export default function SettingsView({ theme, onToggleTheme, appearance }: Props
                 </button>
               </>
             )}
+          </div>
+        </section>
+
+        {/* Workout */}
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+          <h2 className="mb-3 text-sm font-semibold text-gray-700 dark:text-gray-200">Workout</h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm">Display RPE</p>
+              <p className="text-xs text-gray-400">
+                Show the RPE (rate of perceived exertion) column in the set logger.
+              </p>
+            </div>
+            <label className="inline-flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={workoutPrefs.showRpe}
+                onChange={(e) => workoutPrefs.setShowRpe(e.target.checked)}
+                className="h-4 w-4 cursor-pointer rounded border-gray-300 text-gray-600 focus:ring-gray-400/40 dark:border-gray-600 dark:bg-gray-800"
+              />
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                {workoutPrefs.showRpe ? 'On' : 'Off'}
+              </span>
+            </label>
           </div>
         </section>
 

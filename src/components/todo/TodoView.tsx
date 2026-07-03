@@ -49,7 +49,7 @@ export default function TodoView({ api }: { api: UseTasks }) {
         : formatMonthYear(anchor);
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6">
+    <div className="pb-fab w-full px-4 py-6 sm:px-6">
       <h1 className="mb-4 text-xl font-bold tracking-tight">To-Do List</h1>
 
       {/* Toolbar: date nav + add + view switch */}

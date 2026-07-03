@@ -40,7 +40,7 @@ export default function MetricsTab({ userId, exercises, version }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-app space-y-8 p-4 pb-12">
+    <div className="pb-fab mx-auto max-w-app space-y-8 p-4 pb-12">
       {/* Section A */}
       <section>
         <MuscleMap counts={metrics.muscleSetsThisWeek} />

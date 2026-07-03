@@ -412,7 +412,10 @@ export default function WeeklyView({
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         {/* Anytime band: untimed tasks per day (drag between days). On top. The
             bottom divider is on the day-columns container only (not the hour
-            gutter) so it never crosses the 6am / hour labels below it. */}
+            gutter) so it never crosses the 6am / hour labels below it.
+            Hidden on the mobile Schedule pane — there the schedule is the pure
+            timeline (Fix 1); untimed tasks live in the Tasks pane instead. */}
+        {!mobile && (
         <div className="flex">
           <div className="grid w-12 shrink-0 place-items-center px-0.5 text-center text-[9px] font-semibold uppercase leading-tight tracking-wide text-gray-400">
             Any time
@@ -434,6 +437,7 @@ export default function WeeklyView({
             ))}
           </div>
         </div>
+        )}
 
         <div className="flex">
           {/* hour gutter */}

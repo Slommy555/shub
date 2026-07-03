@@ -20,6 +20,16 @@ body {
   max-width: 100%;
 }
 
+/* Mobile bottom clearance: keeps a tab's scrollable content from being hidden
+   behind the fixed floating buttons (mic + menu FABs) and any bottom bar. Only
+   on phones (<640px); desktop is unaffected. Defined after @tailwind utilities
+   so it wins over Tailwind's own padding utilities on the same element. */
+@media (max-width: 639px) {
+  .pb-fab {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 120px) !important;
+  }
+}
+
 body {
   @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
   -webkit-font-smoothing: antialiased;

@@ -136,10 +136,18 @@ export default function NoteEditor({ note, pageTitle, onUpdate, onDelete, onBack
 
       {/* Scrollable editor body */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl px-4 py-5 sm:px-6">
+        <div className="pb-fab mx-auto w-full max-w-2xl px-4 py-5 sm:px-6">
           <input
             value={title}
             onChange={(e) => onTitleChange(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter in the title must never submit/close/clear the note — it
+              // just moves focus into the body so the user can start writing.
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                editor?.commands.focus('end');
+              }
+            }}
             placeholder="Untitled"
             aria-label="Note title"
             className="w-full bg-transparent text-2xl font-bold tracking-tight text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"

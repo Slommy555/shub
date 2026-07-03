@@ -98,7 +98,7 @@ export default function WeightTab({ userId }: Props) {
   }, [entries]);
 
   return (
-    <div className="mx-auto max-w-app space-y-5 p-4 pb-12">
+    <div className="pb-fab mx-auto max-w-app space-y-5 p-4 pb-12">
       <h1 className="text-lg font-bold">Body weight</h1>
 
       {/* log entry */}

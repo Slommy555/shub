@@ -14,6 +14,7 @@ interface Props {
   createCustom: (name: string, groups: MuscleGroup[]) => Promise<Exercise | null>;
   deleteExercise: (id: string) => void;
   onWorkoutFinished: () => void;
+  showRpe: boolean;
 }
 
 export default function LogTab({
@@ -24,6 +25,7 @@ export default function LogTab({
   createCustom,
   deleteExercise,
   onWorkoutFinished,
+  showRpe,
 }: Props) {
   // Active session takes over the whole tab.
   if (sessionApi.session) {
@@ -34,12 +36,13 @@ export default function LogTab({
         onCreateCustom={createCustom}
         onDeleteExercise={deleteExercise}
         onFinished={onWorkoutFinished}
+        showRpe={showRpe}
       />
     );
   }
 
   return (
-    <div className="mx-auto max-w-app space-y-5 p-4">
+    <div className="pb-fab mx-auto max-w-app space-y-5 p-4">
       <div>
         <h1 className="text-lg font-bold">Start a workout</h1>
         <p className="text-sm text-gray-500">Pick a template or go freestyle.</p>

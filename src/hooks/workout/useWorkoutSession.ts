@@ -35,7 +35,12 @@ export function useWorkoutSession(userId: string | null) {
   const [session, setSession] = useState<ActiveSession | null>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? (JSON.parse(raw) as ActiveSession) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as ActiveSession;
+      // Backfill fields added after a session may have been persisted (e.g. the
+      // per-exercise `notes`) so older in-progress sessions stay valid.
+      parsed.exercises = (parsed.exercises ?? []).map((e) => ({ ...e, notes: e.notes ?? '' }));
+      return parsed;
     } catch {
       return null;
     }
@@ -85,6 +90,7 @@ export function useWorkoutSession(userId: string | null) {
         key: crypto.randomUUID(),
         exercise: te.exercise,
         restSeconds: te.rest_seconds ?? null,
+        notes: '',
         sets,
       };
     });
@@ -103,7 +109,7 @@ export function useWorkoutSession(userId: string | null) {
             ...s,
             exercises: [
               ...s.exercises,
-              { key: crypto.randomUUID(), exercise, restSeconds: null, sets: [makeSet()] },
+              { key: crypto.randomUUID(), exercise, restSeconds: null, notes: '', sets: [makeSet()] },
             ],
           }
         : s
@@ -124,6 +130,14 @@ export function useWorkoutSession(userId: string | null) {
     setSession((s) =>
       s
         ? { ...s, exercises: s.exercises.map((e) => (e.key === key ? { ...e, restSeconds } : e)) }
+        : s
+    );
+  }, []);
+
+  const setExerciseNotes = useCallback((key: string, notes: string) => {
+    setSession((s) =>
+      s
+        ? { ...s, exercises: s.exercises.map((e) => (e.key === key ? { ...e, notes } : e)) }
         : s
     );
   }, []);
@@ -208,6 +222,9 @@ export function useWorkoutSession(userId: string | null) {
       for (const ex of session.exercises) {
         let n = 0;
         let working = 0;
+        // No exercise-level notes table exists, so the per-exercise note is
+        // stored on the first saved set's `notes` column (see SessionExercise).
+        const exNote = (ex.notes ?? '').trim() || null;
         for (const st of ex.sets) {
           if (st.weight_lbs == null && st.reps == null) continue; // skip blank rows
           n += 1;
@@ -219,7 +236,7 @@ export function useWorkoutSession(userId: string | null) {
             weight_lbs: st.weight_lbs,
             reps: st.reps,
             rpe: st.rpe,
-            notes: st.notes.trim() || null,
+            notes: n === 1 ? exNote : null,
             set_type: st.type,
           });
           // Warm-up sets are recorded but excluded from volume/working totals.
@@ -275,6 +292,7 @@ export function useWorkoutSession(userId: string | null) {
     removeExercise,
     reorderExercises,
     setExerciseRest,
+    setExerciseNotes,
     addSet,
     updateSet,
     deleteSet,
