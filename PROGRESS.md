@@ -6,11 +6,11 @@
 - [x] FIX 3 — Menu and voice buttons as side tabs
 
 ## Part 2 — Budget Tracker
-- [ ] Supabase schema + migration
-- [ ] Overview sub-tab
-- [ ] Transactions sub-tab
-- [ ] Goals sub-tab
-- [ ] Budget Settings sub-tab
+- [x] Supabase schema + migration
+- [x] Overview sub-tab
+- [x] Transactions sub-tab
+- [x] Goals sub-tab
+- [x] Budget Settings sub-tab
 - [ ] Claude voice integration (log_transaction)
 
 ## Part 3 — Telegram Daily Brief
