@@ -24,6 +24,7 @@ import EditTaskDialog from './components/EditTaskDialog';
 function Shell({ userId }: { userId: string }) {
   const [tab, setTab] = useState<Tab>('todo');
   const [editing, setEditing] = useState<Task | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const { resolvedTheme, toggleTheme } = useTheme(userId);
   const appearance = useAppearance(userId);
   const api = useTasks(userId);
@@ -50,7 +51,27 @@ function Shell({ userId }: { userId: string }) {
     >
       <VoiceController userId={userId} onNavigate={setTab}>
         <div className="flex min-h-screen">
-          <Sidebar active={tab} onSelect={setTab} />
+          <Sidebar
+            active={tab}
+            onSelect={setTab}
+            open={menuOpen}
+            onClose={() => setMenuOpen(false)}
+          />
+
+          {/* Mobile-only menu toggle (opens the sidebar drawer). Sits bottom-left,
+              opposite the mic FAB, so it clears page content and headers. */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            className="fixed bottom-5 left-4 z-40 grid h-12 w-12 place-items-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-lg shadow-gray-900/20 transition-colors hover:bg-gray-100 sm:hidden dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+            style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
 
           <main className="min-w-0 flex-1">
             {tab === 'todo' && <TodoView api={api} />}

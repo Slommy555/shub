@@ -44,6 +44,12 @@ interface Props {
    * keep the toolbar title in sync.
    */
   onAnchorChange?: (iso: string) => void;
+  /**
+   * Mobile (single-column) only: which pane to show. 'schedule' renders just the
+   * timeline; 'tasks' renders the day's tasks as a flat list (no timeline).
+   * Ignored on tablet/desktop where the full board always shows.
+   */
+  mobilePane?: 'tasks' | 'schedule';
 }
 
 /** How many day columns to render at the current viewport width. */
@@ -146,7 +152,14 @@ function TimedBlock({
   );
 }
 
-export default function WeeklyView({ tasks, anchor, onMove, onToggle, onAnchorChange }: Props) {
+export default function WeeklyView({
+  tasks,
+  anchor,
+  onMove,
+  onToggle,
+  onAnchorChange,
+  mobilePane = 'tasks',
+}: Props) {
   const { categories, openEditTask } = useApp();
   const { settings } = useVoiceSettings();
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -254,6 +267,16 @@ export default function WeeklyView({ tasks, anchor, onMove, onToggle, onAnchorCh
     if (task && listDate(task) !== target) onMove(String(a.id), target);
   }
 
+  // Single-column phone layout drives the Tasks/Schedule pane toggle.
+  const mobile = cols === 1;
+  const showScheduleBoard = !mobile || mobilePane === 'schedule';
+  const showTaskList = mobile && mobilePane === 'tasks';
+  // The focused day's tasks (timed + untimed), for the mobile Tasks list.
+  const focusTasks = byDay.get(focus) ?? [];
+  // Unscheduled section (Fix 2) moves to the TOP and only shows when non-empty.
+  // On mobile it belongs to the Tasks pane only; on desktop it always shows.
+  const showUnscheduled = unscheduled.length > 0 && (!mobile || mobilePane === 'tasks');
+
   return (
     <DndContext
       sensors={sensors}
@@ -318,6 +341,47 @@ export default function WeeklyView({ tasks, anchor, onMove, onToggle, onAnchorCh
         </div>
       )}
 
+      {/* Unscheduled — moved to the TOP of the view and only rendered when there
+          is at least one unscheduled task (Fix 2). Also the drop target for
+          dragging a task off a day. */}
+      {showUnscheduled && (
+        <Droppable
+          id="day:none"
+          className="mb-3 rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-2 transition-colors dark:border-gray-700 dark:bg-gray-900/40"
+          overClassName="border-gray-400 bg-gray-100/70 dark:bg-gray-500/10"
+        >
+          <p className="mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+            Unscheduled — drag onto a day
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {unscheduled.map((t) => (
+              <div key={t.id} className="w-56 max-w-full">
+                <ScheduleCard task={t} onToggle={onToggle} showSubtasks />
+              </div>
+            ))}
+          </div>
+        </Droppable>
+      )}
+
+      {/* Mobile "Tasks" pane: the focused day's tasks as a flat list, no timeline. */}
+      {showTaskList && (
+        <div className="flex flex-col gap-2">
+          {focusTasks.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400 dark:border-gray-800">
+              No tasks for this day.
+            </p>
+          ) : (
+            focusTasks.map((t) => (
+              <ScheduleCard key={t.id} task={t} onToggle={onToggle} showSubtasks />
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Schedule board (weekday header + timeline). On mobile it's the
+          "Schedule" pane; hidden when the "Tasks" pane is active. */}
+      {showScheduleBoard && (
+        <>
       {/* Weekday header, aligned with the columns below. Hidden on phone where
           the big day header above already names the day. */}
       <div className={`flex ${cols === 1 ? 'hidden' : ''}`}>
@@ -346,12 +410,14 @@ export default function WeeklyView({ tasks, anchor, onMove, onToggle, onAnchorCh
 
       {/* Timeline grid: hour gutter + 7 day tracks. */}
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-        {/* Anytime band: untimed tasks per day (drag between days). On top. */}
-        <div className="flex border-b border-gray-200 dark:border-gray-800">
+        {/* Anytime band: untimed tasks per day (drag between days). On top. The
+            bottom divider is on the day-columns container only (not the hour
+            gutter) so it never crosses the 6am / hour labels below it. */}
+        <div className="flex">
           <div className="grid w-12 shrink-0 place-items-center px-0.5 text-center text-[9px] font-semibold uppercase leading-tight tracking-wide text-gray-400">
             Any time
           </div>
-          <div className="grid flex-1" style={colTemplate}>
+          <div className="grid flex-1 border-b border-gray-200 dark:border-gray-800" style={colTemplate}>
             {perDay.map((d) => (
               <Droppable
                 key={d.iso}
@@ -454,28 +520,8 @@ export default function WeeklyView({ tasks, anchor, onMove, onToggle, onAnchorCh
           </div>
         </div>
       </div>
-
-      {/* Unscheduled — drag onto a day */}
-      <Droppable
-        id="day:none"
-        className="mt-3 rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-2 transition-colors dark:border-gray-700 dark:bg-gray-900/40"
-        overClassName="border-gray-400 bg-gray-100/70 dark:bg-gray-500/10"
-      >
-        <p className="mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-          Unscheduled — drag onto a day
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {unscheduled.length === 0 ? (
-            <span className="px-0.5 py-1 text-xs text-gray-400">Nothing here.</span>
-          ) : (
-            unscheduled.map((t) => (
-              <div key={t.id} className="w-56 max-w-full">
-                <ScheduleCard task={t} onToggle={onToggle} showSubtasks />
-              </div>
-            ))
-          )}
-        </div>
-      </Droppable>
+        </>
+      )}
 
       <DragOverlay dropAnimation={null}>
         {active ? <ScheduleCard task={active} onToggle={onToggle} overlay /> : null}

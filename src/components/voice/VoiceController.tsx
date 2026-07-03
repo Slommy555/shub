@@ -579,9 +579,11 @@ export default function VoiceController({
         />
       )}
 
-      {/* Mobile-only corner mic button (no always-on listener on mobile). Hidden
-          while the review panel is up; shown idle (start) and recording (stop). */}
-      {voiceEnabled && supported && isMobile && !reviewing && (
+      {/* Mobile-only corner mic button (no always-on listener on mobile). It's
+          the idle "start" trigger and lives bottom-right; while recording or
+          reviewing the bottom-right VoicePopup takes over (and owns the stop
+          control), so we hide the FAB then to avoid overlapping it. */}
+      {voiceEnabled && supported && isMobile && !reviewing && !speech.recording && (
         <MicFab
           recording={speech.recording}
           onStart={speech.startRecordingManual}

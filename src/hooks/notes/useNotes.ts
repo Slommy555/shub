@@ -19,6 +19,16 @@ export function useNotes(userId: string | null) {
   const notesRef = useRef<Note[]>([]);
   notesRef.current = notes;
 
+  // Ids we've just written locally (create/update). While an id is in here, a
+  // realtime echo for that row is ignored so it can't clobber the fresh local
+  // copy before the insert has fully round-tripped (the "note flashes then
+  // disappears" race). Cleared after a short settle window.
+  const recentWrites = useRef<Map<string, number>>(new Map());
+  const markWrite = useCallback((id: string) => {
+    recentWrites.current.set(id, Date.now());
+    window.setTimeout(() => recentWrites.current.delete(id), 4000);
+  }, []);
+
   // --- load ---------------------------------------------------------------
   useEffect(() => {
     if (!userId) {
@@ -57,6 +67,10 @@ export function useNotes(userId: string | null) {
             setNotes((prev) => prev.filter((n) => n.id !== id));
           } else {
             const row = payload.new as Note;
+            // Skip echoes for rows we just wrote locally — our optimistic copy
+            // is the source of truth until the write settles, so a lagging
+            // realtime event can't briefly wipe a freshly created note.
+            if (recentWrites.current.has(row.id)) return;
             setNotes((prev) => {
               const exists = prev.some((n) => n.id === row.id);
               const next = exists ? prev.map((n) => (n.id === row.id ? row : n)) : [...prev, row];
@@ -92,6 +106,7 @@ export function useNotes(userId: string | null) {
         created_at: now,
         updated_at: now,
       };
+      markWrite(id);
       setNotes((prev) => [...prev, row].sort(byPosition));
       const { error: err } = await supabase.from('notes').insert({
         id,
@@ -102,19 +117,24 @@ export function useNotes(userId: string | null) {
         position,
       });
       if (err) {
-        console.error('createNote failed:', err.message);
-        setNotes((prev) => prev.filter((n) => n.id !== id));
-        return null;
+        // Surface the failure but KEEP the note in local state so the user
+        // doesn't lose their work (a silent rollback here is what made new
+        // notes flash then vanish). It'll retry-persist on the next edit.
+        console.error('createNote failed — keeping note locally:', err.message);
+        if (typeof window !== 'undefined') {
+          window.alert(`Couldn't save the note to the server: ${err.message}\n\nIt's kept on this device; check your connection and it will re-sync when you edit it.`);
+        }
       }
       return row;
     },
-    [userId]
+    [userId, markWrite]
   );
 
   /** Update a note's title and/or content. Stamps `updated_at`. Resolves true on success. */
   const updateNote = useCallback(
     async (id: string, patch: { title?: string; content?: TiptapDoc }): Promise<boolean> => {
       const updated_at = new Date().toISOString();
+      markWrite(id);
       setNotes((prev) =>
         prev.map((n) => (n.id === id ? { ...n, ...patch, updated_at } : n)).sort(byPosition)
       );
@@ -128,7 +148,7 @@ export function useNotes(userId: string | null) {
       }
       return true;
     },
-    []
+    [markWrite]
   );
 
   const deleteNote = useCallback(async (id: string) => {

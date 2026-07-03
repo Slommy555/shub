@@ -12,6 +12,14 @@ body,
   height: 100%;
 }
 
+/* Never allow the page to scroll sideways — on mobile the sidebar becomes an
+   off-canvas drawer and stray wide children must wrap/clip, not push the page. */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 body {
   @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
   -webkit-font-smoothing: antialiased;

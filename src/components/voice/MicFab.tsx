@@ -7,9 +7,11 @@ interface Props {
 /**
  * Mobile-only floating mic button (rendered by VoiceController only below the
  * `sm` breakpoint). Tap to start recording, tap again to stop. Sits in the
- * bottom-left corner so it never overlaps the bottom-right VoicePopup that shows
- * the live transcript while recording. The actual recording/transcript/Claude
- * flow is the shared pipeline — this is purely the trigger.
+ * bottom-RIGHT corner (clear of the sidebar drawer / menu toggle on the left),
+ * lifted above the phone's home-indicator safe area. While recording the
+ * VoicePopup takes over as the stop control, so the FAB only needs to clear the
+ * bottom edge. The actual recording/transcript/Claude flow is the shared
+ * pipeline — this is purely the trigger.
  */
 export default function MicFab({ recording, onStart, onStop }: Props) {
   return (
@@ -18,8 +20,11 @@ export default function MicFab({ recording, onStart, onStop }: Props) {
       onClick={recording ? onStop : onStart}
       aria-label={recording ? 'Stop recording' : 'Start recording'}
       aria-pressed={recording}
-      className="fixed bottom-5 left-4 z-50 grid h-14 w-14 place-items-center rounded-full shadow-lg shadow-gray-900/25 transition-colors"
-      style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+      className="fixed bottom-5 right-4 z-40 grid h-14 w-14 place-items-center rounded-full shadow-lg shadow-gray-900/25 transition-colors"
+      style={{
+        marginBottom: 'env(safe-area-inset-bottom)',
+        marginRight: 'env(safe-area-inset-right)',
+      }}
     >
       {/* Pulsing ring while recording */}
       {recording && (

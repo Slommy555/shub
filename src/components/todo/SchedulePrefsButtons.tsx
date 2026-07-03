@@ -4,8 +4,10 @@ import { useVoiceSettings } from '../../hooks/useVoiceSettings';
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const WEEKDAY_LONG = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// On mobile the label text is hidden, leaving a compact ~32px icon button
+// (Fix 4); desktop keeps the icon + label.
 const triggerCls =
-  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800';
+  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 sm:px-2.5 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800';
 const panelCls =
   'absolute left-0 top-full z-30 mt-1.5 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-xl dark:border-gray-700 dark:bg-gray-900';
 
@@ -13,10 +15,14 @@ const panelCls =
 function PopoverButton({
   label,
   icon,
+  tooltip,
   children,
 }: {
   label: React.ReactNode;
   icon: React.ReactNode;
+  /** Native tooltip / long-press label, so the icon-only mobile button is still
+   *  discoverable. */
+  tooltip: string;
   children: (close: () => void) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -44,10 +50,12 @@ function PopoverButton({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
+        aria-label={tooltip}
+        title={tooltip}
         className={triggerCls}
       >
         {icon}
-        {label}
+        <span className="hidden sm:inline">{label}</span>
       </button>
       {open && <div className={panelCls}>{children(() => setOpen(false))}</div>}
     </div>
@@ -61,6 +69,7 @@ export function WorkDaysButton() {
 
   return (
     <PopoverButton
+      tooltip="Work days"
       icon={
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -141,6 +150,7 @@ export function SleepButton() {
 
   return (
     <PopoverButton
+      tooltip="Sleep"
       icon={
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z" />
