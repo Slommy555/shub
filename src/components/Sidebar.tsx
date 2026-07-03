@@ -1,5 +1,3 @@
-import Logo from './Logo';
-
 export type Tab = 'todo' | 'voice' | 'workout' | 'productivity' | 'notes' | 'settings';
 
 interface Props {
@@ -70,11 +68,6 @@ export default function Sidebar({ active, onSelect, open = false, onClose }: Pro
           'sm:sticky sm:top-0 sm:z-auto sm:translate-x-0',
         ].join(' ')}
       >
-      <div className="mb-3 flex flex-col items-center gap-1">
-        <Logo size={40} className="rounded-2xl shadow-lg shadow-indigo-500/30" />
-        <span className="text-[11px] font-bold tracking-tight text-gray-700 dark:text-gray-200">Slommy HQ</span>
-      </div>
-
       <NavButton active={active === 'todo'} label="To-Do" onClick={() => select('todo')}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 6h11M9 12h11M9 18h11" />
