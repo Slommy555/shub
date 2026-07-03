@@ -1,9 +1,9 @@
 # Session Progress
 
 ## Part 1 — Mobile UI Fixes
-- [ ] FIX 1 — Top buttons hidden behind Tasks/Schedule toggle
-- [ ] FIX 2 — Schedule not showing events on mobile
-- [ ] FIX 3 — Menu and voice buttons as side tabs
+- [x] FIX 1 — Top buttons hidden behind Tasks/Schedule toggle
+- [x] FIX 2 — Schedule not showing events on mobile
+- [x] FIX 3 — Menu and voice buttons as side tabs
 
 ## Part 2 — Budget Tracker
 - [ ] Supabase schema + migration

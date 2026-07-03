@@ -60,17 +60,18 @@ function Shell({ userId }: { userId: string }) {
             onClose={() => setMenuOpen(false)}
           />
 
-          {/* Mobile-only menu toggle (opens the sidebar drawer). Sits bottom-left,
-              opposite the mic FAB, so it clears page content and headers. */}
+          {/* Mobile-only menu side tab: a small pill anchored to the RIGHT edge at
+              45% from the top (the voice tab sits just below at 55%). Clears page
+              content and never overlaps the nav/footers (Fix 3). */}
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
             aria-expanded={menuOpen}
-            className="fixed bottom-5 left-4 z-40 grid h-12 w-12 place-items-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-lg shadow-gray-900/20 transition-colors hover:bg-gray-100 sm:hidden dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-            style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+            className="fixed right-0 top-[45%] z-40 flex h-14 w-8 items-center justify-center rounded-l-xl border border-r-0 border-gray-200 bg-white/90 text-gray-700 shadow-lg shadow-gray-900/20 backdrop-blur transition-colors hover:bg-gray-100 sm:hidden dark:border-gray-700 dark:bg-gray-900/90 dark:text-gray-200"
+            style={{ right: 'env(safe-area-inset-right)' }}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>

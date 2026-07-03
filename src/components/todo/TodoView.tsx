@@ -52,8 +52,10 @@ export default function TodoView({ api }: { api: UseTasks }) {
     <div className="pb-fab w-full px-4 py-6 sm:px-6">
       <h1 className="mb-4 text-xl font-bold tracking-tight">To-Do List</h1>
 
-      {/* Toolbar: date nav + add + view switch */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Toolbar: date nav + add + view switch. Sits in its own stacking context
+          above the sticky Tasks/Schedule toggle (z-30) so the header buttons and
+          their popovers are never covered / intercepted on mobile (Fix 1). */}
+      <div className="relative z-40 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
           {/* Upper date cycler — desktop only. On mobile the day view's own
               header/cycler is the single navigator (Fix 4). */}

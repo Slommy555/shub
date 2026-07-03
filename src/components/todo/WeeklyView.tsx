@@ -453,8 +453,15 @@ export default function WeeklyView({
             ))}
           </div>
 
-          {/* day tracks */}
-          <div className="relative grid flex-1" style={{ height: totalH, ...colTemplate }}>
+          {/* day tracks. gridTemplateRows is set explicitly to the full timeline
+              height so the single row can never collapse — relying on the default
+              `align-content: stretch` to size the auto row is unreliable on mobile
+              Safari, which left the day track (and its absolutely-positioned event
+              blocks) with no height, so events vanished on mobile only (Fix 2). */}
+          <div
+            className="relative grid flex-1"
+            style={{ height: totalH, gridTemplateRows: `${totalH}px`, ...colTemplate }}
+          >
             {/* hour gridlines spanning all columns */}
             {hours.map((h) => (
               <div

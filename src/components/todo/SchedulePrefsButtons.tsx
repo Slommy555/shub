@@ -9,7 +9,7 @@ const WEEKDAY_LONG = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const triggerCls =
   'inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 sm:px-2.5 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800';
 const panelCls =
-  'absolute left-0 top-full z-30 mt-1.5 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-xl dark:border-gray-700 dark:bg-gray-900';
+  'absolute left-0 top-full z-40 mt-1.5 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-xl dark:border-gray-700 dark:bg-gray-900';
 
 /** A button that toggles a popover, closing on outside click or Escape. */
 function PopoverButton({
