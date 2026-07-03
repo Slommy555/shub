@@ -1,7 +1,7 @@
 {
-  "name": "S Hub",
-  "short_name": "S Hub",
-  "description": "To-do, habits, workouts, and reminders.",
+  "name": "Slommy HQ",
+  "short_name": "Slommy HQ",
+  "description": "To-do, habits, workouts, and notes.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

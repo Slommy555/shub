@@ -1,8 +1,8 @@
 @echo off
-title S Hub
+title Slommy HQ
 cd /d "%~dp0"
 echo ============================================
-echo   Starting your S Hub app...
+echo   Starting your Slommy HQ app...
 echo   Your browser will open automatically.
 echo.
 echo   KEEP THIS WINDOW OPEN while using the app.

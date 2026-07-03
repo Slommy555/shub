@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import Logo from './Logo';
 
 export default function LoginScreen() {
   const { signInWithPassword } = useAuth();
@@ -26,11 +27,7 @@ export default function LoginScreen() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm animate-slide-up">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-gray-800 shadow-lg shadow-gray-500/30">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M7 12.5l3.2 3.2L17 9" />
-            </svg>
-          </div>
+          <Logo size={56} className="mx-auto mb-4 rounded-2xl shadow-lg shadow-indigo-500/30" />
           <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Sign in with your email and password.

@@ -1,4 +1,4 @@
-# S Hub — a personal productivity app
+# Slommy HQ — a personal productivity app
 
 A mobile-first personal productivity hub (to-do, voice, workout, focus) with
 magic-link auth, real-time sync, drag-to-reorder, subtasks, search/filter,

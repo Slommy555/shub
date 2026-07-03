@@ -1,3 +1,5 @@
+import Logo from './Logo';
+
 export type Tab = 'todo' | 'voice' | 'workout' | 'productivity' | 'notes' | 'settings';
 
 interface Props {
@@ -69,12 +71,8 @@ export default function Sidebar({ active, onSelect, open = false, onClose }: Pro
         ].join(' ')}
       >
       <div className="mb-3 flex flex-col items-center gap-1">
-        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-800 shadow-lg shadow-gray-500/30">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M7 12.5l3.2 3.2L17 9" />
-          </svg>
-        </div>
-        <span className="text-[11px] font-bold tracking-tight text-gray-700 dark:text-gray-200">S Hub</span>
+        <Logo size={40} className="rounded-2xl shadow-lg shadow-indigo-500/30" />
+        <span className="text-[11px] font-bold tracking-tight text-gray-700 dark:text-gray-200">Slommy HQ</span>
       </div>
 
       <NavButton active={active === 'todo'} label="To-Do" onClick={() => select('todo')}>

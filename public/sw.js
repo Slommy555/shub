@@ -1,4 +1,4 @@
-/* S Hub service worker. Three responsibilities:
+/* Slommy HQ service worker. Three responsibilities:
  *
  *  1) Notifications — show reminders from the registration (the only path that
  *     works in an installed PWA, incl. iOS) and focus the app when one is
@@ -17,7 +17,7 @@
  */
 
 const CACHE_VERSION = 'v1';
-const CACHE_NAME = `s-hub-${CACHE_VERSION}`;
+const CACHE_NAME = `slommy-hq-${CACHE_VERSION}`;
 
 // The minimal shell needed to boot offline. Content-hashed JS/CSS are added to
 // the cache at runtime by the stale-while-revalidate handler below.

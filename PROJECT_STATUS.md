@@ -1,4 +1,4 @@
-# Project Status — S Hub app
+# Project Status — Slommy HQ app
 
 _Last updated: 2026-06-23_
 
