@@ -191,7 +191,9 @@ Deno.serve(async (req: Request) => {
         u.user_id,
         "Good morning! Here's your daily brief",
         brief.slice(0, 100) + (brief.length > 100 ? '…' : ''),
-        { tab: 'home', fullBrief: brief }
+        // Keep the data payload under FCM's ~4KB limit; the full brief is always
+        // available in-app via the bell (notification_log).
+        { tab: 'home', fullBrief: brief.slice(0, 2500) }
       );
       await logNotification(db, u.user_id, 'daily_brief', result, brief);
       if (result.ok && !result.skipped) sent++;
