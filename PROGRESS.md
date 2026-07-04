@@ -49,5 +49,5 @@
 ## Final Steps
 - [x] Supabase migration 022 pushed
 - [x] npm run build passing
-- [ ] Git pushed (final commit)
+- [x] Git pushed
 - [x] Setup checklist emitted in session output
