@@ -1,124 +1,89 @@
-# Session Spec — Mobile Fixes, Budget Tracker, Telegram Daily Brief
+# Session Spec — Capacitor Android, Electron PC, Firebase Push
 
-> Saved for session resumption. See PROGRESS.md for completion state.
-> To resume: "Read PROMPT.md and PROGRESS.md from the project root and resume where you left off."
+> Supersedes the previous PROMPT.md (Budget/Telegram). Firebase push here
+> **replaces** the planned Telegram daily brief. Note: the prior task's "Budget
+> voice integration (log_transaction)" was left unfinished and is NOT part of
+> this spec. Budget Tracker UI itself is done (commit 8e204b5).
+> Resume with: "Read PROMPT.md and PROGRESS.md and resume where you left off."
 
-## SESSION MANAGEMENT
-- PROMPT.md: this file (the full spec).
-- PROGRESS.md: checklist of items; mark [x] and commit after each item completes.
-- Before writing code, ask user for: (1) Telegram Bot Token, (2) Telegram Chat ID.
-  These go into Supabase secrets (user runs `supabase secrets set ...`); not embedded in code.
-
-Order: Part 1 (mobile fixes) → Part 2 (budget tracker) → Part 3 (telegram brief). Do not change anything not mentioned.
+App is React + Vite + Supabase. Web version must keep working alongside native apps. All three share the same Supabase backend. appId `com.personal.productivityapp`, appName **Slommy HQ**.
 
 ===========================
-## PART 1 — MOBILE UI FIXES
+## PART 1 — CAPACITOR ANDROID APP
 ===========================
+Wrap the Vite web app in a native Android shell → sideloadable APK for a Galaxy S26 Ultra (no Play Store).
 
-FIX 1 — TOP BUTTONS HIDDEN BEHIND TASKS/SCHEDULE TOGGLE
-The top header buttons (Work Days, Add Task, Sleep icon buttons) render behind/underneath the Tasks/Schedule toggle switcher on mobile, making them untappable.
-- Audit z-index/stacking of the mobile header area.
-- Ensure header buttons have higher z-index than the toggle, OR restructure so they don't overlap — header buttons in their own row ABOVE the toggle.
-- Toggle sits below header buttons in DOM and visually, never on top.
-- Verify all three icon buttons are tappable without the toggle intercepting touch.
+Install: `@capacitor/core @capacitor/cli @capacitor/android`; `npx cap init`; `npx cap add android`.
+capacitor.config.ts at root: appId `com.personal.productivityapp`, appName `Slommy HQ`, webDir `dist`, server.androidScheme `https`, plugins.PushNotifications.presentationOptions `['badge','sound','alert']`.
 
-FIX 2 — SCHEDULE TAB NOT SHOWING EVENTS ON MOBILE
-Events that display on desktop still not appearing in mobile Schedule view (attempted before, do a deeper audit).
-- Add temporary console.log to trace: full events/tasks array passed to timeline on mobile; whether timeline mounts on mobile; computed positions/heights of event elements.
-- Check & fix whichever applies: (A) data not passed, (B) CSS hiding events (sm:hidden/md:hidden/media query), (C) zero height/width from container width calc, (D) overflow:hidden clipping, (E) component not mounting.
-- Remove all console.log after fixing.
-- Confirm: event added on desktop appears at correct time slot in mobile Schedule tab.
+Native plugins (guard ALL usage with `Capacitor.isNativePlatform()` or dynamic import so web build never breaks):
+1. `@capacitor/camera` — barcode scanner: BarcodeScanner.tsx uses native camera on native, falls back to `@zxing/browser` on web.
+2. `@capacitor/filesystem` — local file ops.
+3. `@capacitor/app` — foreground/background; refetch on resume (mirror existing visibilitychange listener).
+4. `@capacitor/status-bar` — set color to theme; update on dark/light change; Android safe-area insets.
+5. `@capacitor/splash-screen` — splash using primary color.
+6. `@capacitor/haptics` — light haptic on task-complete checkbox, habit completion, workout set completion.
 
-FIX 3 — MENU AND VOICE BUTTONS AS SIDE TABS ON MOBILE
-Menu and voice buttons positioned too low on mobile, overlapping nav/content. Convert to small side tabs.
-- Remove current floating positions for both menu toggle and voice mic on mobile.
-- Two small vertical side tabs on RIGHT edge: each ~32px wide, 56px tall, anchored right.
-  - Menu tab at 45% from top (hamburger icon); Voice tab at 55% from top (mic icon).
-  - Semi-transparent/card bg, subtle shadow, protrude half-in/half-out from right edge.
-  - Menu tab toggles sidebar drawer; Voice tab starts/stops recording.
-  - Use env(safe-area-inset-right) for right positioning.
-- Desktop layout of both buttons unchanged.
+AndroidManifest.xml permissions: INTERNET, CAMERA, RECEIVE_BOOT_COMPLETED, VIBRATE, POST_NOTIFICATIONS; uses-feature camera required=false.
+
+package.json scripts:
+`"android:build": "npm run build && npx cap sync android && cd android && ./gradlew assembleDebug"`
+`"android:open": "npx cap open android"`
+APK output: android/app/build/outputs/apk/debug/app-debug.apk. Note transfer/sideload steps.
+
+When native: remove PWA add-to-home prompt if any; apply status-bar safe insets. Existing <640px responsive layout applies automatically.
 
 ===========================
-## PART 2 — BUDGET TRACKER TAB
+## PART 2 — ELECTRON PC APP
 ===========================
+Wrap the web app in a desktop window → Windows .exe.
 
-### Supabase schema — migration 0XX_budget.sql
-budget_categories(id uuid pk default gen_random_uuid(), user_id uuid → auth.users, name text not null, type text not null [income|expense|savings], color text, monthly_limit numeric null, position integer, created_at timestamptz default now())
-budget_transactions(id, user_id → auth.users, category_id uuid → budget_categories(id) on delete set null, type text not null [income|expense|savings], amount numeric not null, description text, date date not null default current_date, recurring boolean default false, recurring_interval text null [daily|weekly|monthly|yearly], created_at)
-savings_goals(id, user_id → auth.users, name text not null, target_amount numeric not null, current_amount numeric not null default 0, target_date date null, color text, created_at)
-budget_settings(id, user_id → auth.users unique, monthly_income_target numeric null, currency_symbol text default '$', week_start text default 'monday', alert_threshold numeric default 0.8)
-Enable RLS on all tables.
-Seed budget_categories defaults — Income: Paycheck, Side Income, Other Income. Expenses: Housing, Food, Transport, Entertainment, Health, Shopping, Bills, Other. Savings: Emergency Fund, General Savings.
-(Seed per-user; ideally on first load if none exist, since seeds need a user_id.)
+Install (dev): `electron electron-builder concurrently wait-on cross-env`.
+electron/main.js: BrowserWindow 1280x800 (min 900x600), preload, titleBarStyle hiddenInset, icon public/icons/icon-512.png; dev loads http://localhost:5173 + devtools, prod loads dist/index.html; system Tray (icon-192) with click→show; native menu bar (App/Edit/View roles + Quit CmdOrCtrl+Q); setWindowOpenHandler → shell.openExternal external links; standard window-all-closed/activate handlers.
+electron/preload.js: empty (DOMContentLoaded stub).
 
-### Tab structure — 4 sub-tabs: Overview / Transactions / Goals / Settings
-OVERVIEW: summary strip (Total Income, Total Expenses, Net, Total Saved this month); budget alerts (amber >= alert_threshold% of limit, red when over, hidden when none); spending donut by expense category (Recharts); weekly trend bar (daily spend this week); monthly trend line (last 6 months, toggle income/expenses/net); recent transactions (last 5, tap → all).
-TRANSACTIONS: add form (amount, type toggle, category dropdown, description, date, recurring toggle+interval); list grouped by date desc; filter bar (All/Income/Expenses/Savings + category filter + search); tap to edit inline, swipe-left mobile delete w/ confirm; month nav arrows.
-GOALS: goal cards (name, color, progress bar current/target, target date, days remaining); "Add funds" per goal (input → savings transaction + updates current_amount); completed (current>=target) → collapsed "Completed" section; "New Goal" (name, target, date, color).
-SETTINGS: categories list grouped by type (edit name/color/limit, drag reorder, delete w/ warning); budget limits (monthly_limit per expense category); alert threshold slider; preferences (income target, currency symbol, week start day).
+package.json: `"main": "electron/main.js"`; scripts electron:dev (concurrently dev + wait-on + cross-env NODE_ENV=development electron .), electron:build (build + electron-builder --win), electron:build:dir. build config: appId com.personal.productivityapp, productName "Slommy HQ", directories.output dist-electron, files [dist/**, electron/**, public/icons/**], win.target nsis + icon, nsis oneClick + desktop/startmenu shortcuts.
+Detect Electron via userAgent contains 'Electron'; hide PWA prompt; desktop layout auto (1280 wide).
 
-### Claude voice integration — claudeActions.ts
-Add log_transaction action to Claude system prompt:
-  data: { type: income|expense|savings, amount: number, description: string, category_name: string|null, date: string|null, recurring: boolean }
-  Examples: "I spent $45 on groceries"→expense,45,groceries,Food; "Got paid $2400"→income,2400,paycheck,Paycheck; "Put $200 into savings"→savings,200,savings transfer.
-Add handleLogTransaction: review card (type badge, amount, description, category dropdown, date); "Log it" saves to budget_transactions; "Edit" allows changes first.
-
-### File structure
-src/components/budget/ — BudgetTab, OverviewTab, TransactionsTab, GoalsTab, BudgetSettingsTab, TransactionCard, GoalCard, BudgetAlertCard, SpendingChart, WeeklyTrendChart, MonthlyTrendChart, AddTransactionForm, TransactionReviewCard
-src/hooks/budget/ — useBudgetTransactions, useBudgetCategories, useSavingsGoals, useBudgetSettings, useBudgetMetrics
-src/types/budget.ts
+⚠ NOTE: main "electron/main.js" + "type" field can conflict with Vite. Keep electron main as CommonJS .cjs or ensure package.json has no "type":"module". Verify web build/dev still work after adding "main".
 
 ===========================
-## PART 3 — TELEGRAM DAILY BRIEF
+## PART 3 — PUSH NOTIFICATIONS (replaces Telegram)
 ===========================
+FCM push on Android (Capacitor) + web. Supabase Edge Function + pg_cron sends at user's chosen time.
 
-Edge Function collects the day's data → Claude generates brief → sends via Telegram. pg_cron triggers each minute; sends at user's chosen time. No app needs to run.
+Firebase (USER does): create project; add Android app pkg com.personal.productivityapp; download google-services.json → android/app/; get FCM Server Key → `supabase secrets set FCM_SERVER_KEY=...`.
 
-### Supabase secrets (user runs)
-supabase secrets set TELEGRAM_BOT_TOKEN=...
-supabase secrets set TELEGRAM_CHAT_ID=...
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...
-(ANTHROPIC_API_KEY already set.)
+Capacitor push: `@capacitor/push-notifications`; android/app/build.gradle `apply plugin 'com.google.gms.google-services'`; android/build.gradle classpath `com.google.gms:google-services:4.3.15`.
 
-### Telegram settings in app — "Telegram Brief" section in Settings drawer
-Enable/disable toggle (default off); delivery time picker (hour+minute, local, default 7:00 AM); timezone selector (IANA strings, auto-detect from browser first open); section checkboxes (Schedule, Tasks, Habits, Workout day, Budget summary, Notes flagged, Time mgmt recommendations); Save button → user_preferences.
-New migration columns on user_preferences:
-  telegram_enabled boolean default false
-  telegram_time time default '07:00'
-  telegram_timezone text default 'America/Los_Angeles'
-  telegram_sections jsonb default '{"schedule":true,"tasks":true,"habits":true,"workout":true,"budget":true,"notes":true,"recommendations":true}'
+src/lib/pushNotifications.ts: registerPushNotifications() — native only; request perms; register; on 'registration' upsert fcm_token to user_preferences for the user; on received (foreground) in-app toast; on actionPerformed navigate to data.tab. Call after login.
 
-### Notes tab update
-"Include in daily brief" checkbox per note ("Daily update", below title). Stores to include_in_brief boolean on notes (default false). New migration adds column.
+Edge Functions:
+- send-push/index.ts: POST {user_id,title,body,data?}; look up fcm_token (service role); skip if none; POST fcm.googleapis.com/fcm/send with Authorization key=FCM_SERVER_KEY, {to, notification:{title,body,icon:'ic_notification'}, data}.
+- daily-brief-push/index.ts: pg_cron each minute; check notification_enabled/time/timezone (±1min) + notification_log not sent today; collect today's tasks/habits/schedule/workout-day/budget/flagged-notes (enabled sections); Claude (claude-sonnet-4-6) plain-text brief; call send-push title "Good morning! Here's your daily brief", body first 100 chars + "…", data {tab:'home', fullBrief}; log to notification_log (with content).
+- task-reminders/index.ts: pg_cron; tasks due today (8AM) / 1hr before if timed; send-push "Task due today: [name]", data tab tasks.
+- habit-reminders/index.ts: pg_cron; habits whose reminder_time matches now; send-push "Habit reminder: [name]".
 
-### Workout schedule addition — "Workout Schedule" section in Workout tab settings
-7 day slots (Mon–Sun) each dropdown: Rest / [template name] / Custom label. Store workout_schedule jsonb on user_preferences: {mon:"Push Day",...}. Brief reads this to tell workout day.
+In-app: NotificationSettings.tsx in Settings drawer — master toggle, daily brief toggle+time+timezone, section checkboxes (schedule/tasks/habits/workout/budget/notes), task reminders toggle, habit reminders note, Test notification button (sends test push now). DailyBriefModal.tsx — full brief view opened on notification tap; bell icon in top nav shows most recent brief; store last 7 briefs in notification_log.content.
 
-### Edge Function supabase/functions/telegram-brief/index.ts
-1. Triggered by pg_cron each minute. 2. Fetch telegram settings; skip if telegram_enabled false. 3. Convert telegram_time+timezone to UTC, check ±1 min window. 4. Check telegram_brief_log; skip if already sent today. 5. Collect today's data (tasks due today/overdue not done; habits w/ today status; events today; workout: today DOW → workout_schedule → template name or "Rest Day"; budget: today's transactions, weekly spend vs pace, categories near/over limit; notes where include_in_brief=true title+snippet) — only enabled sections. 6. Send to Claude (claude-sonnet-4-6) with system prompt (concise friendly brief, adapt length, Telegram markdown *bold*/_italic_/• bullets, no # headers, recommendations only if enough, encouraging, motivational line). 7. POST to https://api.telegram.org/bot{TOKEN}/sendMessage {chat_id, text, parse_mode:"Markdown"}; split if >4096 chars. 8. Log to telegram_brief_log.
-telegram_brief_log(id, user_id → auth.users, sent_at timestamptz default now(), status text [success|failed], error_message text null, char_count integer null)
-
-### pg_cron setup migration
-CREATE EXTENSION IF NOT EXISTS pg_cron; CREATE EXTENSION IF NOT EXISTS pg_net;
-cron.schedule('telegram-brief-check','* * * * *', net.http_post to <supabase_url>/functions/v1/telegram-brief with auth bearer anon key, body '{}').
-Note: pg_cron/pg_net may need manual activation in Supabase dashboard → Database → Extensions. FLAG clearly.
-
-### Security
-Use SUPABASE_SERVICE_ROLE_KEY server-side; never expose to frontend; only send to TELEGRAM_CHAT_ID from secrets.
-
-### File additions
-supabase/functions/telegram-brief/index.ts
-supabase/migrations/0XX_telegram_settings.sql, 0XX_cron_setup.sql
-src/components/settings/TelegramBriefSettings.tsx
-src/components/notes/ (update NoteEditor.tsx — include_in_brief checkbox)
-src/components/workout/WorkoutScheduleSettings.tsx
+Per-habit reminder_time in Focus/Habits settings.
 
 ===========================
-## MIGRATIONS / DEPLOY
+## SCHEMA (migrations)
 ===========================
-npx supabase db push (if duplicate key: migration list, skip applied). Flag if pg_cron/pg_net need manual activation.
-After build passes: git add . && git commit -m "Mobile fixes, budget tracker, and Telegram daily brief" && git push. Do not push if build fails.
+00X_notifications.sql: user_preferences += fcm_token text, notification_enabled bool default false, notification_time time default '07:00', notification_timezone text default 'America/Los_Angeles', notification_sections jsonb default '{"schedule":true,"tasks":true,"habits":true,"workout":true,"budget":true,"notes":true}', task_reminders_enabled bool default true. notification_log(id, user_id, sent_at, type [daily_brief|task_reminder|habit_reminder], status, error_message, content text). habits += reminder_time time null. notes += include_in_brief bool default false (if not present). Also user_preferences needs workout_schedule jsonb (from prior plan) if referenced.
+00X_cron_push.sql: CREATE EXTENSION pg_cron, pg_net; cron.schedule daily-brief-push, task-reminders, habit-reminders (every minute → net.http_post to each function). Flag pg_cron/pg_net manual activation.
 
-## OUTPUT
-Report each section ✓/✗ + summary. End with Telegram SETUP CHECKLIST (bot token, message bot, chat id, 3× secrets set, enable pg_cron/pg_net, deploy function, enable in app, test message).
+===========================
+## FILES
+===========================
+capacitor.config.ts; electron/{main.js,preload.js}; android/ (generated); src/lib/pushNotifications.ts; src/components/settings/NotificationSettings.tsx; src/components/DailyBriefModal.tsx; supabase/functions/{send-push,daily-brief-push,task-reminders,habit-reminders}/index.ts; supabase/migrations/{00X_notifications.sql,00X_cron_push.sql}.
+
+## DEPLOY
+`npx supabase db push` (dup key → migration list, skip applied; flag pg_cron/pg_net). After `npm run build` passes: git add/commit "Capacitor Android, Electron PC, and push notifications" / push.
+
+## SETUP CHECKLIST (emit at end)
+Firebase (create project, add android app, google-services.json → android/app/, FCM key secret, service role secret); Android APK (npm run android:build → APK path → transfer/sideload); PC app (npm run electron:build → dist-electron/ .exe); Notifications (enable pg_cron/pg_net, deploy 4 functions, enable in Settings, Test notification).
+
+## ENVIRONMENT REALITY (this dev box)
+Windows, no Android SDK/emulator, no GUI verification. APK gradle build + Electron .exe build + FCM require the user's machine/credentials. Claude scaffolds all code/config/migrations/functions and web build stays green; native BUILD + VERIFY steps are the user's to run (documented in checklist).
