@@ -25,7 +25,7 @@
 - [x] Firebase Cloud Messaging setup — CODE ready (Capacitor push plugin +
       conditional google-services in app/build.gradle). USER must create the
       Firebase project, add google-services.json to android/app/, and set
-      FCM_SERVER_KEY secret (see checklist).
+      FCM_SERVICE_ACCOUNT secret (FCM HTTP v1 + OAuth; see checklist).
 - [x] Capacitor push notification plugin (installed; src/lib/pushNotifications.ts
       registers token → user_preferences.fcm_token, foreground + tap handlers)
 - [x] Supabase Edge Function for sending notifications (send-push + _shared/push)

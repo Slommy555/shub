@@ -52,14 +52,14 @@ Detect Electron via userAgent contains 'Electron'; hide PWA prompt; desktop layo
 ===========================
 FCM push on Android (Capacitor) + web. Supabase Edge Function + pg_cron sends at user's chosen time.
 
-Firebase (USER does): create project; add Android app pkg com.personal.productivityapp; download google-services.json → android/app/; get FCM Server Key → `supabase secrets set FCM_SERVER_KEY=...`.
+Firebase (USER does): create project; add Android app pkg com.personal.productivityapp; download google-services.json → android/app/; create a service account (Project Settings → Service accounts → Generate new private key) → `supabase secrets set FCM_SERVICE_ACCOUNT='<full JSON>'`. (Legacy server key API is shut down; we use FCM HTTP v1 + OAuth.)
 
 Capacitor push: `@capacitor/push-notifications`; android/app/build.gradle `apply plugin 'com.google.gms.google-services'`; android/build.gradle classpath `com.google.gms:google-services:4.3.15`.
 
 src/lib/pushNotifications.ts: registerPushNotifications() — native only; request perms; register; on 'registration' upsert fcm_token to user_preferences for the user; on received (foreground) in-app toast; on actionPerformed navigate to data.tab. Call after login.
 
 Edge Functions:
-- send-push/index.ts: POST {user_id,title,body,data?}; look up fcm_token (service role); skip if none; POST fcm.googleapis.com/fcm/send with Authorization key=FCM_SERVER_KEY, {to, notification:{title,body,icon:'ic_notification'}, data}.
+- send-push/index.ts: POST {user_id,title,body,data?}; look up fcm_token (service role); skip if none; POST FCM HTTP v1 (https://fcm.googleapis.com/v1/projects/<project_id>/messages:send) with OAuth Bearer minted from FCM_SERVICE_ACCOUNT (signed-JWT→token, Web Crypto RS256; see _shared/push.ts), body {message:{token,notification,data,android}}.
 - daily-brief-push/index.ts: pg_cron each minute; check notification_enabled/time/timezone (±1min) + notification_log not sent today; collect today's tasks/habits/schedule/workout-day/budget/flagged-notes (enabled sections); Claude (claude-sonnet-4-6) plain-text brief; call send-push title "Good morning! Here's your daily brief", body first 100 chars + "…", data {tab:'home', fullBrief}; log to notification_log (with content).
 - task-reminders/index.ts: pg_cron; tasks due today (8AM) / 1hr before if timed; send-push "Task due today: [name]", data tab tasks.
 - habit-reminders/index.ts: pg_cron; habits whose reminder_time matches now; send-push "Habit reminder: [name]".

@@ -4,7 +4,7 @@
 // daily-brief functions and by the app's "Test notification" button.
 //
 // Deploy:  supabase functions deploy send-push
-// Secrets: FCM_SERVER_KEY, SUPABASE_SERVICE_ROLE_KEY
+// Secrets: FCM_SERVICE_ACCOUNT, SUPABASE_SERVICE_ROLE_KEY
 //
 // Body: { user_id: string, title: string, body: string, data?: object,
 //         type?: 'daily_brief'|'task_reminder'|'habit_reminder'|'test' }

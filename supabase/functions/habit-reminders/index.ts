@@ -5,7 +5,7 @@
 // a push. Dedup via a per-habit notification_log content marker.
 //
 // Deploy:  supabase functions deploy habit-reminders
-// Secrets: FCM_SERVER_KEY, SUPABASE_SERVICE_ROLE_KEY
+// Secrets: FCM_SERVICE_ACCOUNT, SUPABASE_SERVICE_ROLE_KEY
 
 import {
   isTimeToSend,

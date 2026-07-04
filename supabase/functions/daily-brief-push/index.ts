@@ -6,7 +6,7 @@
 // as a push (via FCM), and logs the full brief for the in-app bell/modal.
 //
 // Deploy:  supabase functions deploy daily-brief-push
-// Secrets: FCM_SERVER_KEY, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY
+// Secrets: FCM_SERVICE_ACCOUNT, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY
 
 import {
   isTimeToSend,
