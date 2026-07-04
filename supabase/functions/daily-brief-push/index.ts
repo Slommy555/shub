@@ -3,10 +3,10 @@
 // Triggered by pg_cron every minute. For each user with notifications enabled,
 // if it's their chosen local time (±1 min) and no brief was sent today, it
 // collects the day's data, asks Claude for a concise plain-text brief, sends it
-// as a push (via FCM), and logs the full brief for the in-app bell/modal.
+// as a Web Push, and logs the full brief for the in-app bell/modal.
 //
 // Deploy:  supabase functions deploy daily-brief-push
-// Secrets: FCM_SERVICE_ACCOUNT, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY
+// Secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_EMAIL, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY
 
 import {
   isTimeToSend,
@@ -191,9 +191,10 @@ Deno.serve(async (req: Request) => {
         u.user_id,
         "Good morning! Here's your daily brief",
         brief.slice(0, 100) + (brief.length > 100 ? '…' : ''),
-        // Keep the data payload under FCM's ~4KB limit; the full brief is always
-        // available in-app via the bell (notification_log).
-        { tab: 'home', fullBrief: brief.slice(0, 2500) }
+        // Keep the data payload under the Web Push ~4KB limit; the full brief is
+        // always available in-app via the bell (notification_log). `type` lets
+        // the client open the DailyBriefModal when the notification is tapped.
+        { type: 'daily_brief', fullBrief: brief.slice(0, 2500) }
       );
       await logNotification(db, u.user_id, 'daily_brief', result, brief);
       if (result.ok && !result.skipped) sent++;

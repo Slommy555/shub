@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { useNotificationPrefs, type NotificationSections } from '../hooks/useNotificationPrefs';
 import { supabase } from '../lib/supabase';
+import { enablePush, unsubscribeFromPush } from '../lib/webPush';
 
 const COMMON_TIMEZONES = [
   'America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York',
@@ -51,6 +52,21 @@ export default function NotificationSettings() {
 
   async function enable() {
     setPerm(await requestNotifPermission());
+  }
+
+  // Master toggle: on enable, request permission + create/store the Web Push
+  // subscription; on disable, unsubscribe this device and clear it. The pref is
+  // only flipped on when a subscription was actually created.
+  async function toggleMaster(on: boolean) {
+    if (on) {
+      const ok = await enablePush();
+      setPerm(notifPermission());
+      if (!ok) return; // permission denied / unsupported — leave it off
+      save({ notification_enabled: true });
+    } else {
+      await unsubscribeFromPush();
+      save({ notification_enabled: false });
+    }
   }
 
   // Ensure the timezone list always includes the user's current value.
@@ -121,7 +137,7 @@ export default function NotificationSettings() {
         </div>
         <Toggle
           checked={prefs.notification_enabled}
-          onChange={(v) => save({ notification_enabled: v })}
+          onChange={toggleMaster}
         />
       </div>
 
@@ -218,15 +234,17 @@ export default function NotificationSettings() {
       {!installed && (
         <div className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-800">
           <p className="text-xs text-gray-400">
-            Install the app (Add to Home Screen on iOS, or the Android APK) for reliable delivery.
+            On iPhone, install this app first — open the Share menu in Safari and tap
+            “Add to Home Screen”, then enable notifications here. (iOS only delivers push
+            to installed PWAs, iOS 16.4+.)
           </p>
         </div>
       )}
 
       {perm === 'granted' && !triggersSupported() && (
         <div className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-400 dark:border-gray-800">
-          On this device, web reminders fire while the app is open or backgrounded. The native
-          Android app delivers pushes even when fully closed.
+          Push notifications are delivered by the server even when the app is fully closed,
+          as long as this device stays subscribed.
         </div>
       )}
     </section>

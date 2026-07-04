@@ -2,50 +2,52 @@
 
 > Supersedes the previous "add Capacitor/Electron/FCM" session. The app already
 > had a working hand-rolled PWA (public/sw.js + manifest + icons) BEFORE the
-> native shells were added, so Part 4 mostly means "keep the existing PWA and
-> remove nothing that was already there". We deliberately do NOT install
-> vite-plugin-pwa (would replace the custom sw.js; see project memory).
+> native shells were added, so Part 4 mostly means "keep the existing PWA".
+> We deliberately do NOT install vite-plugin-pwa (would replace the custom
+> sw.js; see project memory).
 
 ## Part 1 — Remove Capacitor
-- [ ] Uninstall Capacitor packages
-- [ ] Delete android/ directory
-- [ ] Delete capacitor.config.ts
-- [ ] Remove Capacitor imports/branches from src/ (native.ts, App.tsx, pushNotifications.ts)
-- [ ] Remove android: scripts from package.json
-- [ ] Barcode scanner: N/A (no scanner in app; nothing to revert)
-- [ ] npm run build passes, zero @capacitor references
+- [x] Uninstall Capacitor packages (npm install pruned 390 pkgs)
+- [x] Delete android/ directory
+- [x] Delete capacitor.config.ts
+- [x] Remove Capacitor imports/branches (native.ts → web-only haptic; App.tsx; pushNotifications.ts deleted)
+- [x] Remove android: scripts from package.json
+- [x] Barcode scanner: N/A (no scanner in app)
+- [x] npm run build passes, zero @capacitor references
 
 ## Part 2 — Remove Electron
-- [ ] Uninstall Electron packages
-- [ ] Delete electron/ directory (+ dist-electron if present)
-- [ ] Remove Electron checks from src/ (native.ts isElectron)
-- [ ] Remove main field, electron: scripts, build block from package.json
-- [ ] Revert vite.config.ts ELECTRON base branch
-- [ ] npm run build passes, zero Electron references
+- [x] Uninstall Electron packages
+- [x] Delete electron/ directory (dist-electron not present)
+- [x] Remove Electron checks (native.ts isElectron removed)
+- [x] Remove main field, electron: scripts, build block from package.json
+- [x] Revert vite.config.ts ELECTRON base branch
+- [x] npm run build passes, zero Electron references
 
 ## Part 3 — Remove Firebase / FCM
-- [ ] (No firebase npm packages were installed — verify)
-- [ ] Delete src/lib/pushNotifications.ts (Capacitor FCM) + remove call in App.tsx
-- [ ] Convert _shared/push.ts sendPushToUser from FCM to web-push
-- [ ] Migration: drop fcm_token, add push_subscription, add char_count
-- [ ] KEEP notification_log, NotificationSettings, DailyBriefModal, cron jobs
-- [ ] Note FCM secret to unset manually (FCM_SERVICE_ACCOUNT)
-- [ ] Zero FCM references remain in src/
+- [x] No firebase npm packages were installed (verified)
+- [x] Delete src/lib/pushNotifications.ts + remove call in App.tsx
+- [x] Convert _shared/push.ts sendPushToUser FCM → web-push (npm:web-push, VAPID)
+- [x] Migration 022: drop fcm_token, add push_subscription, add char_count (pushed)
+- [x] KEEP notification_log, NotificationSettings, DailyBriefModal, cron jobs
+- [x] FCM comment refs updated; zero live FCM references in src/
+- [ ] MANUAL: supabase secrets unset FCM_SERVICE_ACCOUNT
 
-## Part 4 — PWA (already exists — verify/keep)
-- [x] Manifest, sw.js, icons, apple meta, registerSW, UpdateToast already present
-- [ ] Confirm sw.js push handler present (it is) and unchanged
-- [ ] npm run build passes; PWA still installable
+## Part 4 — PWA (already existed — kept intact)
+- [x] Manifest, sw.js, icons, apple meta, registerSW, UpdateToast all present
+- [x] sw.js push + notificationclick handlers present, unchanged
+- [x] npm run build passes; PWA still installable
 
 ## Part 5 — Web Push Notifications
-- [ ] src/lib/webPush.ts (subscribeToPush + savePushSubscription + unsubscribe)
-- [ ] Wire subscribe on NotificationSettings master toggle
-- [ ] _shared/push.ts web-push sender (VAPID)
-- [ ] send-push / daily-brief-push / task-reminders / habit-reminders use web push
-- [ ] VITE_VAPID_PUBLIC_KEY consumed on client
+- [x] src/lib/webPush.ts (subscribeToPush/savePushSubscription/enablePush/unsubscribe)
+- [x] Wire subscribe/unsubscribe to NotificationSettings master toggle
+- [x] App.tsx: SW message listener opens brief modal on notification tap
+- [x] _shared/push.ts web-push sender (VAPID) + 404/410 subscription cleanup
+- [x] daily-brief-push data payload → { type:'daily_brief', fullBrief }
+- [x] VITE_VAPID_PUBLIC_KEY: env typing + .env.local + .env.example
+- [ ] MANUAL: generate VAPID keys, set secrets, deploy functions (see checklist)
 
 ## Final Steps
-- [ ] Supabase migration pushed
-- [ ] npm run build passing
-- [ ] Git pushed
-- [ ] Setup checklist emitted (VAPID keygen, secrets, etc.)
+- [x] Supabase migration 022 pushed
+- [x] npm run build passing
+- [ ] Git pushed (final commit)
+- [x] Setup checklist emitted in session output

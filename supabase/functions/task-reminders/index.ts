@@ -6,7 +6,7 @@
 // markers so nothing fires twice in a day.
 //
 // Deploy:  supabase functions deploy task-reminders
-// Secrets: FCM_SERVICE_ACCOUNT, SUPABASE_SERVICE_ROLE_KEY
+// Secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_EMAIL, SUPABASE_SERVICE_ROLE_KEY
 
 import {
   isTimeToSend,

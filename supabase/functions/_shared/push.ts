@@ -1,15 +1,17 @@
 // Shared helpers for the push Edge Functions: a service-role Supabase client
-// (bypasses RLS to read any user's data server-side) and an FCM sender built on
-// the **FCM HTTP v1 API** (the legacy fcm.googleapis.com/fcm/send API is shut
-// down). Auth uses a Google service account via a signed-JWT → OAuth2 token
-// exchange (Web Crypto, no external libraries).
+// (bypasses RLS to read any user's data server-side) and a Web Push sender built
+// on the standard Web Push Protocol with VAPID (no Firebase/FCM). Works in
+// Chrome (desktop + Android) and Safari/iOS 16.4+ installed as a PWA.
 //
 // Secrets required (supabase secrets set ...):
-//   FCM_SERVICE_ACCOUNT          — the full service-account JSON (one line)
+//   VAPID_PUBLIC_KEY             — VAPID public key (also exposed to the client)
+//   VAPID_PRIVATE_KEY            — VAPID private key (server only)
+//   VAPID_EMAIL                  — contact, e.g. mailto:you@example.com
 //   SUPABASE_SERVICE_ROLE_KEY    — service role key (never exposed to frontend)
 // SUPABASE_URL is provided automatically in the Edge runtime.
 
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import webpush from 'npm:web-push@3.6.7';
 
 export function serviceClient(): SupabaseClient {
   const url = Deno.env.get('SUPABASE_URL')!;
@@ -23,95 +25,26 @@ export interface PushResult {
   error?: string;
 }
 
-// --- Google service-account OAuth (for FCM HTTP v1) ------------------------
+// --- VAPID setup -----------------------------------------------------------
 
-interface ServiceAccount {
-  client_email: string;
-  private_key: string;
-  project_id: string;
-  token_uri?: string;
-}
+let vapidReady = false;
 
-function serviceAccount(): ServiceAccount | null {
-  const raw = Deno.env.get('FCM_SERVICE_ACCOUNT');
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as ServiceAccount;
-  } catch {
-    return null;
-  }
-}
-
-function b64url(bytes: Uint8Array): string {
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function pemToBytes(pem: string): Uint8Array {
-  const body = pem
-    .replace(/-----BEGIN [^-]+-----/, '')
-    .replace(/-----END [^-]+-----/, '')
-    .replace(/\s+/g, '');
-  const bin = atob(body);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-// Cache the access token across invocations while the isolate lives.
-let cachedToken: { token: string; exp: number } | null = null;
-
-async function getAccessToken(sa: ServiceAccount): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  if (cachedToken && cachedToken.exp - now > 60) return cachedToken.token;
-
-  const header = b64url(new TextEncoder().encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
-  const claim = b64url(
-    new TextEncoder().encode(
-      JSON.stringify({
-        iss: sa.client_email,
-        scope: 'https://www.googleapis.com/auth/firebase.messaging',
-        aud: sa.token_uri ?? 'https://oauth2.googleapis.com/token',
-        iat: now,
-        exp: now + 3600,
-      })
-    )
-  );
-  const signingInput = `${header}.${claim}`;
-
-  const key = await crypto.subtle.importKey(
-    'pkcs8',
-    pemToBytes(sa.private_key),
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const sig = new Uint8Array(
-    await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput))
-  );
-  const jwt = `${signingInput}.${b64url(sig)}`;
-
-  const res = await fetch(sa.token_uri ?? 'https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
-    }),
-  });
-  const json = await res.json();
-  if (!res.ok || !json.access_token) {
-    throw new Error(`OAuth token error: ${JSON.stringify(json).slice(0, 200)}`);
-  }
-  cachedToken = { token: json.access_token, exp: now + (json.expires_in ?? 3600) };
-  return cachedToken.token;
+function ensureVapid(): boolean {
+  if (vapidReady) return true;
+  const publicKey = Deno.env.get('VAPID_PUBLIC_KEY');
+  const privateKey = Deno.env.get('VAPID_PRIVATE_KEY');
+  const email = Deno.env.get('VAPID_EMAIL') ?? 'mailto:admin@example.com';
+  if (!publicKey || !privateKey) return false;
+  webpush.setVapidDetails(email, publicKey, privateKey);
+  vapidReady = true;
+  return true;
 }
 
 /**
- * Send a push to one user via their stored FCM token (FCM HTTP v1 API).
- * Skips silently when the user has no token. Returns the outcome so callers can
- * log it.
+ * Send a push to one user via their stored Web Push subscription (VAPID).
+ * Skips silently when the user has no subscription. If the subscription is
+ * gone (404/410), it is cleared so we stop trying. Returns the outcome so
+ * callers can log it.
  */
 export async function sendPushToUser(
   db: SupabaseClient,
@@ -120,55 +53,46 @@ export async function sendPushToUser(
   body: string,
   data: Record<string, unknown> = {}
 ): Promise<PushResult> {
-  const sa = serviceAccount();
-  if (!sa) return { ok: false, error: 'FCM_SERVICE_ACCOUNT not set or invalid JSON' };
+  if (!ensureVapid()) {
+    return { ok: false, error: 'VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY not set' };
+  }
 
   const { data: pref, error } = await db
     .from('user_preferences')
-    .select('fcm_token')
+    .select('push_subscription')
     .eq('user_id', userId)
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
-  const token = pref?.fcm_token as string | undefined;
-  if (!token) return { ok: true, skipped: true };
 
-  // FCM v1 data values must be strings.
-  const stringData: Record<string, string> = {};
-  for (const [k, v] of Object.entries(data)) {
-    stringData[k] = typeof v === 'string' ? v : JSON.stringify(v);
-  }
+  const raw = pref?.push_subscription as string | undefined;
+  if (!raw) return { ok: true, skipped: true };
 
-  let accessToken: string;
+  let subscription: unknown;
   try {
-    accessToken = await getAccessToken(sa);
+    subscription = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: 'stored push_subscription is not valid JSON' };
+  }
+
+  const payload = JSON.stringify({ title, body, data });
+
+  try {
+    // deno-lint-ignore no-explicit-any
+    await webpush.sendNotification(subscription as any, payload);
+    return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'OAuth failed' };
-  }
-
-  const res = await fetch(
-    `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message: {
-          token,
-          notification: { title, body },
-          data: stringData,
-          android: { notification: { icon: 'ic_notification' } },
-        },
-      }),
+    const status = (e as { statusCode?: number }).statusCode;
+    // 404 = endpoint gone, 410 = subscription expired → drop it.
+    if (status === 404 || status === 410) {
+      await db
+        .from('user_preferences')
+        .update({ push_subscription: null })
+        .eq('user_id', userId);
+      return { ok: false, error: `subscription expired (${status}), cleared` };
     }
-  );
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    return { ok: false, error: `FCM ${res.status}: ${text.slice(0, 200)}` };
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: `web-push ${status ?? ''}: ${msg}`.slice(0, 200) };
   }
-  return { ok: true };
 }
 
 /** Log a notification attempt (service role bypasses RLS). */
@@ -185,6 +109,7 @@ export async function logNotification(
     status: result.ok ? 'success' : 'failed',
     error_message: result.error ?? null,
     content: content ?? null,
+    char_count: content ? content.length : null,
   });
 }
 
