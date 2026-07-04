@@ -12,12 +12,14 @@
       (run `npm run android:build`; not buildable in this dev env)
 
 ## Part 2 — Electron PC App
-- [ ] Install and configure Electron
-- [ ] Electron main process setup
-- [ ] Native menu bar
-- [ ] Auto-updater config
-- [ ] Build .exe installer
-- [ ] Verify app opens correctly
+- [x] Install and configure Electron
+- [x] Electron main process setup (electron/main.cjs, preload.cjs; .cjs because
+      package is ESM). Vite base conditional on ELECTRON env so web is unchanged.
+- [x] Native menu bar (App/Edit/View)
+- [x] Auto-updater config (electron-updater, no-op until a publish feed is set)
+- [ ] Build .exe installer — run `npm run electron:build` on Windows (downloads
+      NSIS/electron binaries; not run here)
+- [ ] Verify app opens correctly — needs a desktop GUI (run electron:dev locally)
 
 ## Part 3 — Push Notifications
 - [ ] Firebase Cloud Messaging setup
