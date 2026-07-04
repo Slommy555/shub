@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Slommy HQ</string>
-    <string name="title_activity_main">Slommy HQ</string>
-    <string name="package_name">com.personal.productivityapp</string>
-    <string name="custom_url_scheme">com.personal.productivityapp</string>
-</resources>

@@ -3,30 +3,13 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit",
-    "android:build": "npm run build && npx cap sync android && cd android && ./gradlew assembleDebug",
-    "android:open": "npx cap open android",
-    "cap:sync": "npm run build && npx cap sync",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
-    "electron:build": "cross-env ELECTRON=true npm run build && electron-builder build --win",
-    "electron:build:dir": "cross-env ELECTRON=true npm run build && electron-builder build --win --dir"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@capacitor/android": "^8.4.1",
-    "@capacitor/app": "^8.1.0",
-    "@capacitor/camera": "^8.2.0",
-    "@capacitor/cli": "^8.4.1",
-    "@capacitor/core": "^8.4.1",
-    "@capacitor/filesystem": "^8.1.2",
-    "@capacitor/haptics": "^8.0.2",
-    "@capacitor/push-notifications": "^8.1.1",
-    "@capacitor/splash-screen": "^8.0.1",
-    "@capacitor/status-bar": "^8.0.2",
     "@dnd-kit/core": "^6.1.0",
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -46,40 +29,10 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
-    "concurrently": "^10.0.3",
-    "cross-env": "^10.1.0",
-    "electron": "^43.0.0",
-    "electron-builder": "^26.15.3",
-    "electron-updater": "^6.8.9",
     "postcss": "^8.4.45",
     "supabase": "^2.108.0",
     "tailwindcss": "^3.4.10",
     "typescript": "^5.5.4",
-    "vite": "^5.4.3",
-    "wait-on": "^9.0.10"
-  },
-  "build": {
-    "appId": "com.personal.productivityapp",
-    "productName": "Slommy HQ",
-    "directories": {
-      "output": "dist-electron"
-    },
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "public/icon-512.png",
-      "public/icon-192.png"
-    ],
-    "win": {
-      "target": "nsis",
-      "icon": "public/icon-512.png"
-    },
-    "nsis": {
-      "oneClick": true,
-      "installerIcon": "public/icon-512.png",
-      "installerHeaderIcon": "public/icon-512.png",
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
+    "vite": "^5.4.3"
   }
 }

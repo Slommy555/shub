@@ -8,9 +8,6 @@ dist
 dist-ssr
 *.local
 
-# Electron build output
-dist-electron
-
 # Environment — keep secrets out of git
 .env
 .env.local

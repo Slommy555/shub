@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 
-import { initNative, syncStatusBar } from './lib/native';
-import { registerPushNotifications } from './lib/pushNotifications';
 import { useAuth } from './hooks/useAuth';
 import { useTheme } from './hooks/useTheme';
 import { useAppearance } from './hooks/useAppearance';
@@ -44,28 +42,24 @@ function Shell({ userId }: { userId: string }) {
   // Keep the open editor in sync with the latest task data (realtime edits).
   const editingTask = editing ? api.tasks.find((t) => t.id === editing.id) ?? editing : null;
 
-  // Native (Capacitor) setup: hide splash, wire app-resume, register push.
-  // All no-ops on web. Resume broadcasts an event any hook can listen for;
-  // realtime keeps the data itself live.
+  // When the user taps a push notification, the service worker posts a message
+  // to the page (see public/sw.js notificationclick handler). A daily-brief tap
+  // opens the brief modal; a message carrying a `tab` navigates there.
   useEffect(() => {
-    let cleanup = () => {};
-    initNative(() => window.dispatchEvent(new Event('app:resume'))).then((c) => {
-      cleanup = c;
-    });
-    registerPushNotifications(
-      (t) => setTab(t as Tab),
-      (full) => {
-        setBriefText(full);
+    if (!('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const msg = event.data;
+      if (!msg || msg.type !== 'notification-click') return;
+      const data = (msg.data ?? {}) as { tab?: string; type?: string; fullBrief?: string };
+      if (data.type === 'daily_brief') {
+        setBriefText(data.fullBrief ?? latestBrief);
         setBriefOpen(true);
       }
-    );
-    return () => cleanup();
-  }, []);
-
-  // Keep the Android status bar matched to the active theme.
-  useEffect(() => {
-    syncStatusBar(resolvedTheme === 'dark');
-  }, [resolvedTheme]);
+      if (data.tab) setTab(data.tab as Tab);
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [latestBrief]);
 
   return (
     <AppProvider
