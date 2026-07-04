@@ -11,13 +11,14 @@ interface Props {
   today: string;
   onToggle: (date: string) => void;
   onChangeColor: (color: ColorKey) => void;
+  onSetReminder: (time: string | null) => void;
   onDelete: () => void;
 }
 
 const STRIP_DAYS = 14;
 
 /** A single habit/goal row: today's check, consistency stats, recent history. */
-export default function HabitCard({ habit, done, today, onToggle, onChangeColor, onDelete }: Props) {
+export default function HabitCard({ habit, done, today, onToggle, onChangeColor, onSetReminder, onDelete }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -141,6 +142,29 @@ export default function HabitCard({ habit, done, today, onToggle, onChangeColor,
                   ].join(' ')}
                 />
               ))}
+            </div>
+            <div className="my-1.5 border-t border-gray-100 dark:border-gray-800" />
+            <p className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+              Daily reminder
+            </p>
+            <div className="flex items-center gap-2 px-1 pb-1.5">
+              <input
+                type="time"
+                value={habit.reminder_time?.slice(0, 5) ?? ''}
+                onChange={(e) => onSetReminder(e.target.value || null)}
+                aria-label="Habit reminder time"
+                className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-950"
+              />
+              {habit.reminder_time && (
+                <button
+                  type="button"
+                  onClick={() => onSetReminder(null)}
+                  aria-label="Clear reminder"
+                  className="rounded-md px-1.5 py-1 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                >
+                  Clear
+                </button>
+              )}
             </div>
             <div className="my-1.5 border-t border-gray-100 dark:border-gray-800" />
             <button

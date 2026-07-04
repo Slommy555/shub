@@ -24,11 +24,16 @@ import NotesTab from './components/notes/NotesTab';
 import SettingsView from './components/SettingsView';
 import DueDateReminder from './components/DueDateReminder';
 import EditTaskDialog from './components/EditTaskDialog';
+import DailyBriefModal from './components/DailyBriefModal';
+import { useDailyBriefs } from './hooks/useDailyBriefs';
 
 function Shell({ userId }: { userId: string }) {
   const [tab, setTab] = useState<Tab>('todo');
   const [editing, setEditing] = useState<Task | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [briefText, setBriefText] = useState<string | null>(null);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const { latest: latestBrief } = useDailyBriefs(userId);
   const { resolvedTheme, toggleTheme } = useTheme(userId);
   const appearance = useAppearance(userId);
   const workoutPrefs = useWorkoutPrefs(userId);
@@ -47,7 +52,13 @@ function Shell({ userId }: { userId: string }) {
     initNative(() => window.dispatchEvent(new Event('app:resume'))).then((c) => {
       cleanup = c;
     });
-    registerPushNotifications((t) => setTab(t as Tab));
+    registerPushNotifications(
+      (t) => setTab(t as Tab),
+      (full) => {
+        setBriefText(full);
+        setBriefOpen(true);
+      }
+    );
     return () => cleanup();
   }, []);
 
@@ -96,6 +107,25 @@ function Shell({ userId }: { userId: string }) {
             </svg>
           </button>
 
+          {/* Daily-brief bell (top-right). Opens the most recent brief. */}
+          <button
+            type="button"
+            onClick={() => {
+              setBriefText(latestBrief);
+              setBriefOpen(true);
+            }}
+            aria-label="Daily brief"
+            className="fixed right-3 top-3 z-40 grid h-10 w-10 place-items-center rounded-full border border-gray-200 bg-white/90 text-gray-600 shadow-lg shadow-gray-900/10 backdrop-blur transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900/90 dark:text-gray-300"
+            style={{ marginRight: 'env(safe-area-inset-right)', marginTop: 'env(safe-area-inset-top)' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            {latestBrief && (
+              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-indigo-500" />
+            )}
+          </button>
+
           <main className="min-w-0 flex-1">
             {tab === 'todo' && <TodoView api={api} />}
             {tab === 'voice' && <VoiceTab />}
@@ -121,6 +151,10 @@ function Shell({ userId }: { userId: string }) {
           />
 
           {editingTask && <EditTaskDialog task={editingTask} onClose={() => setEditing(null)} />}
+
+          {briefOpen && (
+            <DailyBriefModal brief={briefText} onClose={() => setBriefOpen(false)} />
+          )}
         </div>
       </VoiceController>
     </AppProvider>

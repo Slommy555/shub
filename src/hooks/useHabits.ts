@@ -119,6 +119,7 @@ export function useHabits(userId: string | null) {
         color: input.color,
         position: 0,
         archived: false,
+        reminder_time: null,
         created_at: new Date().toISOString(),
       };
       setHabits([row, ...shifted].sort(byPosition));
@@ -150,7 +151,7 @@ export function useHabits(userId: string | null) {
   );
 
   const updateHabit = useCallback(
-    async (id: string, patch: Partial<Pick<Habit, 'name' | 'kind' | 'color' | 'position'>>) => {
+    async (id: string, patch: Partial<Pick<Habit, 'name' | 'kind' | 'color' | 'position' | 'reminder_time'>>) => {
       setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, ...patch } : h)).sort(byPosition));
       const { error } = await supabase.from('habits').update(patch).eq('id', id);
       if (error) console.error('updateHabit failed:', error.message);

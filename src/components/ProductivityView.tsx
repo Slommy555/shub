@@ -77,6 +77,7 @@ export default function ProductivityView({ userId }: { userId: string }) {
               today={today}
               onToggle={(date) => toggle(h.id, date)}
               onChangeColor={(color) => updateHabit(h.id, { color })}
+              onSetReminder={(time) => updateHabit(h.id, { reminder_time: time })}
               onDelete={() => deleteHabit(h.id)}
             />
           ))}

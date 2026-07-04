@@ -11,6 +11,8 @@ export interface Habit {
   color: ColorKey;
   position: number;
   archived: boolean;
+  /** Optional daily push reminder time, "HH:MM" (or null for none). */
+  reminder_time: string | null;
   created_at: string;
 }
 

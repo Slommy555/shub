@@ -22,15 +22,22 @@
 - [ ] Verify app opens correctly — needs a desktop GUI (run electron:dev locally)
 
 ## Part 3 — Push Notifications
-- [ ] Firebase Cloud Messaging setup
-- [ ] Capacitor push notification plugin
-- [ ] Supabase Edge Function for sending notifications
-- [ ] In-app notification settings UI
-- [ ] Daily brief push notification (replaces Telegram)
-- [ ] Task due date notifications
-- [ ] Habit reminder notifications
+- [x] Firebase Cloud Messaging setup — CODE ready (Capacitor push plugin +
+      conditional google-services in app/build.gradle). USER must create the
+      Firebase project, add google-services.json to android/app/, and set
+      FCM_SERVER_KEY secret (see checklist).
+- [x] Capacitor push notification plugin (installed; src/lib/pushNotifications.ts
+      registers token → user_preferences.fcm_token, foreground + tap handlers)
+- [x] Supabase Edge Function for sending notifications (send-push + _shared/push)
+- [x] In-app notification settings UI (NotificationSettings: master toggle,
+      brief time+timezone, section checkboxes, task-reminders toggle, test button)
+- [x] Daily brief push notification (daily-brief-push fn + DailyBriefModal + bell
+      + useDailyBriefs; replaces Telegram)
+- [x] Task due date notifications (task-reminders fn: 8AM digest + 1hr-before)
+- [x] Habit reminder notifications (habit-reminders fn + per-habit reminder_time UI)
 
 ## Final Steps
-- [ ] Supabase migrations pushed
-- [ ] npm run build passing
-- [ ] Git pushed
+- [x] Supabase migrations pushed (019/020/021 applied; pg_cron jobs scheduled —
+      need app.supabase_url/anon_key GUCs + deployed functions to actually fire)
+- [x] npm run build passing
+- [ ] Git pushed (this commit)
