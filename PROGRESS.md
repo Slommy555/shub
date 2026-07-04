@@ -1,43 +1,51 @@
-# Session Progress
+# Session Progress — Remove Capacitor/Electron/FCM, revert to PWA + web push
 
-## Part 1 — Capacitor Android Setup
-- [x] Install and configure Capacitor
-- [x] Android platform added
-- [x] Capacitor config and permissions
-- [x] Native camera plugin (barcode scanner) — plugin installed; NO barcode
-      scanner exists in the app (removed with the old macro tracker), so nothing
-      to convert. Camera plugin ready for future use.
-- [x] Native filesystem access (plugin installed)
-- [ ] Build APK and verify it installs — needs Android SDK/Gradle on user machine
-      (run `npm run android:build`; not buildable in this dev env)
+> Supersedes the previous "add Capacitor/Electron/FCM" session. The app already
+> had a working hand-rolled PWA (public/sw.js + manifest + icons) BEFORE the
+> native shells were added, so Part 4 mostly means "keep the existing PWA and
+> remove nothing that was already there". We deliberately do NOT install
+> vite-plugin-pwa (would replace the custom sw.js; see project memory).
 
-## Part 2 — Electron PC App
-- [x] Install and configure Electron
-- [x] Electron main process setup (electron/main.cjs, preload.cjs; .cjs because
-      package is ESM). Vite base conditional on ELECTRON env so web is unchanged.
-- [x] Native menu bar (App/Edit/View)
-- [x] Auto-updater config (electron-updater, no-op until a publish feed is set)
-- [ ] Build .exe installer — run `npm run electron:build` on Windows (downloads
-      NSIS/electron binaries; not run here)
-- [ ] Verify app opens correctly — needs a desktop GUI (run electron:dev locally)
+## Part 1 — Remove Capacitor
+- [ ] Uninstall Capacitor packages
+- [ ] Delete android/ directory
+- [ ] Delete capacitor.config.ts
+- [ ] Remove Capacitor imports/branches from src/ (native.ts, App.tsx, pushNotifications.ts)
+- [ ] Remove android: scripts from package.json
+- [ ] Barcode scanner: N/A (no scanner in app; nothing to revert)
+- [ ] npm run build passes, zero @capacitor references
 
-## Part 3 — Push Notifications
-- [x] Firebase Cloud Messaging setup — CODE ready (Capacitor push plugin +
-      conditional google-services in app/build.gradle). USER must create the
-      Firebase project, add google-services.json to android/app/, and set
-      FCM_SERVICE_ACCOUNT secret (FCM HTTP v1 + OAuth; see checklist).
-- [x] Capacitor push notification plugin (installed; src/lib/pushNotifications.ts
-      registers token → user_preferences.fcm_token, foreground + tap handlers)
-- [x] Supabase Edge Function for sending notifications (send-push + _shared/push)
-- [x] In-app notification settings UI (NotificationSettings: master toggle,
-      brief time+timezone, section checkboxes, task-reminders toggle, test button)
-- [x] Daily brief push notification (daily-brief-push fn + DailyBriefModal + bell
-      + useDailyBriefs; replaces Telegram)
-- [x] Task due date notifications (task-reminders fn: 8AM digest + 1hr-before)
-- [x] Habit reminder notifications (habit-reminders fn + per-habit reminder_time UI)
+## Part 2 — Remove Electron
+- [ ] Uninstall Electron packages
+- [ ] Delete electron/ directory (+ dist-electron if present)
+- [ ] Remove Electron checks from src/ (native.ts isElectron)
+- [ ] Remove main field, electron: scripts, build block from package.json
+- [ ] Revert vite.config.ts ELECTRON base branch
+- [ ] npm run build passes, zero Electron references
+
+## Part 3 — Remove Firebase / FCM
+- [ ] (No firebase npm packages were installed — verify)
+- [ ] Delete src/lib/pushNotifications.ts (Capacitor FCM) + remove call in App.tsx
+- [ ] Convert _shared/push.ts sendPushToUser from FCM to web-push
+- [ ] Migration: drop fcm_token, add push_subscription, add char_count
+- [ ] KEEP notification_log, NotificationSettings, DailyBriefModal, cron jobs
+- [ ] Note FCM secret to unset manually (FCM_SERVICE_ACCOUNT)
+- [ ] Zero FCM references remain in src/
+
+## Part 4 — PWA (already exists — verify/keep)
+- [x] Manifest, sw.js, icons, apple meta, registerSW, UpdateToast already present
+- [ ] Confirm sw.js push handler present (it is) and unchanged
+- [ ] npm run build passes; PWA still installable
+
+## Part 5 — Web Push Notifications
+- [ ] src/lib/webPush.ts (subscribeToPush + savePushSubscription + unsubscribe)
+- [ ] Wire subscribe on NotificationSettings master toggle
+- [ ] _shared/push.ts web-push sender (VAPID)
+- [ ] send-push / daily-brief-push / task-reminders / habit-reminders use web push
+- [ ] VITE_VAPID_PUBLIC_KEY consumed on client
 
 ## Final Steps
-- [x] Supabase migrations pushed (019/020/021 applied; pg_cron jobs scheduled —
-      need app.supabase_url/anon_key GUCs + deployed functions to actually fire)
-- [x] npm run build passing
-- [x] Git pushed
+- [ ] Supabase migration pushed
+- [ ] npm run build passing
+- [ ] Git pushed
+- [ ] Setup checklist emitted (VAPID keygen, secrets, etc.)
