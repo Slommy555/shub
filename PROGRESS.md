@@ -40,4 +40,4 @@
 - [x] Supabase migrations pushed (019/020/021 applied; pg_cron jobs scheduled —
       need app.supabase_url/anon_key GUCs + deployed functions to actually fire)
 - [x] npm run build passing
-- [ ] Git pushed (this commit)
+- [x] Git pushed
