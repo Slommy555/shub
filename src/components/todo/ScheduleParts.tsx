@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
+import { haptic } from '../../lib/native';
 import { PRIORITY_DOT, type Task } from '../../types';
 import { formatShort, formatTimeRange } from '../../lib/dates';
 import { titleCase } from '../../lib/text';
@@ -87,7 +88,10 @@ export function ScheduleCard({
         <input
           type="checkbox"
           checked={task.done}
-          onChange={(e) => onToggle(baseTask.id, e.target.checked)}
+          onChange={(e) => {
+            if (e.target.checked) haptic();
+            onToggle(baseTask.id, e.target.checked);
+          }}
           onPointerDown={(e) => e.stopPropagation()}
           aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
           className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded border-gray-300 text-gray-600 focus:ring-gray-400/40 dark:border-gray-600 dark:bg-gray-800"

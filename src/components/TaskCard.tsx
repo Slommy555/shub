@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { haptic } from '../lib/native';
 import {
   PRIORITY_DOT,
   PRIORITY_LABEL,
@@ -127,7 +128,10 @@ export default function TaskCard({
         <input
           type="checkbox"
           checked={task.done}
-          onChange={(e) => onUpdate(task.id, { done: e.target.checked })}
+          onChange={(e) => {
+            if (e.target.checked) haptic();
+            onUpdate(task.id, { done: e.target.checked });
+          }}
           aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
           className="mt-1 h-5 w-5 shrink-0 cursor-pointer rounded-md border-gray-300 text-gray-600 focus:ring-gray-400/40 dark:border-gray-600 dark:bg-gray-800 max-sm:mt-0.5 max-sm:h-6 max-sm:w-6"
         />

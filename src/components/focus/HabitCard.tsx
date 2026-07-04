@@ -3,6 +3,7 @@ import { COLOR_DOT, COLOR_KEYS, type ColorKey } from '../../types';
 import type { Habit } from '../../types/habits';
 import { completionRate, currentStreak, longestStreak, recentDays } from '../../lib/habits';
 import { parseISO } from '../../lib/dates';
+import { haptic } from '../../lib/native';
 
 interface Props {
   habit: Habit;
@@ -41,7 +42,10 @@ export default function HabitCard({ habit, done, today, onToggle, onChangeColor,
       {/* Today's check */}
       <button
         type="button"
-        onClick={() => onToggle(today)}
+        onClick={() => {
+          haptic();
+          onToggle(today);
+        }}
         aria-pressed={doneToday}
         aria-label={doneToday ? `Mark ${habit.name} not done today` : `Mark ${habit.name} done today`}
         className={[

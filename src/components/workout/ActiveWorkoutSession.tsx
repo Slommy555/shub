@@ -27,6 +27,7 @@ import {
   type WorkoutSummary,
 } from '../../types/workout';
 import { DEFAULT_REST_SECONDS, formatClock } from '../../lib/workout';
+import { haptic } from '../../lib/native';
 import type { UseWorkoutSession } from '../../hooks/workout/useWorkoutSession';
 import ExerciseModal from './ExerciseModal';
 
@@ -209,7 +210,10 @@ function SetRow({
           onClick={() => {
             const next = !set.done;
             onChange({ done: next });
-            if (next) onCompleted(); // finishing a set starts the rest timer
+            if (next) {
+              haptic();
+              onCompleted(); // finishing a set starts the rest timer
+            }
           }}
           aria-label="Mark set done"
           aria-pressed={set.done}
