@@ -10,6 +10,8 @@ function defaults(userId: string): BudgetSettings {
     currency_symbol: '$',
     week_start: 'monday',
     alert_threshold: 0.8,
+    weekly_spending_limit: null,
+    weekly_savings_target: null,
   };
 }
 
@@ -63,14 +65,18 @@ export function useBudgetSettings(userId: string | null) {
     async (patch: Partial<Omit<BudgetSettings, 'id' | 'user_id'>>) => {
       if (!userId) return;
       setSettings((prev) => ({ ...(prev ?? defaults(userId)), ...patch }) as BudgetSettings);
-      const current = settings ?? defaults(userId);
+      // Merge so a patch can clear a value to null (the old `patch.x ?? current.x`
+      // form silently ignored nulls, making limits impossible to remove).
+      const merged = { ...(settings ?? defaults(userId)), ...patch };
       const { error } = await supabase.from('budget_settings').upsert(
         {
           user_id: userId,
-          monthly_income_target: patch.monthly_income_target ?? current.monthly_income_target,
-          currency_symbol: patch.currency_symbol ?? current.currency_symbol,
-          week_start: patch.week_start ?? current.week_start,
-          alert_threshold: patch.alert_threshold ?? current.alert_threshold,
+          monthly_income_target: merged.monthly_income_target,
+          currency_symbol: merged.currency_symbol,
+          week_start: merged.week_start,
+          alert_threshold: merged.alert_threshold,
+          weekly_spending_limit: merged.weekly_spending_limit,
+          weekly_savings_target: merged.weekly_savings_target,
         },
         { onConflict: 'user_id' }
       );

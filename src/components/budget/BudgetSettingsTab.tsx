@@ -208,6 +208,38 @@ export default function BudgetSettingsTab({
             />
           </div>
           <div className="flex items-center justify-between gap-3">
+            <label className="text-sm font-medium">Weekly spending limit</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              defaultValue={settings.weekly_spending_limit ?? ''}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                save({ weekly_spending_limit: v === '' ? null : Number(v) });
+              }}
+              placeholder="—"
+              aria-label="Weekly spending limit"
+              className={`w-28 ${inputCls}`}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-sm font-medium">Weekly savings goal</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              defaultValue={settings.weekly_savings_target ?? ''}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                save({ weekly_savings_target: v === '' ? null : Number(v) });
+              }}
+              placeholder="—"
+              aria-label="Weekly savings goal"
+              className={`w-28 ${inputCls}`}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
             <label className="text-sm font-medium">Currency symbol</label>
             <input
               defaultValue={settings.currency_symbol}

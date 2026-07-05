@@ -2,6 +2,7 @@ import { useBudgetMetrics } from '../../hooks/budget/useBudgetMetrics';
 import type { BudgetCategory, BudgetSettings, BudgetTransaction } from '../../types/budget';
 import { formatMoney } from '../../lib/budget';
 import BudgetAlertCard from './BudgetAlertCard';
+import WeeklyLimitsCard from './WeeklyLimitsCard';
 import SpendingChart from './SpendingChart';
 import WeeklyTrendChart from './WeeklyTrendChart';
 import MonthlyTrendChart from './MonthlyTrendChart';
@@ -43,6 +44,11 @@ export default function OverviewTab({ transactions, categories, settings, curren
         <Stat label="Net" value={formatMoney(m.net, currency)} tone={m.net >= 0 ? 'pos' : 'neg'} />
         <Stat label="Saved" value={formatMoney(m.totalSavings, currency)} />
       </div>
+
+      {/* Weekly limit / savings-goal pacing (only when a limit or goal is set) */}
+      {(m.weekly.spendingLimit != null || m.weekly.savingsTarget != null) && (
+        <WeeklyLimitsCard weekly={m.weekly} currency={currency} />
+      )}
 
       {/* Alerts */}
       {m.alerts.length > 0 && (

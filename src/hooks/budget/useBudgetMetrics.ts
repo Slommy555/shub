@@ -122,6 +122,11 @@ export function useBudgetMetrics(
     const weekStartDate = new Date(now);
     weekStartDate.setDate(now.getDate() - offsetToStart);
     const labels = weekStart === 'monday' ? WEEK_LABELS_MON : WEEK_LABELS_SUN;
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekStartDate.getDate() + 6);
+    const weekStartISO = isoLocal(weekStartDate);
+    const weekEndISO = isoLocal(weekEndDate);
+    const inWeek = transactions.filter((t) => t.date >= weekStartISO && t.date <= weekEndISO);
     const weeklyTrend: WeeklyPoint[] = labels.map((label, i) => {
       const d = new Date(weekStartDate);
       d.setDate(weekStartDate.getDate() + i);
@@ -133,6 +138,18 @@ export function useBudgetMetrics(
       );
       return { label, amount };
     });
+
+    // This week's totals vs the optional weekly limit / savings goal.
+    const weekSpent = sum(inWeek, 'expense');
+    const weekSaved = sum(inWeek, 'savings');
+    const weekly = {
+      rangeStart: weekStartISO,
+      rangeEnd: weekEndISO,
+      spent: weekSpent,
+      saved: weekSaved,
+      spendingLimit: settings?.weekly_spending_limit ?? null,
+      savingsTarget: settings?.weekly_savings_target ?? null,
+    };
 
     // Monthly trend — last 6 months (oldest → newest).
     const monthlyTrend: MonthlyPoint[] = [];
@@ -162,10 +179,19 @@ export function useBudgetMetrics(
       spendingByCategory,
       alerts,
       weeklyTrend,
+      weekly,
       monthlyTrend,
       recent,
     };
-  }, [transactions, categories, month, alertThreshold, weekStart]);
+  }, [
+    transactions,
+    categories,
+    month,
+    alertThreshold,
+    weekStart,
+    settings?.weekly_spending_limit,
+    settings?.weekly_savings_target,
+  ]);
 }
 
 export type BudgetMetrics = ReturnType<typeof useBudgetMetrics>;

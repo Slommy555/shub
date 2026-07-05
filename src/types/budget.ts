@@ -46,6 +46,10 @@ export interface BudgetSettings {
   currency_symbol: string;
   week_start: 'monday' | 'sunday';
   alert_threshold: number; // 0..1
+  /** Overall weekly expense cap; null = no cap. */
+  weekly_spending_limit: number | null;
+  /** Weekly savings goal; null = no goal. */
+  weekly_savings_target: number | null;
 }
 
 export const TX_TYPES: TxType[] = ['income', 'expense', 'savings'];
