@@ -3,6 +3,7 @@ import type { BudgetCategory, BudgetTransaction, TxType } from '../../types/budg
 import type { UseBudgetTransactions } from '../../hooks/budget/useBudgetTransactions';
 import { currentMonth, formatDayLabel, monthLabel, shiftMonth } from '../../lib/budget';
 import AddTransactionForm from './AddTransactionForm';
+import EditTransactionModal from './EditTransactionModal';
 import TransactionCard from './TransactionCard';
 
 type Filter = 'all' | TxType;
@@ -50,27 +51,8 @@ export default function TransactionsTab({ api, categories, currency }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* Add form (collapsible) */}
-      {editing ? (
-        <AddTransactionForm
-          categories={categories}
-          initial={{
-            type: editing.type,
-            amount: Number(editing.amount),
-            category_id: editing.category_id,
-            description: editing.description,
-            date: editing.date,
-            recurring: editing.recurring,
-            recurring_interval: editing.recurring_interval,
-          }}
-          submitLabel="Save"
-          onSubmit={(patch) => {
-            api.updateTransaction(editing.id, patch);
-            setEditing(null);
-          }}
-          onCancel={() => setEditing(null)}
-        />
-      ) : showAdd ? (
+      {/* Add form (collapsible). Editing happens in a modal/bottom sheet below. */}
+      {showAdd ? (
         <AddTransactionForm
           categories={categories}
           onSubmit={(tx) => {
@@ -181,6 +163,15 @@ export default function TransactionsTab({ api, categories, currency }: Props) {
             </div>
           ))}
         </div>
+      )}
+
+      {editing && (
+        <EditTransactionModal
+          tx={editing}
+          categories={categories}
+          onSave={(id, patch) => api.updateTransaction(id, patch)}
+          onClose={() => setEditing(null)}
+        />
       )}
     </div>
   );

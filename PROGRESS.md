@@ -15,11 +15,16 @@
 - [x] Verify events match desktop at 375px width (build passes; logic shared)
 
 ## Part 2 — Budget Transaction Delete
-- [ ] Add delete button to transaction list items
-- [ ] Add swipe-to-delete on mobile
-- [ ] Add confirmation before deleting
-- [ ] Add edit functionality for misinputs
-- [ ] Verify deletion reflects immediately in totals/charts
+- [x] Add delete button to transaction list items (visible trash icon; desktop
+      previously had NO way to delete — swipe was mobile-only)
+- [x] Add swipe-to-delete on mobile (kept; now opens styled confirm, not window.confirm)
+- [x] Add confirmation before deleting ("Delete this transaction? This cannot be
+      undone." styled dialog w/ Cancel + Delete, shared by swipe + trash icon)
+- [x] Add edit functionality for misinputs (new EditTransactionModal bottom
+      sheet / centered modal; tap a row to open, all fields prefilled)
+- [x] Verify deletion reflects immediately in totals/charts (optimistic state in
+      useBudgetTransactions.deleteTransaction/updateTransaction; charts derive
+      from api.transactions)
 
 ## Part 3 — Telegram Daily Brief
 - [ ] Telegram settings UI in app settings drawer
