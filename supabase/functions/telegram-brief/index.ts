@@ -20,9 +20,31 @@
 // be invoked by pg_cron.
 
 import { isTimeToSend, localDate, serviceClient } from '../_shared/push.ts';
-import { corsHeaders, json } from '../_shared/auth.ts';
 // deno-lint-ignore no-explicit-any
 type Any = any;
+
+// This function is safe to call from any origin: it requires a valid Supabase
+// JWT (verify_jwt) and only ever sends to the single TELEGRAM_CHAT_ID secret —
+// it can't be abused to spend a key or message an arbitrary target. So, unlike
+// anthropic-proxy, we echo the caller's origin rather than locking to an
+// ALLOWED_ORIGIN allowlist (which was silently blocking the in-app test button
+// whenever the app was served from an origin not in that list).
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') ?? '*';
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  };
+}
+
+function json(req: Request, body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders(req), 'content-type': 'application/json' },
+  });
+}
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
