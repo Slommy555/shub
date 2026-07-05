@@ -53,6 +53,27 @@ export interface SavingsGoal {
   created_at: string;
 }
 
+/** A credit card whose spent balance the user is paying down over time. */
+export interface CreditCardPayoff {
+  id: string;
+  user_id: string;
+  name: string;
+  total_amount: number; // amount spent / starting balance
+  color: string | null;
+  created_at: string;
+}
+
+/** A scheduled paydown toward a card: a due date, an amount, and paid status. */
+export interface CreditCardPayment {
+  id: string;
+  payoff_id: string;
+  user_id: string;
+  due_date: string; // YYYY-MM-DD (the week to pay by)
+  amount: number;
+  paid: boolean;
+  created_at: string;
+}
+
 export interface BudgetSettings {
   id: string;
   user_id: string;

@@ -179,6 +179,33 @@ async function collect(db: Any, userId: string, today: string, sections: Section
       spent_this_month: spentMonth,
       categories_near_or_over_limit: overLimit,
     };
+
+    // Credit card payoff plan: remaining balance per card, plus any payments due
+    // in the next 7 days or already overdue (so the brief can nudge the user).
+    const weekAheadISO = (() => {
+      const d = new Date(`${today}T12:00:00`);
+      d.setDate(d.getDate() + 7);
+      return d.toISOString().slice(0, 10);
+    })();
+    const [{ data: cards }, { data: cardPmts }] = await Promise.all([
+      db.from('credit_card_payoffs').select('id, name, total_amount').eq('user_id', userId),
+      db.from('credit_card_payments').select('payoff_id, due_date, amount, paid').eq('user_id', userId),
+    ]);
+    const creditCards = ((cards ?? []) as Any[])
+      .map((c) => {
+        const pmts = ((cardPmts ?? []) as Any[]).filter((p) => p.payoff_id === c.id);
+        const paidSum = pmts.filter((p) => p.paid).reduce((s, p) => s + Number(p.amount || 0), 0);
+        const remaining = Math.max(0, Number(c.total_amount || 0) - paidSum);
+        const dueThisWeek = pmts
+          .filter((p) => !p.paid && p.due_date >= today && p.due_date <= weekAheadISO)
+          .map((p) => ({ due: p.due_date, amount: Number(p.amount || 0) }));
+        const overdue = pmts
+          .filter((p) => !p.paid && p.due_date < today)
+          .map((p) => ({ due: p.due_date, amount: Number(p.amount || 0) }));
+        return { name: c.name, remaining, due_this_week: dueThisWeek, overdue };
+      })
+      .filter((c) => c.remaining > 0 || c.due_this_week.length || c.overdue.length);
+    if (creditCards.length) data.credit_cards = creditCards;
   }
 
   if (sections.notes) {

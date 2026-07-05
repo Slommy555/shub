@@ -2,18 +2,21 @@ import { useState } from 'react';
 import { useBudgetCategories } from '../../hooks/budget/useBudgetCategories';
 import { useBudgetTransactions } from '../../hooks/budget/useBudgetTransactions';
 import { useSavingsGoals } from '../../hooks/budget/useSavingsGoals';
+import { useCreditCardPayoffs } from '../../hooks/budget/useCreditCardPayoffs';
 import { useBudgetSettings } from '../../hooks/budget/useBudgetSettings';
 import OverviewTab from './OverviewTab';
 import TransactionsTab from './TransactionsTab';
 import GoalsTab from './GoalsTab';
+import CreditCardTab from './CreditCardTab';
 import BudgetSettingsTab from './BudgetSettingsTab';
 
-type Sub = 'overview' | 'transactions' | 'goals' | 'settings';
+type Sub = 'overview' | 'transactions' | 'goals' | 'cards' | 'settings';
 
 const SUBS: { id: Sub; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'transactions', label: 'Transactions' },
   { id: 'goals', label: 'Goals' },
+  { id: 'cards', label: 'Cards' },
   { id: 'settings', label: 'Settings' },
 ];
 
@@ -22,6 +25,7 @@ export default function BudgetTab({ userId }: { userId: string }) {
   const categoriesApi = useBudgetCategories(userId);
   const transactionsApi = useBudgetTransactions(userId);
   const goalsApi = useSavingsGoals(userId);
+  const cardsApi = useCreditCardPayoffs(userId);
   const settingsApi = useBudgetSettings(userId);
 
   const currency = settingsApi.settings?.currency_symbol ?? '$';
@@ -69,6 +73,7 @@ export default function BudgetTab({ userId }: { userId: string }) {
         />
       )}
       {sub === 'goals' && <GoalsTab api={goalsApi} currency={currency} />}
+      {sub === 'cards' && <CreditCardTab api={cardsApi} currency={currency} />}
       {sub === 'settings' && (
         <BudgetSettingsTab categoriesApi={categoriesApi} settingsApi={settingsApi} />
       )}
