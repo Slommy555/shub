@@ -6,6 +6,7 @@ import ThemeToggle from './ThemeToggle';
 import SetPasswordDialog from './SetPasswordDialog';
 import CategoryManager from './CategoryManager';
 import NotificationSettings from './NotificationSettings';
+import TelegramBriefSettings from './settings/TelegramBriefSettings';
 
 interface Props {
   theme: 'light' | 'dark';
@@ -159,6 +160,8 @@ export default function SettingsView({ theme, onToggleTheme, appearance, workout
         </section>
 
         <NotificationSettings />
+
+        <TelegramBriefSettings />
 
         <CategoryManager />
       </div>

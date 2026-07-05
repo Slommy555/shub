@@ -1,0 +1,335 @@
+// Supabase Edge Function: telegram-brief
+//
+// Triggered by pg_cron every minute (see 025_telegram_cron.sql). For each user
+// with telegram_enabled = true, if it's their chosen local delivery time (±1 min)
+// and no brief was sent today, it collects the day's data (per telegram_sections),
+// asks Claude to write a warm, Telegram-formatted brief, sends it to Telegram,
+// and logs the result to telegram_brief_log.
+//
+// The app does NOT need to be open — this runs entirely server-side.
+//
+// Deploy:  supabase functions deploy telegram-brief
+// Secrets: SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY,
+//          TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+//   (SUPABASE_URL is provided automatically in the Edge runtime.)
+//
+// SECURITY: all user data is read with the service role key; the brief is only
+// ever sent to the single TELEGRAM_CHAT_ID stored in secrets — never to a value
+// supplied by a client. The function has no side effects for a non-authorized
+// caller (it only reads prefs and posts to the fixed chat), and is intended to
+// be invoked by pg_cron.
+
+import { isTimeToSend, localDate, serviceClient } from '../_shared/push.ts';
+// deno-lint-ignore no-explicit-any
+type Any = any;
+
+const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
+const TELEGRAM_CHAT_ID = Deno.env.get('TELEGRAM_CHAT_ID');
+const MODEL = 'claude-sonnet-4-6';
+const DOW = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const TELEGRAM_LIMIT = 4096;
+
+const SYSTEM_PROMPT =
+  'You are a personal daily briefing assistant sending a morning message via ' +
+  'Telegram. Generate a friendly, well-structured daily brief based on the ' +
+  "user's data. Adapt length to how much is happening — light day = short and " +
+  'punchy, busy day = thorough. Use Telegram markdown: *bold* for section ' +
+  'headers, • for bullet points, _italic_ for emphasis. Do NOT use # headers — ' +
+  "Telegram doesn't render them. Include time management recommendations only " +
+  'if the schedule/task load warrants it. If the budget section shows ' +
+  'overspending or categories near limits, give a brief practical suggestion ' +
+  "for the day's spending. End with one short motivational line tailored to " +
+  "what's ahead. Be warm and direct, not robotic.";
+
+interface Sections {
+  schedule: boolean;
+  tasks: boolean;
+  habits: boolean;
+  workout: boolean;
+  budget: boolean;
+  notes: boolean;
+  recommendations: boolean;
+}
+
+/** Flatten a Tiptap doc to plain text (best-effort) for note snippets. */
+function tiptapText(content: unknown): string {
+  try {
+    const walk = (n: Any): string => {
+      if (!n) return '';
+      if (n.type === 'text') return n.text ?? '';
+      if (Array.isArray(n.content)) return n.content.map(walk).join(' ');
+      return '';
+    };
+    return walk(content).replace(/\s+/g, ' ').trim();
+  } catch {
+    return '';
+  }
+}
+
+async function collect(db: Any, userId: string, today: string, sections: Sections) {
+  const data: Record<string, unknown> = {};
+
+  if (sections.tasks || sections.schedule) {
+    const { data: tasks } = await db
+      .from('tasks')
+      .select('text, done, due_date, scheduled_date, start_time, end_time')
+      .eq('user_id', userId)
+      .eq('done', false);
+    const list = (tasks ?? []) as Any[];
+    if (sections.schedule) {
+      data.todays_events = list
+        .filter((t) => (t.scheduled_date === today || t.due_date === today) && t.start_time)
+        .map((t) => ({ text: t.text, start: t.start_time, end: t.end_time }))
+        .sort((a, b) => String(a.start).localeCompare(String(b.start)));
+    }
+    if (sections.tasks) {
+      data.tasks_due_or_overdue = list
+        .filter((t) => (t.due_date && t.due_date <= today) || t.scheduled_date === today)
+        .map((t) => ({ text: t.text, due: t.due_date, overdue: t.due_date && t.due_date < today }));
+    }
+  }
+
+  if (sections.habits) {
+    const { data: habits } = await db
+      .from('habits')
+      .select('id, name')
+      .eq('user_id', userId)
+      .eq('archived', false);
+    const { data: logs } = await db.from('habit_logs').select('habit_id').eq('date', today);
+    const done = new Set((logs ?? []).map((l: Any) => l.habit_id));
+    data.habits = (habits ?? []).map((h: Any) => ({ name: h.name, done: done.has(h.id) }));
+  }
+
+  // The workout schedule + week's work shifts both come from user_preferences.
+  const { data: pref } = await db
+    .from('user_preferences')
+    .select('workout_schedule')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (sections.workout) {
+    const sched = (pref?.workout_schedule ?? {}) as Record<string, string>;
+    const key = DOW[new Date(`${today}T12:00:00`).getDay()];
+    data.workout_today = sched[key] || 'Rest Day';
+  }
+
+  if (sections.budget) {
+    const monthStart = today.slice(0, 7) + '-01';
+    const weekStart = (() => {
+      const d = new Date(`${today}T12:00:00`);
+      const diff = (d.getDay() + 6) % 7; // days since Monday
+      d.setDate(d.getDate() - diff);
+      return d.toISOString().slice(0, 10);
+    })();
+    const [{ data: txs }, { data: cats }] = await Promise.all([
+      db.from('budget_transactions').select('type, amount, date, category_id').eq('user_id', userId).gte('date', monthStart),
+      db.from('budget_categories').select('id, name, monthly_limit').eq('user_id', userId),
+    ]);
+    const list = (txs ?? []) as Any[];
+    const catById = new Map((cats ?? []).map((c: Any) => [c.id, c]));
+    const spentToday = list
+      .filter((t) => t.type === 'expense' && t.date === today)
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+    const spentWeek = list
+      .filter((t) => t.type === 'expense' && t.date >= weekStart)
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+    const spentMonth = list
+      .filter((t) => t.type === 'expense')
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+    // Categories at/over their monthly limit.
+    const perCat = new Map<string, number>();
+    for (const t of list) {
+      if (t.type !== 'expense' || !t.category_id) continue;
+      perCat.set(t.category_id, (perCat.get(t.category_id) ?? 0) + Number(t.amount || 0));
+    }
+    const overLimit: { name: string; spent: number; limit: number }[] = [];
+    for (const [id, spent] of perCat) {
+      const c = catById.get(id) as Any;
+      if (c?.monthly_limit && spent >= Number(c.monthly_limit) * 0.9) {
+        overLimit.push({ name: c.name, spent, limit: Number(c.monthly_limit) });
+      }
+    }
+    data.budget = {
+      spent_today: spentToday,
+      spent_this_week: spentWeek,
+      spent_this_month: spentMonth,
+      categories_near_or_over_limit: overLimit,
+    };
+  }
+
+  if (sections.notes) {
+    const { data: notes } = await db
+      .from('notes')
+      .select('title, content')
+      .eq('user_id', userId)
+      .eq('include_in_brief', true);
+    data.flagged_notes = (notes ?? []).map((n: Any) => ({
+      title: n.title,
+      content: tiptapText(n.content).slice(0, 1000),
+    }));
+  }
+
+  data.include_time_management_recommendations = sections.recommendations;
+  data.date = today;
+  return data;
+}
+
+async function generateBrief(payload: unknown): Promise<string> {
+  if (!ANTHROPIC_API_KEY) return 'Good morning! (Set ANTHROPIC_API_KEY to enable AI briefs.)';
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 1500,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: `Here is today's data as JSON. Write my daily brief.\n\n${JSON.stringify(payload, null, 2)}`,
+        },
+      ],
+    }),
+  });
+  const json = await res.json();
+  const text = json?.content?.[0]?.text;
+  return typeof text === 'string' && text.trim() ? text.trim() : 'Good morning! Have a great day.';
+}
+
+/** Split a message into <=4096-char chunks, preferring paragraph/line breaks. */
+function splitMessage(text: string, limit = TELEGRAM_LIMIT): string[] {
+  if (text.length <= limit) return [text];
+  const chunks: string[] = [];
+  let rest = text;
+  while (rest.length > limit) {
+    let cut = rest.lastIndexOf('\n\n', limit);
+    if (cut < limit * 0.5) cut = rest.lastIndexOf('\n', limit);
+    if (cut < limit * 0.5) cut = rest.lastIndexOf(' ', limit);
+    if (cut <= 0) cut = limit;
+    chunks.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) chunks.push(rest);
+  return chunks;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Send a (possibly multi-part) brief to the fixed Telegram chat. */
+async function sendToTelegram(text: string): Promise<{ ok: boolean; error?: string }> {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    return { ok: false, error: 'TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set' };
+  }
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+  const parts = splitMessage(text);
+  for (let i = 0; i < parts.length; i++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: parts[i], parse_mode: 'Markdown' }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      return { ok: false, error: `Telegram ${res.status}: ${body}`.slice(0, 300) };
+    }
+    if (i < parts.length - 1) await sleep(500);
+  }
+  return { ok: true };
+}
+
+async function logResult(
+  db: Any,
+  userId: string,
+  status: 'success' | 'failed',
+  content: string | null,
+  error: string | null
+) {
+  await db.from('telegram_brief_log').insert({
+    user_id: userId,
+    status,
+    error_message: error,
+    content,
+    char_count: content ? content.length : null,
+  });
+}
+
+const SELECT_COLS = 'user_id, telegram_time, telegram_timezone, telegram_sections';
+
+/** Build + send one user's brief. `force` skips the time/once-a-day gates. */
+async function runForUser(db: Any, u: Any, force: boolean): Promise<boolean> {
+  const tz = u.telegram_timezone || 'America/Los_Angeles';
+  if (!force && !isTimeToSend(u.telegram_time || '07:00', tz)) return false;
+
+  const today = localDate(tz);
+  if (!force) {
+    const { data: existing } = await db
+      .from('telegram_brief_log')
+      .select('id')
+      .eq('user_id', u.user_id)
+      .eq('status', 'success')
+      .gte('sent_at', `${today}T00:00:00`)
+      .limit(1);
+    if (existing && existing.length > 0) return false;
+  }
+
+  const sections: Sections = {
+    schedule: true, tasks: true, habits: true, workout: true, budget: true, notes: true, recommendations: true,
+    ...(u.telegram_sections ?? {}),
+  };
+
+  try {
+    const payload = await collect(db, u.user_id, today, sections);
+    const brief = await generateBrief(payload);
+    const result = await sendToTelegram(brief);
+    await logResult(db, u.user_id, result.ok ? 'success' : 'failed', brief, result.error ?? null);
+    return result.ok;
+  } catch (err) {
+    await logResult(db, u.user_id, 'failed', null, err instanceof Error ? err.message : 'brief error');
+    return false;
+  }
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok');
+  const db = serviceClient();
+
+  // Optional body: { force?: true, user_id?: string } — the in-app "Send test"
+  // button posts this to deliver immediately, bypassing the time/dedup gates and
+  // the telegram_enabled filter (so a user can test before turning it on).
+  let force = false;
+  let forcedUserId: string | null = null;
+  try {
+    const body = await req.json();
+    force = body?.force === true;
+    forcedUserId = typeof body?.user_id === 'string' ? body.user_id : null;
+  } catch {
+    /* no body / not JSON — scheduled run */
+  }
+
+  if (force && forcedUserId) {
+    const { data: u } = await db
+      .from('user_preferences')
+      .select(SELECT_COLS)
+      .eq('user_id', forcedUserId)
+      .maybeSingle();
+    if (!u) return Response.json({ ok: false, error: 'no preferences for user' }, { status: 404 });
+    const ok = await runForUser(db, u, true);
+    return Response.json({ ok, sent: ok ? 1 : 0 });
+  }
+
+  const { data: users } = await db
+    .from('user_preferences')
+    .select(SELECT_COLS)
+    .eq('telegram_enabled', true);
+
+  let sent = 0;
+  for (const u of (users ?? []) as Any[]) {
+    if (await runForUser(db, u, false)) sent++;
+  }
+  return Response.json({ ok: true, sent });
+});

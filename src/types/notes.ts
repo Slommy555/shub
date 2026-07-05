@@ -36,6 +36,8 @@ export interface Note {
   title: string;
   content: TiptapDoc;
   position: number;
+  /** When true, the note's title + content is pulled into the daily brief. */
+  include_in_brief: boolean;
   created_at: string;
   updated_at: string;
 }

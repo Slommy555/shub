@@ -27,16 +27,27 @@
       from api.transactions)
 
 ## Part 3 — Telegram Daily Brief
-- [ ] Telegram settings UI in app settings drawer
-- [ ] Notes include_in_brief checkbox
-- [ ] Workout schedule day planner in workout settings
-- [ ] telegram-brief Edge Function
-- [ ] pg_cron setup migration
-- [ ] telegram_brief_log table
-- [ ] Supabase secrets configured
-- [ ] Test message sends successfully
+- [x] Telegram settings UI in app settings drawer
+      (src/components/settings/TelegramBriefSettings.tsx + useTelegramPrefs, wired
+      into SettingsView after NotificationSettings)
+- [x] Notes include_in_brief checkbox ("Daily update" under note title in
+      NoteEditor; column already existed from migration 020, wired updateNote)
+- [x] Workout schedule day planner in workout settings
+      (src/components/workout/WorkoutScheduleSettings.tsx, in the Templates sub-tab;
+      writes user_preferences.workout_schedule — column existed from 020)
+- [x] telegram-brief Edge Function (supabase/functions/telegram-brief/index.ts;
+      collects schedule/tasks/habits/workout/budget/notes, calls Claude directly
+      via ANTHROPIC_API_KEY — NOT the anthropic-proxy, which needs a per-user JWT
+      a cron job can't supply — sends to Telegram w/ 4096 split, logs result)
+- [x] pg_cron setup migration (025_telegram_cron.sql; pg_cron/pg_net already
+      enabled from 021, reuses same GUCs)
+- [x] telegram_brief_log table (migration 024, RLS select-own)
+- [x] Supabase secrets configured (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID set;
+      ANTHROPIC_API_KEY + SUPABASE_SERVICE_ROLE_KEY already present)
+- [x] Test message sends successfully (direct Telegram API test delivered to the
+      user's chat — ok:true; full AI pipeline runs via in-app "Send test" button)
 
 ## Final Steps
-- [ ] Supabase migrations pushed
-- [ ] npm run build passing
-- [ ] Git pushed
+- [x] Supabase migrations pushed (023, 024, 025 applied to remote)
+- [x] npm run build passing
+- [ ] Git pushed (final commit below)

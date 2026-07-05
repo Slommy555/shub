@@ -8,6 +8,7 @@ import LogTab from './LogTab';
 import TemplatesTab from './TemplatesTab';
 import MetricsTab from './MetricsTab';
 import WeightTab from './WeightTab';
+import WorkoutScheduleSettings from './WorkoutScheduleSettings';
 
 type SubTab = 'log' | 'templates' | 'metrics' | 'weight';
 
@@ -94,12 +95,20 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
           />
         )}
         {sub === 'templates' && (
-          <TemplatesTab
-            templatesApi={templatesApi}
-            exercises={exercisesApi.exercises}
-            createCustom={exercisesApi.createCustom}
-            deleteExercise={exercisesApi.deleteExercise}
-          />
+          <>
+            <div className="mx-auto max-w-app px-4 pt-4">
+              <WorkoutScheduleSettings
+                userId={userId}
+                templateNames={templatesApi.templates.map((t) => t.name)}
+              />
+            </div>
+            <TemplatesTab
+              templatesApi={templatesApi}
+              exercises={exercisesApi.exercises}
+              createCustom={exercisesApi.createCustom}
+              deleteExercise={exercisesApi.deleteExercise}
+            />
+          </>
         )}
         {sub === 'metrics' && (
           <MetricsTab userId={userId} exercises={exercisesApi.exercises} version={version} />

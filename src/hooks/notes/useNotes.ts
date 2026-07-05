@@ -103,6 +103,7 @@ export function useNotes(userId: string | null) {
         title: opts?.title?.trim() || 'Untitled',
         content: opts?.content ?? EMPTY_DOC,
         position,
+        include_in_brief: false,
         created_at: now,
         updated_at: now,
       };
@@ -130,9 +131,12 @@ export function useNotes(userId: string | null) {
     [userId, markWrite]
   );
 
-  /** Update a note's title and/or content. Stamps `updated_at`. Resolves true on success. */
+  /** Update a note's title, content, and/or daily-brief flag. Stamps `updated_at`. Resolves true on success. */
   const updateNote = useCallback(
-    async (id: string, patch: { title?: string; content?: TiptapDoc }): Promise<boolean> => {
+    async (
+      id: string,
+      patch: { title?: string; content?: TiptapDoc; include_in_brief?: boolean }
+    ): Promise<boolean> => {
       const updated_at = new Date().toISOString();
       markWrite(id);
       setNotes((prev) =>
