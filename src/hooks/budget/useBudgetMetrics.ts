@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import type {
-  BudgetCategory,
-  BudgetSettings,
-  BudgetTransaction,
+import {
+  WEEKDAYS,
+  type BudgetCategory,
+  type BudgetSettings,
+  type BudgetTransaction,
 } from '../../types/budget';
 
 export interface CategorySpend {
@@ -35,8 +36,8 @@ export interface WeeklyPoint {
   amount: number;
 }
 
-const WEEK_LABELS_MON = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const WEEK_LABELS_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// Short labels in Date.getDay() order (index 0 = Sunday).
+const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const monthKey = (d: string) => d.slice(0, 7);
@@ -115,13 +116,16 @@ export function useBudgetMetrics(
     }
     alerts.sort((a, b) => b.ratio - a.ratio);
 
-    // Weekly trend — daily expense totals for the current week.
+    // Weekly trend — daily expense totals for the current week. The week can
+    // start on any weekday (the user's `week_start`); everything below rotates
+    // off that start day.
     const now = new Date();
     const dow = now.getDay(); // 0=Sun..6=Sat
-    const offsetToStart = weekStart === 'monday' ? (dow + 6) % 7 : dow;
+    const startIdx = Math.max(0, WEEKDAYS.indexOf(weekStart)); // 0=Sun..6=Sat
+    const offsetToStart = (dow - startIdx + 7) % 7;
     const weekStartDate = new Date(now);
     weekStartDate.setDate(now.getDate() - offsetToStart);
-    const labels = weekStart === 'monday' ? WEEK_LABELS_MON : WEEK_LABELS_SUN;
+    const labels = Array.from({ length: 7 }, (_, i) => DAY_ABBR[(startIdx + i) % 7]);
     const weekEndDate = new Date(weekStartDate);
     weekEndDate.setDate(weekStartDate.getDate() + 6);
     const weekStartISO = isoLocal(weekStartDate);

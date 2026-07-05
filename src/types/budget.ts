@@ -4,6 +4,20 @@
 export type TxType = 'income' | 'expense' | 'savings';
 export type RecurringInterval = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
+/** Day a budgeting week starts on. Any of the 7 days is allowed. */
+export type Weekday =
+  | 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday';
+
+/** In JS `Date.getDay()` order (index 0 = Sunday). */
+export const WEEKDAYS: Weekday[] = [
+  'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
+];
+
+export const WEEKDAY_LABELS: Record<Weekday, string> = {
+  sunday: 'Sunday', monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday',
+  thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday',
+};
+
 export interface BudgetCategory {
   id: string;
   user_id: string;
@@ -44,7 +58,7 @@ export interface BudgetSettings {
   user_id: string;
   monthly_income_target: number | null;
   currency_symbol: string;
-  week_start: 'monday' | 'sunday';
+  week_start: Weekday;
   alert_threshold: number; // 0..1
   /** Overall weekly expense cap; null = no cap. */
   weekly_spending_limit: number | null;

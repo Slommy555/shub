@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { UseBudgetCategories } from '../../hooks/budget/useBudgetCategories';
 import type { UseBudgetSettings } from '../../hooks/budget/useBudgetSettings';
-import { BUDGET_COLORS, TX_TYPES, TX_TYPE_LABEL, type BudgetCategory, type TxType } from '../../types/budget';
+import { BUDGET_COLORS, TX_TYPES, TX_TYPE_LABEL, WEEKDAYS, WEEKDAY_LABELS, type BudgetCategory, type TxType, type Weekday } from '../../types/budget';
 
 const inputCls =
   'rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-gray-500 dark:border-gray-700 dark:bg-gray-950';
@@ -252,12 +252,15 @@ export default function BudgetSettingsTab({
             <label className="text-sm font-medium">Week starts on</label>
             <select
               value={settings.week_start}
-              onChange={(e) => save({ week_start: e.target.value as 'monday' | 'sunday' })}
+              onChange={(e) => save({ week_start: e.target.value as Weekday })}
               aria-label="Week start"
               className={inputCls}
             >
-              <option value="monday">Monday</option>
-              <option value="sunday">Sunday</option>
+              {WEEKDAYS.map((d) => (
+                <option key={d} value={d}>
+                  {WEEKDAY_LABELS[d]}
+                </option>
+              ))}
             </select>
           </div>
         </section>
