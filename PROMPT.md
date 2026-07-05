@@ -1,63 +1,62 @@
-# Session Spec — Remove Capacitor / Electron / Firebase-FCM, revert to PWA + web push
+# Session Spec — Schedule Mobile Fix, Budget Delete/Edit, Telegram Daily Brief
 
-> Supersedes the previous PROMPT.md ("add Capacitor Android, Electron PC,
-> Firebase Push"). Goal: strip out all Capacitor Android, Electron, and
-> Firebase/FCM code that was recently added, and ship a clean PWA + Web Push
-> (VAPID) setup. Stack: React + Vite + Supabase. The web app must keep working
-> perfectly throughout.
+> Supersedes the previous PROMPT.md (Remove Capacitor/Electron/FCM → PWA + Web Push, now complete).
+> Three things to fix/build, in order. Do not change anything not mentioned.
+> Ask user for Telegram Bot Token + Chat ID before writing any Telegram code.
 
-## Adaptation notes (repo reality vs. the original literal prompt)
-The app already had a complete hand-rolled PWA BEFORE the native shells were
-added: `public/sw.js` (with push + notificationclick handlers), a
-`manifest.webmanifest`, icons (180/192/512), apple meta tags in index.html,
-`src/lib/registerSW.ts`, and `src/components/UpdateToast.tsx`.
+## PART 1 — SCHEDULE MOBILE FIX
+**Issue A — work schedule events not showing on mobile.** Timeline/schedule view is blank on
+mobile; work-schedule events visible on desktop don't appear. Definitive audit: log at top of
+timeline component to confirm mount + events array on mobile; trace data flow (hook → prop →
+filter) for where events get dropped; check CSS that hides content (height:0, display:none,
+visibility:hidden, overflow:hidden at mobile widths); check for events positioned outside visible
+scroll area (negative top / beyond container height). Fix root cause, remove debug logs. Confirm a
+desktop-visible event appears at correct time on mobile.
 
-Therefore:
-- Do NOT install vite-plugin-pwa — it would replace the custom sw.js. Project
-  memory says: "public/sw.js (not vite-plugin-pwa) powers reminder
-  notifications; don't replace with Workbox generateSW."
-- Keep `NotificationSettings.tsx` and `DailyBriefModal.tsx` — they are already
-  push-agnostic (they call the `send-push` Edge Function), not FCM-bound.
-- Keep the `notification_log` table and the pg_cron jobs (021) — the Edge
-  Function names are unchanged; only their internals move FCM → web push.
+**Issue B — timeline clipping (top + bottom hours cut off).** Earliest/latest hours clipped and
+not scrollable. Ensure scroll container uses overflow-y:auto/scroll (not hidden), has defined
+height accounting for mobile header/tab bar/toggle, and add padding-top/bottom so first/last hour
+labels are fully readable. Verify at 375px all hours accessible by scrolling.
 
-## Part 1 — Remove Capacitor
-Uninstall @capacitor/* packages; delete android/ and capacitor.config.ts;
-delete src/lib/native.ts and its imports; remove android: scripts. No barcode
-scanner exists in the app, so nothing to revert there.
+## PART 2 — BUDGET TRANSACTION DELETE + EDIT
+**Delete.** Desktop: trash icon on right of each transaction row → confirm dialog "Delete this
+transaction? This cannot be undone." → delete from budget_transactions, optimistic UI, update
+totals/charts live. Mobile: swipe-left to reveal red Delete button (same pattern as other tabs) →
+same confirm; keep trash icon as fallback.
+**Edit.** Tap a row (not delete btn) → edit modal/sheet pre-filled (Amount, Type
+Income/Expense/Savings, Category, Description, Date, Recurring toggle). Save changes → update
+Supabase, reflect live. Cancel → close. Mobile = bottom sheet slides up.
+Files: src/components/budget/TransactionCard.tsx, src/components/budget/EditTransactionModal.tsx
+(new), src/hooks/budget/useBudgetTransactions.ts (add deleteTransaction, updateTransaction).
 
-## Part 2 — Remove Electron
-Uninstall electron/electron-builder/electron-updater/concurrently/wait-on/
-cross-env; delete electron/ (+ dist-electron); remove "main", electron:* scripts
-and the electron-builder "build" block from package.json; revert the ELECTRON
-base branch in vite.config.ts.
+## PART 3 — TELEGRAM DAILY BRIEF
+Edge Function on pg_cron every minute checks user's delivery time, collects day's data, sends to
+Claude (claude-sonnet-4-6 via anthropic-proxy) to write brief, sends to Telegram. App need not be
+open.
 
-## Part 3 — Remove Firebase / FCM
-No firebase npm packages were installed. Delete src/lib/pushNotifications.ts
-(Capacitor FCM registration) and its call in App.tsx. Convert
-_shared/push.ts `sendPushToUser` from FCM HTTP v1 to web-push (VAPID). Migration
-drops user_preferences.fcm_token, adds push_subscription text, adds
-notification_log.char_count. Manual: `supabase secrets unset FCM_SERVICE_ACCOUNT`.
+Schema (new migrations): user_preferences += telegram_enabled bool default false, telegram_time
+time default '07:00', telegram_timezone text default 'America/Los_Angeles', telegram_sections jsonb
+default all-true, workout_schedule jsonb nullable. notes += include_in_brief bool default false.
+New table telegram_brief_log (id, user_id, sent_at, status, error_message, char_count, content) +
+RLS own-rows-only.
 
-## Part 4 — PWA (already present)
-Verify manifest/sw.js/icons/apple-meta remain intact and build stays installable.
+UI: "Telegram Brief" section in Settings drawer (enable toggle, time picker, IANA timezone
+dropdown auto-detected, section checkboxes, Save, Send test message). Notes: "Daily update"
+checkbox per note (NoteEditor.tsx) → include_in_brief. Workout: "Weekly Workout Schedule" 7-row
+planner (Rest / template names / custom) → workout_schedule.
 
-## Part 5 — Web Push (VAPID)
-- `src/lib/webPush.ts`: subscribeToPush() (Notification.requestPermission +
-  pushManager.subscribe with VITE_VAPID_PUBLIC_KEY), savePushSubscription()
-  (upsert user_preferences.push_subscription), unsubscribeFromPush().
-- Wire subscribe/unsubscribe to the NotificationSettings master toggle.
-- Edge Functions send via `npm:web-push` with VAPID secrets:
-  VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_EMAIL. On 404/410, clear the
-  stored subscription.
-- The four functions (send-push, daily-brief-push, task-reminders,
-  habit-reminders) keep their logic and just call the new web-push sender.
+Edge Function supabase/functions/telegram-brief/index.ts: service role key, fetch enabled users,
+per user convert time+tz to UTC and match ±1min, skip if already sent today (telegram_brief_log),
+collect sections (schedule/tasks/habits/workout/budget/notes), send to Claude, POST to Telegram
+sendMessage (parse_mode Markdown, split >4096 chars w/ 500ms delay), log result. Errors per-user
+non-fatal.
 
-## Setup checklist (manual — run after this session)
-- [ ] npx web-push generate-vapid-keys
-- [ ] Add VITE_VAPID_PUBLIC_KEY=... to .env.local and Vercel env
-- [ ] supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_EMAIL=mailto:you@example.com
-- [ ] supabase secrets unset FCM_SERVICE_ACCOUNT
-- [ ] npx supabase functions deploy send-push daily-brief-push task-reminders habit-reminders
-- [ ] Enable app notifications in Chrome, hit "Send test"
-- [ ] iPhone: Add to Home Screen, then enable notifications
+Migrations: 00X_telegram_settings.sql, 00X_telegram_cron.sql (pg_cron + pg_net; flag manual
+activation in dashboard).
+
+Secrets to set: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SUPABASE_SERVICE_ROLE_KEY.
+
+## FINAL
+npx supabase db push (skip already-applied on dup key). npm run build must pass.
+git add . && commit "Schedule mobile fix, budget delete/edit, Telegram daily brief" && push.
+Flag if pg_cron/pg_net need manual dashboard activation. Output SETUP CHECKLIST for Telegram.
