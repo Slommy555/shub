@@ -50,4 +50,4 @@
 ## Final Steps
 - [x] Supabase migrations pushed (023, 024, 025 applied to remote)
 - [x] npm run build passing
-- [ ] Git pushed (final commit below)
+- [x] Git pushed (commit 6e22ed7 + follow-up)
