@@ -481,7 +481,7 @@ export default function WeeklyView({
               <Droppable
                 key={d.iso}
                 id={`track:${d.iso}`}
-                className="relative border-l border-gray-200 transition-colors first:border-l-0 dark:border-gray-800"
+                className="relative h-full border-l border-gray-200 transition-colors first:border-l-0 dark:border-gray-800"
                 overClassName="bg-gray-100/70 dark:bg-gray-500/10"
               >
                 {/* work shift (behind events) */}

@@ -20,6 +20,7 @@
 // be invoked by pg_cron.
 
 import { isTimeToSend, localDate, serviceClient } from '../_shared/push.ts';
+import { corsHeaders, json } from '../_shared/auth.ts';
 // deno-lint-ignore no-explicit-any
 type Any = any;
 
@@ -295,12 +296,15 @@ async function runForUser(db: Any, u: Any, force: boolean): Promise<boolean> {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok');
+  // Browser preflight (the in-app "Send test" button) needs CORS headers, or the
+  // request never leaves the browser ("failed to send a request to the function").
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) });
   const db = serviceClient();
 
   // Optional body: { force?: true, user_id?: string } — the in-app "Send test"
   // button posts this to deliver immediately, bypassing the time/dedup gates and
-  // the telegram_enabled filter (so a user can test before turning it on).
+  // the telegram_enabled filter (so a user can test before turning it on). The
+  // brief itself is built identically to a scheduled send (same runForUser).
   let force = false;
   let forcedUserId: string | null = null;
   try {
@@ -317,9 +321,11 @@ Deno.serve(async (req: Request) => {
       .select(SELECT_COLS)
       .eq('user_id', forcedUserId)
       .maybeSingle();
-    if (!u) return Response.json({ ok: false, error: 'no preferences for user' }, { status: 404 });
+    if (!u) return json(req, { ok: false, error: 'No preferences found for this user.' }, 404);
     const ok = await runForUser(db, u, true);
-    return Response.json({ ok, sent: ok ? 1 : 0 });
+    // Surface the send failure reason (e.g. a Telegram API error) to the button.
+    const err = ok ? null : await lastError(db, forcedUserId);
+    return json(req, { ok, sent: ok ? 1 : 0, error: err }, 200);
   }
 
   const { data: users } = await db
@@ -331,5 +337,16 @@ Deno.serve(async (req: Request) => {
   for (const u of (users ?? []) as Any[]) {
     if (await runForUser(db, u, false)) sent++;
   }
-  return Response.json({ ok: true, sent });
+  return json(req, { ok: true, sent }, 200);
 });
+
+/** The most recent failure reason logged for a user (for the test button). */
+async function lastError(db: Any, userId: string): Promise<string | null> {
+  const { data } = await db
+    .from('telegram_brief_log')
+    .select('error_message')
+    .eq('user_id', userId)
+    .order('sent_at', { ascending: false })
+    .limit(1);
+  return (data && data[0]?.error_message) || null;
+}
