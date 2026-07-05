@@ -11,6 +11,9 @@ import { ScheduleCard } from './ScheduleParts';
 const DEFAULT_START_HOUR = 6;
 const DEFAULT_END_HOUR = 24;
 const HOUR_PX = 52;
+// Padding above the first hour and below the last so the edge labels aren't
+// clipped by the card's rounded, overflow-hidden border.
+const PAD_Y = 14;
 
 interface Props {
   tasks: Task[];
@@ -108,9 +111,10 @@ export default function ScheduleView({ tasks, anchor, onUpdate }: Props) {
     : DEFAULT_END_HOUR;
   const winStart = startHour * 60;
   const totalH = (endHour - startHour) * HOUR_PX;
+  const trackH = totalH + PAD_Y * 2;
   const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
 
-  const topFor = (min: number) => ((min - winStart) / 60) * HOUR_PX;
+  const topFor = (min: number) => ((min - winStart) / 60) * HOUR_PX + PAD_Y;
 
   // --- column layout for overlapping EVENT blocks ---------------------------
   const events = blocks.filter((b) => b.kind === 'event').sort((a, b) => a.startMin - b.startMin);
@@ -146,7 +150,7 @@ export default function ScheduleView({ tasks, anchor, onUpdate }: Props) {
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         <div className="flex">
           {/* hour gutter */}
-          <div className="relative w-16 shrink-0" style={{ height: totalH }}>
+          <div className="relative w-16 shrink-0" style={{ height: trackH }}>
             {hours.map((h) => (
               <div
                 key={h}
@@ -159,7 +163,7 @@ export default function ScheduleView({ tasks, anchor, onUpdate }: Props) {
           </div>
 
           {/* track */}
-          <div className="relative flex-1 border-l border-gray-200 dark:border-gray-800" style={{ height: totalH }}>
+          <div className="relative flex-1 border-l border-gray-200 dark:border-gray-800" style={{ height: trackH }}>
             {/* hour gridlines */}
             {hours.map((h) => (
               <div

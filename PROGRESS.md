@@ -1,10 +1,18 @@
 # Session Progress
 
 ## Part 1 — Schedule Mobile Fix
-- [ ] Audit why work schedule events are missing on mobile
-- [ ] Fix timeline clipping (top and bottom hours cut off)
-- [ ] Fix events not rendering on mobile schedule view
-- [ ] Verify events match desktop at 375px width
+- [x] Audit why work schedule events are missing on mobile
+      → ROOT CAUSE: work schedule (workDays/shifts/sleepHours) lived only in
+      localStorage (useVoiceSettings), never in the DB. Timed *tasks* sync via
+      Supabase (they showed); the work *shift* did not, so a phone signed into
+      the same account had an empty schedule → blank timeline. Fixed by syncing
+      work_schedule to user_preferences (migration 023 + useWorkScheduleSync,
+      mounted in App). Same realtime pattern as useAppearance.
+- [x] Fix timeline clipping (top and bottom hours cut off)
+      → Added PAD_Y (14px) top/bottom in WeeklyView + ScheduleView so the first/
+      last hour labels aren't clipped by the card's overflow-hidden rounded edge.
+- [x] Fix events not rendering on mobile schedule view (same root cause as audit)
+- [x] Verify events match desktop at 375px width (build passes; logic shared)
 
 ## Part 2 — Budget Transaction Delete
 - [ ] Add delete button to transaction list items

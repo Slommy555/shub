@@ -4,6 +4,7 @@ import { useAuth } from './hooks/useAuth';
 import { useTheme } from './hooks/useTheme';
 import { useAppearance } from './hooks/useAppearance';
 import { useWorkoutPrefs } from './hooks/workout/useWorkoutPrefs';
+import { useWorkScheduleSync } from './hooks/useWorkScheduleSync';
 import { useTasks } from './hooks/useTasks';
 import { useCategories } from './hooks/useCategories';
 import { useReminders } from './hooks/useReminders';
@@ -35,6 +36,9 @@ function Shell({ userId }: { userId: string }) {
   const { resolvedTheme, toggleTheme } = useTheme(userId);
   const appearance = useAppearance(userId);
   const workoutPrefs = useWorkoutPrefs(userId);
+  // Keep the recurring work schedule (localStorage) synced to Supabase so work
+  // shifts configured on one device show up in the timeline on every device.
+  useWorkScheduleSync(userId);
   const api = useTasks(userId);
   const categories = useCategories(userId);
   const { dueTasks, upcomingEvents, permission, requestPermission } = useReminders(api.tasks);

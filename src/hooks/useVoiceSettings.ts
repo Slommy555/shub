@@ -55,6 +55,53 @@ function load(): VoiceSettings {
 /** Fired in-tab after a write so other useVoiceSettings instances re-read. */
 const SYNC_EVENT = 'voicesettings';
 
+// Exposed so the cross-device sync hook (useWorkScheduleSync) can read/write the
+// same localStorage key and trigger every mounted instance to re-read.
+export const VOICE_SETTINGS_KEY = STORAGE_KEY;
+export const VOICE_SETTINGS_SYNC_EVENT = SYNC_EVENT;
+
+/** The portion of the settings that represents the recurring work schedule.
+ *  This is what gets synced to Supabase so it follows the user across devices. */
+export interface WorkScheduleSubset {
+  workDays: number[];
+  shifts: Record<number, WorkShift>;
+  sleepHours: number;
+}
+
+/** Read the current persisted settings (localStorage), outside of React. */
+export function readVoiceSettings(): VoiceSettings {
+  return load();
+}
+
+/** Pull just the schedule-relevant fields out of a full settings object. */
+export function scheduleSubset(s: VoiceSettings): WorkScheduleSubset {
+  return { workDays: s.workDays, shifts: s.shifts, sleepHours: s.sleepHours };
+}
+
+/**
+ * Merge a schedule subset (e.g. arriving from Supabase on another device) into
+ * the stored settings, then notify every mounted useVoiceSettings instance so
+ * the Schedule views re-render with the synced work shifts. Used by
+ * useWorkScheduleSync — the work schedule used to live only in localStorage,
+ * which is why work shifts never appeared on a freshly-signed-in phone.
+ */
+export function writeVoiceSettingsSchedule(sub: WorkScheduleSubset): void {
+  if (typeof window === 'undefined') return;
+  const cur = load();
+  const next: VoiceSettings = {
+    ...cur,
+    workDays: sub.workDays,
+    shifts: sub.shifts,
+    sleepHours: sub.sleepHours,
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore quota/availability errors */
+  }
+  window.dispatchEvent(new Event(SYNC_EVENT));
+}
+
 /** Start/stop voice keywords, persisted to localStorage. */
 export function useVoiceSettings() {
   const [settings, setSettings] = useState<VoiceSettings>(load);

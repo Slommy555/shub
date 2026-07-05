@@ -32,6 +32,10 @@ import { Droppable, ScheduleCard } from './ScheduleParts';
 const DEFAULT_START_HOUR = 6;
 const DEFAULT_END_HOUR = 24;
 const HOUR_PX = 56;
+// Breathing room above the first hour label and below the last so neither is
+// flush against (and clipped by) the timeline card's rounded, overflow-hidden
+// edge — the top/bottom hours used to be cut off, especially on mobile.
+const PAD_Y = 14;
 
 interface Props {
   tasks: Task[];
@@ -244,8 +248,10 @@ export default function WeeklyView({
     : DEFAULT_END_HOUR;
   const winStart = startHour * 60;
   const totalH = (endHour - startHour) * HOUR_PX;
+  // Full height of the scroll/track area including the top & bottom padding.
+  const trackH = totalH + PAD_Y * 2;
   const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
-  const topFor = (min: number) => ((min - winStart) / 60) * HOUR_PX;
+  const topFor = (min: number) => ((min - winStart) / 60) * HOUR_PX + PAD_Y;
 
   const nowMin = showsToday ? (() => {
     const n = new Date();
@@ -441,7 +447,7 @@ export default function WeeklyView({
 
         <div className="flex">
           {/* hour gutter */}
-          <div className="relative w-12 shrink-0" style={{ height: totalH }}>
+          <div className="relative w-12 shrink-0" style={{ height: trackH }}>
             {hours.map((h) => (
               <div
                 key={h}
@@ -460,7 +466,7 @@ export default function WeeklyView({
               blocks) with no height, so events vanished on mobile only (Fix 2). */}
           <div
             className="relative grid flex-1"
-            style={{ height: totalH, gridTemplateRows: `${totalH}px`, ...colTemplate }}
+            style={{ height: trackH, gridTemplateRows: `${trackH}px`, ...colTemplate }}
           >
             {/* hour gridlines spanning all columns */}
             {hours.map((h) => (
