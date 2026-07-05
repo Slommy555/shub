@@ -26,8 +26,12 @@ const SYSTEM_PROMPT =
   'much is going on — light day, keep it short; lots going on, be thorough. Use ' +
   'plain text with simple bullet lines (•). Do NOT use markdown headers (#) or ' +
   '*asterisks*. Include time-management suggestions only if there are enough ' +
-  'tasks/events to warrant them. Be encouraging and practical, not robotic. End ' +
-  'with a short motivational line if it fits.';
+  'tasks/events to warrant them. Also look ahead to TOMORROW using the ' +
+  '`tomorrow` data (work shift, events): if tomorrow has an early work start or ' +
+  'a heavy load, add a short heads-up for tonight (e.g. get to bed early), using ' +
+  '`sleep_hours_target` to suggest a target bedtime counted back from ' +
+  "tomorrow's start time — keep it to a line and only when it matters. Be " +
+  'encouraging and practical, not robotic. End with a short motivational line if it fits.';
 
 interface Sections {
   schedule: boolean; tasks: boolean; habits: boolean;
@@ -52,6 +56,32 @@ function tiptapText(content: unknown): string {
 async function collect(db: any, userId: string, today: string, sections: Sections) {
   const data: Record<string, unknown> = {};
 
+  const tomorrow = (() => {
+    const d = new Date(`${today}T12:00:00`);
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
+  const todayDow = new Date(`${today}T12:00:00`).getDay();
+  const tomDow = new Date(`${tomorrow}T12:00:00`).getDay();
+
+  // Recurring work schedule + workout schedule both live on user_preferences.
+  const { data: pref } = await db
+    .from('user_preferences')
+    .select('workout_schedule, work_schedule')
+    .eq('user_id', userId)
+    .maybeSingle();
+  const work = (pref?.work_schedule ?? {}) as {
+    workDays?: number[];
+    shifts?: Record<string, { start?: string; end?: string }>;
+    sleepHours?: number;
+  };
+  const workDays = Array.isArray(work.workDays) ? work.workDays : [];
+  const shiftFor = (dow: number) =>
+    workDays.includes(dow) && work.shifts?.[dow]
+      ? { start: work.shifts[dow].start, end: work.shifts[dow].end }
+      : null;
+  const sleepHours = typeof work.sleepHours === 'number' ? work.sleepHours : 8;
+
   if (sections.tasks || sections.schedule) {
     const { data: tasks } = await db
       .from('tasks')
@@ -59,16 +89,25 @@ async function collect(db: any, userId: string, today: string, sections: Section
       .eq('user_id', userId)
       .eq('done', false);
     const list = (tasks ?? []) as any[];
+    const timedOn = (iso: string) =>
+      list
+        .filter((t) => (t.scheduled_date === iso || t.due_date === iso) && t.start_time)
+        .map((t) => ({ text: t.text, start: t.start_time, end: t.end_time }))
+        .sort((a, b) => String(a.start).localeCompare(String(b.start)));
     if (sections.tasks) {
       data.tasks_due_or_overdue = list
         .filter((t) => (t.due_date && t.due_date <= today) || t.scheduled_date === today)
         .map((t) => ({ text: t.text, due: t.due_date, overdue: t.due_date && t.due_date < today }));
     }
     if (sections.schedule) {
-      data.todays_events = list
-        .filter((t) => (t.scheduled_date === today || t.due_date === today) && t.start_time)
-        .map((t) => ({ text: t.text, start: t.start_time, end: t.end_time }))
-        .sort((a, b) => String(a.start).localeCompare(String(b.start)));
+      data.todays_events = timedOn(today);
+      data.today_work_shift = shiftFor(todayDow);
+      data.tomorrow = {
+        date: tomorrow,
+        work_shift: shiftFor(tomDow),
+        events: timedOn(tomorrow),
+      };
+      data.sleep_hours_target = sleepHours;
     }
   }
 
@@ -87,13 +126,8 @@ async function collect(db: any, userId: string, today: string, sections: Section
   }
 
   if (sections.workout) {
-    const { data: pref } = await db
-      .from('user_preferences')
-      .select('workout_schedule')
-      .eq('user_id', userId)
-      .maybeSingle();
     const sched = (pref?.workout_schedule ?? {}) as Record<string, string>;
-    const key = DOW[new Date(`${today}T12:00:00`).getDay()];
+    const key = DOW[todayDow];
     data.workout_today = sched[key] || 'Rest Day';
   }
 

@@ -51,6 +51,7 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
 const TELEGRAM_CHAT_ID = Deno.env.get('TELEGRAM_CHAT_ID');
 const MODEL = 'claude-sonnet-4-6';
 const DOW = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TELEGRAM_LIMIT = 4096;
 
 const SYSTEM_PROMPT =
@@ -62,8 +63,15 @@ const SYSTEM_PROMPT =
   "Telegram doesn't render them. Include time management recommendations only " +
   'if the schedule/task load warrants it. If the budget section shows ' +
   'overspending or categories near limits, give a brief practical suggestion ' +
-  "for the day's spending. End with one short motivational line tailored to " +
-  "what's ahead. Be warm and direct, not robotic.";
+  "for the day's spending. " +
+  'Also look ahead to TOMORROW using the `tomorrow` data (work shift, events) ' +
+  'and connect it to today: if tomorrow has an early work start or a heavy load, ' +
+  'add a short, practical heads-up for tonight — e.g. wind down and get to bed ' +
+  'early. Use `sleep_hours_target` to suggest a concrete target bedtime (count ' +
+  "back that many hours from tomorrow's start time), but keep it to a line or " +
+  'two and only when it actually matters. ' +
+  "End with one short motivational line tailored to what's ahead. Be warm and " +
+  'direct, not robotic.';
 
 interface Sections {
   schedule: boolean;
@@ -93,6 +101,35 @@ function tiptapText(content: unknown): string {
 async function collect(db: Any, userId: string, today: string, sections: Sections) {
   const data: Record<string, unknown> = {};
 
+  // Tomorrow (local), for the look-ahead / sleep guidance.
+  const tomorrow = (() => {
+    const d = new Date(`${today}T12:00:00`);
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
+  const todayDow = new Date(`${today}T12:00:00`).getDay();
+  const tomDow = new Date(`${tomorrow}T12:00:00`).getDay();
+
+  // The recurring WORK schedule and the workout schedule both live on the
+  // user_preferences row (work_schedule syncs from the app's localStorage).
+  const { data: pref } = await db
+    .from('user_preferences')
+    .select('workout_schedule, work_schedule')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  const work = (pref?.work_schedule ?? {}) as {
+    workDays?: number[];
+    shifts?: Record<string, { start?: string; end?: string; notes?: string }>;
+    sleepHours?: number;
+  };
+  const workDays = Array.isArray(work.workDays) ? work.workDays : [];
+  const shiftFor = (dow: number) =>
+    workDays.includes(dow) && work.shifts?.[dow]
+      ? { start: work.shifts[dow].start, end: work.shifts[dow].end }
+      : null;
+  const sleepHours = typeof work.sleepHours === 'number' ? work.sleepHours : 8;
+
   if (sections.tasks || sections.schedule) {
     const { data: tasks } = await db
       .from('tasks')
@@ -100,11 +137,22 @@ async function collect(db: Any, userId: string, today: string, sections: Section
       .eq('user_id', userId)
       .eq('done', false);
     const list = (tasks ?? []) as Any[];
-    if (sections.schedule) {
-      data.todays_events = list
-        .filter((t) => (t.scheduled_date === today || t.due_date === today) && t.start_time)
+    const timedOn = (iso: string) =>
+      list
+        .filter((t) => (t.scheduled_date === iso || t.due_date === iso) && t.start_time)
         .map((t) => ({ text: t.text, start: t.start_time, end: t.end_time }))
         .sort((a, b) => String(a.start).localeCompare(String(b.start)));
+    if (sections.schedule) {
+      data.todays_events = timedOn(today);
+      data.today_work_shift = shiftFor(todayDow);
+      // Look-ahead: what's on tomorrow, so the brief can advise on tonight.
+      data.tomorrow = {
+        date: tomorrow,
+        weekday: WEEKDAY_NAMES[tomDow],
+        work_shift: shiftFor(tomDow),
+        events: timedOn(tomorrow),
+      };
+      data.sleep_hours_target = sleepHours;
     }
     if (sections.tasks) {
       data.tasks_due_or_overdue = list
@@ -124,17 +172,11 @@ async function collect(db: Any, userId: string, today: string, sections: Section
     data.habits = (habits ?? []).map((h: Any) => ({ name: h.name, done: done.has(h.id) }));
   }
 
-  // The workout schedule + week's work shifts both come from user_preferences.
-  const { data: pref } = await db
-    .from('user_preferences')
-    .select('workout_schedule')
-    .eq('user_id', userId)
-    .maybeSingle();
-
   if (sections.workout) {
     const sched = (pref?.workout_schedule ?? {}) as Record<string, string>;
-    const key = DOW[new Date(`${today}T12:00:00`).getDay()];
+    const key = DOW[todayDow];
     data.workout_today = sched[key] || 'Rest Day';
+    data.workout_tomorrow = sched[DOW[tomDow]] || 'Rest Day';
   }
 
   if (sections.budget) {
