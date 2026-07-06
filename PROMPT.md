@@ -1,62 +1,50 @@
-# Session Spec — Schedule Mobile Fix, Budget Delete/Edit, Telegram Daily Brief
+# Session Spec — Repo Reorg (web/) + New Expo iOS App (apple/)
 
-> Supersedes the previous PROMPT.md (Remove Capacitor/Electron/FCM → PWA + Web Push, now complete).
-> Three things to fix/build, in order. Do not change anything not mentioned.
-> Ask user for Telegram Bot Token + Chat ID before writing any Telegram code.
+> Supersedes the previous PROMPT.md (Schedule mobile fix, Budget delete/edit, Telegram brief — complete).
+> Reorganize the existing React + Vite + Supabase web app into a `web/` subfolder and create a
+> new React Native + Expo iOS app in an `apple/` subfolder. Both share the same Supabase backend.
+> iOS app starts with just Tasks and Habits. **Do not break the existing web app at any point.**
 
-## PART 1 — SCHEDULE MOBILE FIX
-**Issue A — work schedule events not showing on mobile.** Timeline/schedule view is blank on
-mobile; work-schedule events visible on desktop don't appear. Definitive audit: log at top of
-timeline component to confirm mount + events array on mobile; trace data flow (hook → prop →
-filter) for where events get dropped; check CSS that hides content (height:0, display:none,
-visibility:hidden, overflow:hidden at mobile widths); check for events positioned outside visible
-scroll area (negative top / beyond container height). Fix root cause, remove debug logs. Confirm a
-desktop-visible event appears at correct time on mobile.
+## PART 1 — REPO REORGANIZATION
+Move the Vite app into `web/`: src/, public/, index.html, vite.config.ts, tailwind.config.js,
+postcss.config.js, tsconfig.json, tsconfig.node.json, .env.local, package.json, package-lock.json,
+.env.example. Delete node_modules/ and dist/ (reinstall/rebuild inside web/).
+Stay at root: supabase/, .git/, .gitignore, README.md, PROMPT.md, PROGRESS.md, CLAUDE.md, .vercel/.
+Update .gitignore for both apps. Add root vercel.json:
+`{ "buildCommand": "cd web && npm install && npm run build", "outputDirectory": "web/dist",
+"installCommand": "cd web && npm install", "framework": "vite" }`
+Then `cd web && npm install && npm run build` — confirm it passes. Fix any broken paths.
+Fallback: if Vercel breaks, set Root Directory = web in dashboard.
 
-**Issue B — timeline clipping (top + bottom hours cut off).** Earliest/latest hours clipped and
-not scrollable. Ensure scroll container uses overflow-y:auto/scroll (not hidden), has defined
-height accounting for mobile header/tab bar/toggle, and add padding-top/bottom so first/last hour
-labels are fully readable. Verify at 375px all hours accessible by scrolling.
+## PART 2 — EXPO SCAFFOLD (apple/)
+`npx create-expo-app apple --template blank-typescript`. Deps: expo-router, expo-constants,
+expo-linking, expo-status-bar, @supabase/supabase-js, expo-secure-store, expo-haptics,
+expo-notifications, @react-native-async-storage/async-storage, react-native-url-polyfill,
+nativewind, tailwindcss(dev). NativeWind config (babel plugin, tailwind content globs).
+lib/supabase.ts uses SecureStore adapter + EXPO_PUBLIC_ env. apple/.env.local mirrors web keys.
+Auth: app/_layout.tsx (session check + onAuthStateChange), components/LoginScreen.tsx (magic link
+via signInWithOtp). Nav: app/(tabs)/_layout.tsx bottom tabs Tasks + Habits. Theme: lib/theme.ts +
+useTheme() reading user_preferences (realtime), AsyncStorage cache, matching web palette.
 
-## PART 2 — BUDGET TRANSACTION DELETE + EDIT
-**Delete.** Desktop: trash icon on right of each transaction row → confirm dialog "Delete this
-transaction? This cannot be undone." → delete from budget_transactions, optimistic UI, update
-totals/charts live. Mobile: swipe-left to reveal red Delete button (same pattern as other tabs) →
-same confirm; keep trash icon as fallback.
-**Edit.** Tap a row (not delete btn) → edit modal/sheet pre-filled (Amount, Type
-Income/Expense/Savings, Category, Description, Date, Recurring toggle). Save changes → update
-Supabase, reflect live. Cancel → close. Mobile = bottom sheet slides up.
-Files: src/components/budget/TransactionCard.tsx, src/components/budget/EditTransactionModal.tsx
-(new), src/hooks/budget/useBudgetTransactions.ts (add deleteTransaction, updateTransaction).
+## PART 3 — TASKS  (reuse existing tasks table, no schema change)
+hooks/useTasks.ts (fetch/filter/realtime; add/toggle/delete/update task + subtasks).
+tasks.tsx (FlatList, filter pills All/Active/Done/High, search, FAB, pull-refresh, empty state).
+components/tasks/: TaskCard, AddTaskModal, EditTaskModal, SubtaskList.
 
-## PART 3 — TELEGRAM DAILY BRIEF
-Edge Function on pg_cron every minute checks user's delivery time, collects day's data, sends to
-Claude (claude-sonnet-4-6 via anthropic-proxy) to write brief, sends to Telegram. App need not be
-open.
+## PART 4 — HABITS  (reuse existing habits table, check real name, no schema change)
+hooks/useHabits.ts (habits + today completions, realtime; add/delete/toggle/update).
+habits.tsx (cards, date + "N of M complete", progress bar, add btn, pull-refresh, empty state).
+components/habits/: HabitCard, AddHabitModal.
 
-Schema (new migrations): user_preferences += telegram_enabled bool default false, telegram_time
-time default '07:00', telegram_timezone text default 'America/Los_Angeles', telegram_sections jsonb
-default all-true, workout_schedule jsonb nullable. notes += include_in_brief bool default false.
-New table telegram_brief_log (id, user_id, sent_at, status, error_message, char_count, content) +
-RLS own-rows-only.
+## PART 5 — POLISH
+Loading skeletons (animated opacity pulse), empty states, pull-to-refresh (RefreshControl),
+haptics (light on task toggle, medium on habit complete), push registration (request perms, save
+Expo push token to user_preferences.expo_push_token — new migration).
 
-UI: "Telegram Brief" section in Settings drawer (enable toggle, time picker, IANA timezone
-dropdown auto-detected, section checkboxes, Save, Send test message). Notes: "Daily update"
-checkbox per note (NoteEditor.tsx) → include_in_brief. Workout: "Weekly Workout Schedule" 7-row
-planner (Rest / template names / custom) → workout_schedule.
-
-Edge Function supabase/functions/telegram-brief/index.ts: service role key, fetch enabled users,
-per user convert time+tz to UTC and match ±1min, skip if already sent today (telegram_brief_log),
-collect sections (schedule/tasks/habits/workout/budget/notes), send to Claude, POST to Telegram
-sendMessage (parse_mode Markdown, split >4096 chars w/ 500ms delay), log result. Errors per-user
-non-fatal.
-
-Migrations: 00X_telegram_settings.sql, 00X_telegram_cron.sql (pg_cron + pg_net; flag manual
-activation in dashboard).
-
-Secrets to set: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SUPABASE_SERVICE_ROLE_KEY.
+## MIGRATION
+`ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS expo_push_token text;` → npx supabase db push.
 
 ## FINAL
-npx supabase db push (skip already-applied on dup key). npm run build must pass.
-git add . && commit "Schedule mobile fix, budget delete/edit, Telegram daily brief" && push.
-Flag if pg_cron/pg_net need manual dashboard activation. Output SETUP CHECKLIST for Telegram.
+cd web && npm run build (confirm). git add . && commit "Reorganize into web/ and apple/, scaffold
+Expo iOS app with tasks and habits" && push. Output SETUP CHECKLIST (copy env keys, Expo Go, expo
+start, verify Vercel).
