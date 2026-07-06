@@ -1,12 +1,22 @@
 # Dependencies
-node_modules
 .pnp
 .pnp.js
 
-# Build output
-dist
-dist-ssr
-*.local
+# Web
+web/node_modules/
+web/dist/
+web/dist-ssr/
+web/.env.local
+web/*.local
+
+# Apple (Expo)
+apple/node_modules/
+apple/.expo/
+apple/ios/
+apple/android/
+apple/.env.local
+apple/dist/
+apple/web-build/
 
 # Environment — keep secrets out of git
 .env
@@ -31,8 +41,6 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Vercel
-.vercel
-
 .vercel
 
 # Supabase CLI local cache
