@@ -35,6 +35,11 @@ export function useTasks(userId: string | null) {
   const tasksRef = useRef<Task[]>([]);
   tasksRef.current = tasks;
 
+  // Unique per hook instance so mounting this hook on multiple screens (e.g.
+  // Tasks + Schedule tabs at once) doesn't collide on a shared channel name —
+  // Supabase reuses a channel by name and rejects new bindings after subscribe.
+  const channelIdRef = useRef(Math.random().toString(36).slice(2));
+
   const upsertTaskRow = useCallback((raw: Omit<Task, 'subtasks'>) => {
     const row = normalizeRow(raw);
     setTasks((prev) => {
@@ -113,7 +118,7 @@ export function useTasks(userId: string | null) {
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
-      .channel(`tasks-rt-${userId}`)
+      .channel(`tasks-rt-${userId}-${channelIdRef.current}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${userId}` },

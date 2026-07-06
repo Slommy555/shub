@@ -26,6 +26,8 @@ export function useHabits(userId: string | null) {
   habitsRef.current = habits;
   const logsRef = useRef<HabitLog[]>([]);
   logsRef.current = logs;
+  // Unique per instance to avoid shared-channel collisions across screens.
+  const channelIdRef = useRef(Math.random().toString(36).slice(2));
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -54,7 +56,7 @@ export function useHabits(userId: string | null) {
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
-      .channel(`habits-rt-${userId}`)
+      .channel(`habits-rt-${userId}-${channelIdRef.current}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'habits', filter: `user_id=eq.${userId}` },

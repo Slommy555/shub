@@ -14,6 +14,9 @@ export function useCategories(userId: string | null) {
   const [categories, setCategories] = useState<CategoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const seededRef = useRef(false);
+  // Unique per instance — this hook mounts on multiple screens at once and
+  // Supabase channels collide if they share a name (see useTasks).
+  const channelIdRef = useRef(Math.random().toString(36).slice(2));
 
   useEffect(() => {
     if (!userId) {
@@ -61,7 +64,7 @@ export function useCategories(userId: string | null) {
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
-      .channel(`categories-rt-${userId}`)
+      .channel(`categories-rt-${userId}-${channelIdRef.current}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'categories', filter: `user_id=eq.${userId}` },
