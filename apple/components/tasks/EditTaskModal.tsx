@@ -26,6 +26,8 @@ export function EditTaskModal({
         category: task.category,
         priority: task.priority,
         due_date: task.due_date,
+        start_time: task.start_time,
+        end_time: task.end_time,
       }}
       onSubmit={(v) => {
         onSave(task.id, v);

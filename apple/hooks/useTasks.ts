@@ -8,6 +8,9 @@ export interface NewTaskInput {
   category: Category;
   priority: Priority;
   due_date: string | null;
+  scheduled_date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
   recurrence?: Recurrence | null;
 }
 
@@ -153,9 +156,9 @@ export function useTasks(userId: string | null) {
         priority: input.priority,
         done: false,
         due_date: input.due_date,
-        scheduled_date: null,
-        start_time: null,
-        end_time: null,
+        scheduled_date: input.scheduled_date ?? null,
+        start_time: input.start_time ?? null,
+        end_time: input.end_time ?? null,
         recurrence: input.recurrence ?? null,
         position: 0,
         created_at: new Date().toISOString(),
@@ -171,6 +174,9 @@ export function useTasks(userId: string | null) {
         category: newTask.category,
         priority: newTask.priority,
         due_date: newTask.due_date,
+        scheduled_date: newTask.scheduled_date,
+        start_time: newTask.start_time,
+        end_time: newTask.end_time,
         recurrence: newTask.recurrence,
         position: 0,
       });

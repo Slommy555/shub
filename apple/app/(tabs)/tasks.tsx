@@ -168,7 +168,16 @@ export default function TasksScreen() {
       <AddTaskModal
         visible={adding}
         categories={categories}
-        onAdd={(v) => addTask({ text: v.text, category: v.category, priority: v.priority, due_date: v.due_date })}
+        onAdd={(v) =>
+          addTask({
+            text: v.text,
+            category: v.category,
+            priority: v.priority,
+            due_date: v.due_date,
+            start_time: v.start_time,
+            end_time: v.end_time,
+          })
+        }
         onClose={() => setAdding(false)}
       />
       <EditTaskModal
@@ -176,7 +185,14 @@ export default function TasksScreen() {
         task={editing}
         categories={categories}
         onSave={(id, v) =>
-          updateTask(id, { text: v.text, category: v.category, priority: v.priority, due_date: v.due_date })
+          updateTask(id, {
+            text: v.text,
+            category: v.category,
+            priority: v.priority,
+            due_date: v.due_date,
+            start_time: v.start_time,
+            end_time: v.end_time,
+          })
         }
         onClose={() => setEditing(null)}
       />

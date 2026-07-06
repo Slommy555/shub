@@ -19,7 +19,30 @@ export interface TaskFormValues {
   category: string;
   priority: Priority;
   due_date: string | null;
+  start_time: string | null; // "HH:MM"
+  end_time: string | null; // "HH:MM"
 }
+
+const fmtTime = (d: Date) =>
+  `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+/** "HH:MM" → a Date today at that time (for the picker's value). */
+const timeToDate = (t: string | null): Date => {
+  const d = new Date();
+  if (t) {
+    const [h, m] = t.split(':').map(Number);
+    d.setHours(h, m, 0, 0);
+  }
+  return d;
+};
+
+/** 12-hour display for a "HH:MM" value. */
+const showTime = (t: string): string => {
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h < 12 ? 'AM' : 'PM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+};
 
 export function TaskFormSheet({
   visible,
@@ -43,7 +66,10 @@ export function TaskFormSheet({
   const [category, setCategory] = useState('');
   const [priority, setPriority] = useState<Priority>('med');
   const [due, setDue] = useState<string | null>(null);
+  const [start, setStart] = useState<string | null>(null);
+  const [end, setEnd] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [timePicker, setTimePicker] = useState<null | 'start' | 'end'>(null);
 
   // Reset fields each time the sheet opens.
   useEffect(() => {
@@ -52,14 +78,24 @@ export function TaskFormSheet({
     setCategory(initial?.category ?? categories[0]?.name ?? '');
     setPriority(initial?.priority ?? 'med');
     setDue(initial?.due_date ?? null);
+    setStart(initial?.start_time ?? null);
+    setEnd(initial?.end_time ?? null);
     setShowPicker(false);
+    setTimePicker(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const submit = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    onSubmit({ text: trimmed, category: category || categories[0]?.name || 'other', priority, due_date: due });
+    onSubmit({
+      text: trimmed,
+      category: category || categories[0]?.name || 'other',
+      priority,
+      due_date: due,
+      start_time: start,
+      end_time: end,
+    });
   };
 
   const tomorrow = toISODate(new Date(Date.now() + 86400000));
@@ -190,6 +226,51 @@ export function TaskFormSheet({
                 onChange={(_e, d) => {
                   setShowPicker(Platform.OS === 'ios');
                   if (d) setDue(toISODate(d));
+                }}
+              />
+            )}
+
+            <Label>Time block (optional — shows on Schedule)</Label>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <DueChip
+                label={start ? showTime(start) : 'Start…'}
+                active={!!start}
+                onPress={() => setTimePicker('start')}
+              />
+              <Text style={{ color: colors.muted }}>→</Text>
+              <DueChip
+                label={end ? showTime(end) : 'End…'}
+                active={!!end}
+                onPress={() => setTimePicker('end')}
+              />
+              {(start || end) && (
+                <DueChip
+                  label="Clear"
+                  active={false}
+                  onPress={() => {
+                    setStart(null);
+                    setEnd(null);
+                  }}
+                />
+              )}
+            </View>
+            {(start || end) && !due ? (
+              <Text style={{ color: colors.muted, fontSize: 12, marginTop: 8 }}>
+                Tip: set a due date too, so this appears on that day&apos;s schedule.
+              </Text>
+            ) : null}
+
+            {timePicker && (
+              <DateTimePicker
+                value={timeToDate(timePicker === 'start' ? start : end)}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(_e, d) => {
+                  setTimePicker(Platform.OS === 'ios' ? timePicker : null);
+                  if (d) {
+                    if (timePicker === 'start') setStart(fmtTime(d));
+                    else setEnd(fmtTime(d));
+                  }
                 }}
               />
             )}

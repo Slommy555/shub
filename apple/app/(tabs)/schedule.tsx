@@ -289,7 +289,14 @@ export default function ScheduleScreen() {
         task={editing}
         categories={categories}
         onSave={(id, v) =>
-          updateTask(id, { text: v.text, category: v.category, priority: v.priority, due_date: v.due_date })
+          updateTask(id, {
+            text: v.text,
+            category: v.category,
+            priority: v.priority,
+            due_date: v.due_date,
+            start_time: v.start_time,
+            end_time: v.end_time,
+          })
         }
         onClose={() => setEditing(null)}
       />

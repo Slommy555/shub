@@ -20,6 +20,17 @@ every working session.
   Checkbox, Fab, BottomSheet, SectionHeader, Divider, EmptyState, Skeleton).
   **Always build new screens from these, not raw Views.**
 
+## ⚠️ ACCOUNT / DATA (read first if "no data shows")
+The phone currently signs into `brandonmoran603@gmail.com` (via `EXPO_PUBLIC_DEV_*`
+in `apple/.env.local`) — a **fresh, empty** account (verified 0 tasks / 0 habits).
+The real PWA data is under **`tracidyann@gmail.com`**. Nothing will show or sync
+with the web app until the phone logs into the SAME account.
+**Fix (no data loss):** on the web PWA (signed in as tracidyann via magic link),
+use the app's "Set a password" feature to give that account a password, then set
+`EXPO_PUBLIC_DEV_EMAIL=tracidyann@gmail.com` + that password in `apple/.env.local`
+and restart with `npx expo start -c`. Do NOT delete/recreate tracidyann (that
+orphans the data).
+
 ## Architecture notes / gotchas
 - Auth: single-username gate (`Slommy Dev`) → signs into Supabase via
   `EXPO_PUBLIC_DEV_*` env (see `components/LoginScreen.tsx`). Data is RLS-scoped
@@ -46,7 +57,10 @@ every working session.
 |---|---|---|
 | Design tokens / UI kit | `UI_SKILL.md` | ✅ **Phase 0 done** (theme.tsx + components/ui/kit.tsx) |
 | Tasks: list + filters | `components/todo/TodoView` | ✅ basic (needs UI_SKILL polish) |
-| Tasks: schedule/weekly/monthly | `components/todo/{Schedule,Weekly,Monthly}View` | ❌ Phase 1 |
+| Tasks: multi-day grouping | `components/todo/TodoView` | ✅ day sections (Overdue/Today/Tomorrow/…) |
+| Tasks: schedule (day timeline) | `components/todo/ScheduleView` | ✅ Schedule tab (no work-shift overlay yet) |
+| Tasks: time-block editing | form | ✅ start/end time in task form → persists + shows on Schedule |
+| Tasks: weekly/monthly views | `components/todo/{Weekly,Monthly}View` | ❌ still TODO |
 | Tasks: recurrence | `lib/recurrence.ts` | ❌ Phase 1 |
 | Categories management | `components/CategoryManager` | ❌ Phase 1 (hook exists) |
 | Habits / Focus | `components/focus/*` | ✅ basic (needs streaks + polish) |
@@ -87,6 +101,16 @@ every working session.
 - NOT verified live (no simulator here) — confirm by changing theme on web and
   watching the phone update, and vice versa.
 
-_Next session: start **Phase 1 (Tasks views)** — port schedule/weekly/monthly views
-from `web/src/components/todo/*`, recurrence (`web/src/lib/recurrence.ts`), and the
-CategoryManager. Build every new screen from `components/ui/kit.tsx`._
+### Session 3 (2026-07-05) — Phase 1 (tasks views) + account diagnosis
+- **Diagnosed "no tasks":** the phone is on an empty account (see ACCOUNT note
+  above). Data layer (`useTasks`) is correct; the fix is switching accounts.
+- Tasks tab → **multi-day** day-grouped SectionList (`lib/taskOrder.ts`).
+- New **Schedule tab** (`app/(tabs)/schedule.tsx`): day timeline + date nav +
+  now-line + untimed list. Tabs are now Tasks / Schedule / Habits / Settings.
+- Task form (`TaskFormSheet`) gained **start/end time** fields; `useTasks.addTask`
+  now persists scheduled_date/start_time/end_time so tasks land on the timeline.
+- tsc clean. Still TODO in Phase 1: weekly + monthly views, recurrence,
+  CategoryManager, and the work-shift overlay on the Schedule timeline.
+
+_Next session: finish Phase 1 (weekly/monthly views + recurrence + CategoryManager),
+then Phase 2 (Habits streaks). Build from `components/ui/kit.tsx`._
