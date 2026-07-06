@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme, COLOR_DOT_HEX } from '../../lib/theme';
 import type { Habit } from '../../lib/types';
+import { Checkbox } from '../ui/kit';
 
 export function HabitCard({
   habit,
@@ -80,27 +81,16 @@ export function HabitCard({
           marginBottom: 10,
         }}
       >
-        <Pressable
-          onPress={toggle}
-          hitSlop={8}
-          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons
-            name={done ? 'checkmark-circle' : 'ellipse-outline'}
-            size={30}
-            color={done ? '#22c55e' : colors.border}
-          />
-        </Pressable>
+        <Checkbox checked={done} onToggle={toggle} size={28} />
 
         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLOR_DOT_HEX[habit.color] }} />
 
         <Text
           style={{
             flex: 1,
-            fontSize: 16,
-            fontWeight: '600',
+            fontSize: 17,
+            fontWeight: '500',
             color: done ? colors.muted : colors.text,
-            opacity: done ? 0.7 : 1,
           }}
         >
           {habit.name}

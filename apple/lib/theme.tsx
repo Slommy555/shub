@@ -17,42 +17,81 @@ export type ThemePref = 'light' | 'dark' | 'system';
 export type Scheme = 'light' | 'dark';
 
 export interface Palette {
+  /** page/screen root — UI_SKILL bg-base */
   bg: string;
+  /** cards, modals, sheets, tab bar — UI_SKILL bg-elevated */
   surface: string;
+  /** inputs, secondary cards, hover — UI_SKILL bg-surface */
   surfaceAlt: string;
+  /** tooltips, dropdowns, popovers, drag handle — UI_SKILL bg-overlay */
+  overlay: string;
+  /** primary text — warm white */
   text: string;
+  /** secondary text — muted purple-gray */
   muted: string;
+  /** placeholder / disabled — UI_SKILL text-tertiary */
+  textTertiary: string;
+  /** barely-visible card borders / dividers */
   border: string;
+  /** stronger borders for inputs / focused elements */
+  borderStrong: string;
+  /** primary lavender accent — CTAs, active tabs, highlights */
   accent: string;
+  /** secondary accent — inactive indicators, secondary borders */
+  accentMuted: string;
+  /** very subtle accent tint — selected rows */
+  accentSubtle: string;
+  /** text/icon color that sits on top of `accent` */
   accentText: string;
+  success: string;
+  warning: string;
   danger: string;
+  info: string;
+  /** skeleton loader base */
   skeleton: string;
 }
 
-const LIGHT: Palette = {
-  bg: '#f9fafb',
-  surface: '#ffffff',
-  surfaceAlt: '#f3f4f6',
-  text: '#111827',
-  muted: '#6b7280',
-  border: '#e5e7eb',
-  accent: '#1f2937',
-  accentText: '#ffffff',
-  danger: '#ef4444',
-  skeleton: '#e5e7eb',
+// Dark mode is the primary experience (UI_SKILL: "deep space, quiet luxury").
+const DARK: Palette = {
+  bg: '#16161f',
+  surface: '#1e1e2e',
+  surfaceAlt: '#252538',
+  overlay: '#2d2d45',
+  text: '#f0eeff',
+  muted: '#8b8aa8',
+  textTertiary: '#56556a',
+  border: '#2e2e45',
+  borderStrong: '#3d3d5c',
+  accent: '#b8a9f5',
+  accentMuted: '#7c6fb0',
+  accentSubtle: '#2a2545',
+  accentText: '#16161f',
+  success: '#4caf82',
+  warning: '#f0a04b',
+  danger: '#e05c5c',
+  info: '#5c9eff',
+  skeleton: '#252538',
 };
 
-const DARK: Palette = {
-  bg: '#030712',
-  surface: '#111827',
-  surfaceAlt: '#1f2937',
-  text: '#f9fafb',
-  muted: '#9ca3af',
-  border: '#1f2937',
-  accent: '#f9fafb',
-  accentText: '#111827',
-  danger: '#f87171',
-  skeleton: '#1f2937',
+const LIGHT: Palette = {
+  bg: '#f4f3ff',
+  surface: '#ffffff',
+  surfaceAlt: '#eeecff',
+  overlay: '#e8e6ff',
+  text: '#1a1830',
+  muted: '#6b6888',
+  textTertiary: '#a09db8',
+  border: '#e0ddf5',
+  borderStrong: '#c8c4e8',
+  accent: '#7c6fb0',
+  accentMuted: '#b8a9f5',
+  accentSubtle: '#ede9ff',
+  accentText: '#ffffff',
+  success: '#4caf82',
+  warning: '#f0a04b',
+  danger: '#e05c5c',
+  info: '#5c9eff',
+  skeleton: '#eeecff',
 };
 
 // Category / habit badge tints per ColorKey, matching the web COLOR_STYLES.

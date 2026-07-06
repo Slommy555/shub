@@ -12,6 +12,7 @@ import { AddTaskModal } from '../../components/tasks/AddTaskModal';
 import { EditTaskModal } from '../../components/tasks/EditTaskModal';
 import { SkeletonList } from '../../components/ui/Skeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { Fab } from '../../components/ui/kit';
 
 type Filter = 'all' | 'active' | 'done' | 'high';
 const FILTERS: { key: Filter; label: string }[] = [
@@ -65,7 +66,9 @@ export default function TasksScreen() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 }}>
-        <Text style={{ color: colors.text, fontSize: 30, fontWeight: '800' }}>Tasks</Text>
+        <Text style={{ color: colors.text, fontSize: 28, fontWeight: '700', letterSpacing: -0.5 }}>
+          Tasks
+        </Text>
 
         <View
           style={{
@@ -159,28 +162,7 @@ export default function TasksScreen() {
         />
       )}
 
-      {/* Floating action button */}
-      <Pressable
-        onPress={() => setAdding(true)}
-        style={{
-          position: 'absolute',
-          right: 20,
-          bottom: 24,
-          width: 58,
-          height: 58,
-          borderRadius: 29,
-          backgroundColor: colors.accent,
-          alignItems: 'center',
-          justifyContent: 'center',
-          shadowColor: '#000',
-          shadowOpacity: 0.2,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 4,
-        }}
-      >
-        <Ionicons name="add" size={30} color={colors.accentText} />
-      </Pressable>
+      <Fab onPress={() => setAdding(true)} />
 
       <AddTaskModal
         visible={adding}

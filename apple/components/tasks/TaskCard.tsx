@@ -3,10 +3,11 @@ import { Alert, Pressable, Text, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useTheme, COLOR_DOT_HEX } from '../../lib/theme';
+import { useTheme } from '../../lib/theme';
 import { PRIORITY_HEX, type ColorKey, type Task } from '../../lib/types';
 import { formatDue, isOverdue, isToday } from '../../lib/dates';
 import { SubtaskList } from './SubtaskList';
+import { Checkbox } from '../ui/kit';
 
 export function TaskCard({
   task,
@@ -46,7 +47,7 @@ export function TaskCard({
   const dueColor = isOverdue(task.due_date)
     ? colors.danger
     : isToday(task.due_date)
-    ? '#f59e0b'
+    ? colors.warning
     : colors.muted;
 
   const renderRightActions = () => (
@@ -77,30 +78,32 @@ export function TaskCard({
           borderColor: colors.border,
           borderWidth: 1,
           borderRadius: 16,
-          padding: 14,
           marginBottom: 10,
+          overflow: 'hidden',
+          flexDirection: 'row',
+          opacity: task.done ? 0.45 : 1,
         }}
       >
+        {/* Priority strip — subtler than a full badge (UI_SKILL Task Card). */}
+        <View
+          style={{
+            width: 3,
+            backgroundColor: task.done ? colors.surfaceAlt : PRIORITY_HEX[task.priority],
+          }}
+        />
+        <View style={{ flex: 1, padding: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-          <Pressable
-            onPress={toggle}
-            hitSlop={8}
-            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -8, marginTop: -8 }}
-          >
-            <Ionicons
-              name={task.done ? 'checkmark-circle' : 'ellipse-outline'}
-              size={28}
-              color={task.done ? '#22c55e' : colors.border}
-            />
-          </Pressable>
+          <View style={{ marginTop: 1 }}>
+            <Checkbox checked={task.done} onToggle={toggle} size={24} />
+          </View>
 
           <View style={{ flex: 1 }}>
             <Text
               style={{
-                fontSize: 16,
+                fontSize: 17,
+                fontWeight: '500',
                 color: task.done ? colors.muted : colors.text,
                 textDecorationLine: task.done ? 'line-through' : 'none',
-                opacity: task.done ? 0.6 : 1,
               }}
             >
               {task.text}
@@ -143,6 +146,7 @@ export function TaskCard({
             />
           </View>
         ) : null}
+        </View>
       </Pressable>
     </Swipeable>
   );
