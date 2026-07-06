@@ -11,35 +11,44 @@
       to web/; no hardcoded absolute paths)
 
 ## Part 2 — Expo App Scaffold
-- [ ] Initialize Expo app in apple/ directory
-- [ ] Install and configure dependencies
-- [ ] Supabase client configured
-- [ ] Auth flow (magic link login)
-- [ ] Navigation structure (bottom tabs)
-- [ ] Theme (dark/light mode synced with Supabase)
+- [x] Initialize Expo app in apple/ directory (create-expo-app, SDK 57 / RN 0.86 /
+      React 19; blank-typescript; expo-router)
+- [x] Install and configure dependencies (expo-router, supabase-js, secure-store,
+      haptics, notifications, async-storage, url-polyfill, nativewind v4 +
+      tailwind, gesture-handler, reanimated+worklets, datetimepicker, vector-icons;
+      .npmrc legacy-peer-deps to resolve react/react-dom peer mismatch)
+- [x] Supabase client configured (lib/supabase.ts — SecureStore adapter, EXPO_PUBLIC_ env)
+- [x] Auth flow (magic link login — components/LoginScreen.tsx, hooks/useAuth.tsx,
+      app/_layout.tsx gate on onAuthStateChange)
+- [x] Navigation structure (bottom tabs — app/(tabs)/_layout.tsx Tasks + Habits)
+- [x] Theme (lib/theme.tsx — reads user_preferences.theme, realtime sync,
+      AsyncStorage cache, system/light/dark, web-matching palette)
 
 ## Part 3 — Tasks Feature
-- [ ] Task list screen
-- [ ] Add task form
-- [ ] Task card component (checkbox, priority, category, due date)
-- [ ] Subtasks
-- [ ] Edit task inline
-- [ ] Real-time sync with Supabase
+- [x] Task list screen (app/(tabs)/tasks.tsx — FlatList, filter pills, search, FAB)
+- [x] Add task form (AddTaskModal → shared TaskFormSheet bottom sheet)
+- [x] Task card component (TaskCard — 44px checkbox, priority dot, category badge,
+      due chip w/ overdue/today colors)
+- [x] Subtasks (SubtaskList, expand card to view/add/toggle/delete)
+- [x] Edit task inline (long-press → EditTaskModal, prefilled)
+- [x] Real-time sync with Supabase (useTasks — same optimistic + realtime as web)
 
 ## Part 4 — Habits Feature
-- [ ] Habits list screen
-- [ ] Habit card with today's completion toggle
-- [ ] Add/edit/delete habits
-- [ ] Real-time sync with Supabase
+- [x] Habits list screen (app/(tabs)/habits.tsx — date, N of M, progress bar)
+- [x] Habit card with today's completion toggle (HabitCard, medium haptic)
+- [x] Add/edit/delete habits (AddHabitModal; swipe-delete; tap-to-rename)
+- [x] Real-time sync with Supabase (useHabits — habits + habit_logs realtime)
 
 ## Part 5 — Polish
-- [ ] Loading skeletons
-- [ ] Empty states
-- [ ] Pull to refresh
-- [ ] Haptic feedback on completions
-- [ ] Push notification registration (Expo notifications)
+- [x] Loading skeletons (components/ui/Skeleton — animated opacity pulse)
+- [x] Empty states (components/ui/EmptyState — icon + message + add button)
+- [x] Pull to refresh (RefreshControl on both FlatLists → refetch)
+- [x] Haptic feedback on completions (light on task toggle, medium on habit)
+- [x] Push notification registration (usePushRegistration → user_preferences
+      .expo_push_token, migration 028; skips gracefully in Expo Go)
 
 ## Final Steps
-- [ ] npm run build passes for web/ app
-- [ ] Expo app runs in Expo Go on iPhone
-- [ ] Git pushed
+- [x] npm run build passes for web/ app
+- [x] Expo app runs in Expo Go on iPhone (tsc clean; `expo export --platform ios`
+      bundles successfully — 4.9MB Hermes; run `cd apple && npx expo start`)
+- [x] Git pushed
