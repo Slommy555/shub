@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
+import { Pressable, RefreshControl, SectionList, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '../../hooks/useAuth';
@@ -7,12 +7,13 @@ import { useTasks } from '../../hooks/useTasks';
 import { useCategories } from '../../hooks/useCategories';
 import { useTheme } from '../../lib/theme';
 import type { Task } from '../../lib/types';
+import { buildDaySections } from '../../lib/taskOrder';
 import { TaskCard } from '../../components/tasks/TaskCard';
 import { AddTaskModal } from '../../components/tasks/AddTaskModal';
 import { EditTaskModal } from '../../components/tasks/EditTaskModal';
 import { SkeletonList } from '../../components/ui/Skeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Fab } from '../../components/ui/kit';
+import { Fab, PillRow, SectionHeader, SPACE } from '../../components/ui/kit';
 
 type Filter = 'all' | 'active' | 'done' | 'high';
 const FILTERS: { key: Filter; label: string }[] = [
@@ -46,15 +47,16 @@ export default function TasksScreen() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
 
-  const visible = useMemo(() => {
+  const sections = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return tasks.filter((t) => {
+    const filtered = tasks.filter((t) => {
       if (filter === 'active' && t.done) return false;
       if (filter === 'done' && !t.done) return false;
       if (filter === 'high' && t.priority !== 'high') return false;
       if (q && !t.text.toLowerCase().includes(q)) return false;
       return true;
     });
+    return buildDaySections(filtered);
   }, [tasks, filter, search]);
 
   const onRefresh = async () => {
@@ -63,9 +65,11 @@ export default function TasksScreen() {
     setRefreshing(false);
   };
 
+  const isFiltered = !!search || filter !== 'all';
+
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 }}>
+      <View style={{ paddingHorizontal: SPACE.lg, paddingTop: SPACE.sm, paddingBottom: SPACE.xs }}>
         <Text style={{ color: colors.text, fontSize: 28, fontWeight: '700', letterSpacing: -0.5 }}>
           Tasks
         </Text>
@@ -74,13 +78,13 @@ export default function TasksScreen() {
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 8,
-            backgroundColor: colors.surface,
+            gap: SPACE.sm,
+            backgroundColor: colors.surfaceAlt,
             borderColor: colors.border,
             borderWidth: 1,
             borderRadius: 12,
-            paddingHorizontal: 12,
-            marginTop: 12,
+            paddingHorizontal: SPACE.md,
+            marginTop: SPACE.md,
           }}
         >
           <Ionicons name="search" size={18} color={colors.muted} />
@@ -88,7 +92,7 @@ export default function TasksScreen() {
             value={search}
             onChangeText={setSearch}
             placeholder="Search tasks"
-            placeholderTextColor={colors.muted}
+            placeholderTextColor={colors.textTertiary}
             style={{ flex: 1, color: colors.text, paddingVertical: 10 }}
           />
           {search ? (
@@ -98,43 +102,42 @@ export default function TasksScreen() {
           ) : null}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          {FILTERS.map((f) => {
-            const active = f.key === filter;
-            return (
-              <Pressable
-                key={f.key}
-                onPress={() => setFilter(f.key)}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 7,
-                  borderRadius: 999,
-                  backgroundColor: active ? colors.accent : colors.surface,
-                  borderWidth: 1,
-                  borderColor: active ? colors.accent : colors.border,
-                }}
-              >
-                <Text style={{ color: active ? colors.accentText : colors.muted, fontSize: 13, fontWeight: '600' }}>
-                  {f.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+        <View style={{ marginTop: SPACE.md }}>
+          <PillRow options={FILTERS} value={filter} onChange={setFilter} />
         </View>
       </View>
 
       {loading ? (
-        <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+        <View style={{ paddingHorizontal: SPACE.lg, paddingTop: SPACE.md }}>
           <SkeletonList />
         </View>
       ) : (
-        <FlatList
-          data={visible}
+        <SectionList
+          sections={sections}
           keyExtractor={(t) => t.id}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 120 }}
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={{
+            paddingHorizontal: SPACE.lg,
+            paddingTop: SPACE.md,
+            paddingBottom: 120,
+          }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />
           }
+          renderSectionHeader={({ section }) => (
+            <View style={{ marginTop: SPACE.lg, marginBottom: SPACE.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.sm }}>
+                <SectionHeader
+                  label={section.title}
+                  style={{
+                    marginBottom: 0,
+                    color: section.key === 'overdue' ? colors.danger : colors.muted,
+                  }}
+                />
+                <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{section.data.length}</Text>
+              </View>
+            </View>
+          )}
           renderItem={({ item }) => (
             <TaskCard
               task={item}
@@ -151,11 +154,9 @@ export default function TasksScreen() {
             <EmptyState
               icon="🗒️"
               title={
-                search || filter !== 'all'
-                  ? 'No tasks match your filters.'
-                  : 'No tasks yet — add your first one'
+                isFiltered ? 'No tasks match your filters.' : 'No tasks yet — add your first one'
               }
-              actionLabel={search || filter !== 'all' ? undefined : 'Add a task'}
+              actionLabel={isFiltered ? undefined : 'Add a task'}
               onAction={() => setAdding(true)}
             />
           }
