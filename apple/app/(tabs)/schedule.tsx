@@ -49,6 +49,7 @@ export default function ScheduleScreen() {
 
   const [anchor, setAnchor] = useState(todayISO());
   const [editing, setEditing] = useState<Task | null>(null);
+  const [trackW, setTrackW] = useState(0);
 
   // Re-render the "now" line each minute when viewing today.
   const [, setTick] = useState(0);
@@ -170,7 +171,10 @@ export default function ScheduleScreen() {
             </View>
 
             {/* track */}
-            <View style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border }}>
+            <View
+              style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border }}
+              onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}
+            >
               {hours.map((h) => (
                 <View
                   key={h}
@@ -185,9 +189,10 @@ export default function ScheduleScreen() {
                 />
               ))}
 
-              {sorted.map((b) => {
+              {trackW > 0 &&
+                sorted.map((b) => {
                 const col = colOf.get(b.id) ?? 0;
-                const widthPct = 100 / colCount;
+                const colW = trackW / colCount;
                 const badge = tint(colorForCategory(b.task.category));
                 return (
                   <Pressable
@@ -197,8 +202,8 @@ export default function ScheduleScreen() {
                       position: 'absolute',
                       top: topFor(b.startMin) + 1,
                       height: Math.max(24, topFor(b.endMin) - topFor(b.startMin) - 2),
-                      left: `${col * widthPct}%`,
-                      width: `${widthPct}%`,
+                      left: col * colW,
+                      width: colW,
                       paddingHorizontal: 4,
                     }}
                   >
