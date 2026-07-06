@@ -13,26 +13,45 @@ import { StatusBar } from 'expo-status-bar';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../lib/theme';
 
+const ALLOWED_USERNAME = process.env.EXPO_PUBLIC_DEV_USERNAME ?? 'Slommy Dev';
+const DEV_EMAIL = process.env.EXPO_PUBLIC_DEV_EMAIL;
+const DEV_PASSWORD = process.env.EXPO_PUBLIC_DEV_PASSWORD;
+
 export function LoginScreen() {
   const { colors, scheme } = useTheme();
-  const [email, setEmail] = useState('');
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [username, setUsername] = useState('');
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const send = async () => {
-    const trimmed = email.trim();
+  const enter = async () => {
+    const trimmed = username.trim();
     if (!trimmed) return;
-    setSending(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithOtp({
-      email: trimmed,
-      options: { shouldCreateUser: true },
+
+    if (trimmed.toLowerCase() !== ALLOWED_USERNAME.toLowerCase()) {
+      setError('Unrecognized username.');
+      return;
+    }
+
+    if (!DEV_EMAIL || !DEV_PASSWORD) {
+      setError(
+        'App not configured: set EXPO_PUBLIC_DEV_EMAIL and EXPO_PUBLIC_DEV_PASSWORD in .env.local.'
+      );
+      return;
+    }
+
+    setBusy(true);
+    // The username maps to a real Supabase account so the database has an
+    // authenticated session (RLS). The password lives in env, never typed.
+    const { error } = await supabase.auth.signInWithPassword({
+      email: DEV_EMAIL,
+      password: DEV_PASSWORD,
     });
-    setSending(false);
+    setBusy(false);
     if (error) setError(error.message);
-    else setSent(true);
   };
+
+  const disabled = busy || !username.trim();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -52,77 +71,51 @@ export function LoginScreen() {
             </Text>
           </View>
 
-          {sent ? (
-            <View
-              style={{
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderWidth: 1,
-                borderRadius: 16,
-                padding: 24,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ fontSize: 32, marginBottom: 8 }}>📬</Text>
-              <Text style={{ color: colors.text, fontSize: 17, fontWeight: '600', textAlign: 'center' }}>
-                Check your email
+          <TextInput
+            value={username}
+            onChangeText={setUsername}
+            placeholder="Username"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="words"
+            autoCorrect={false}
+            onSubmitEditing={enter}
+            returnKeyType="go"
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderWidth: 1,
+              borderRadius: 14,
+              paddingHorizontal: 16,
+              paddingVertical: 16,
+              fontSize: 17,
+              color: colors.text,
+            }}
+          />
+
+          {error ? (
+            <Text style={{ color: colors.danger, marginTop: 10 }}>{error}</Text>
+          ) : null}
+
+          <Pressable
+            onPress={enter}
+            disabled={disabled}
+            style={{
+              backgroundColor: colors.accent,
+              borderRadius: 14,
+              paddingVertical: 16,
+              alignItems: 'center',
+              marginTop: 16,
+              opacity: disabled ? 0.5 : 1,
+            }}
+          >
+            {busy ? (
+              <ActivityIndicator color={colors.accentText} />
+            ) : (
+              <Text style={{ color: colors.accentText, fontWeight: '700', fontSize: 16 }}>
+                Enter
               </Text>
-              <Text style={{ color: colors.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
-                We sent a login link to {email.trim()}. Open it on this device to sign in.
-              </Text>
-              <Pressable onPress={() => setSent(false)} style={{ marginTop: 16 }}>
-                <Text style={{ color: colors.muted, textDecorationLine: 'underline' }}>
-                  Use a different email
-                </Text>
-              </Pressable>
-            </View>
-          ) : (
-            <>
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@example.com"
-                placeholderTextColor={colors.muted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="email"
-                style={{
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  borderWidth: 1,
-                  borderRadius: 14,
-                  paddingHorizontal: 16,
-                  paddingVertical: 16,
-                  fontSize: 17,
-                  color: colors.text,
-                }}
-              />
-              {error ? (
-                <Text style={{ color: colors.danger, marginTop: 10 }}>{error}</Text>
-              ) : null}
-              <Pressable
-                onPress={send}
-                disabled={sending || !email.trim()}
-                style={{
-                  backgroundColor: colors.accent,
-                  borderRadius: 14,
-                  paddingVertical: 16,
-                  alignItems: 'center',
-                  marginTop: 16,
-                  opacity: sending || !email.trim() ? 0.5 : 1,
-                }}
-              >
-                {sending ? (
-                  <ActivityIndicator color={colors.accentText} />
-                ) : (
-                  <Text style={{ color: colors.accentText, fontWeight: '700', fontSize: 16 }}>
-                    Send magic link
-                  </Text>
-                )}
-              </Pressable>
-            </>
-          )}
+            )}
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
