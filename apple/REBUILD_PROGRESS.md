@@ -55,7 +55,7 @@ every working session.
 | Notes | `components/notes/*`, `hooks/notes/*` | ❌ Phase 5 |
 | Voice + Claude | `components/voice/*`, `lib/claude*` | ❌ Phase 6 |
 | Daily brief | `components/DailyBriefModal`, `hooks/useDailyBriefs` | ❌ Phase 7 |
-| Settings (appearance/push/telegram/work) | `components/Settings*`, `settings/*` | ⚠️ partial (theme + push) |
+| Settings (appearance/push/telegram/work) | `components/Settings*`, `settings/*` | ⚠️ partial — **Settings tab + Theme editor done** (mode + custom_colors, synced); push partial; telegram/work TODO |
 
 ---
 
@@ -73,6 +73,19 @@ every working session.
 - Re-skinned tab bar (accent active / tertiary inactive, 10px labels).
 - Polished TaskCard (3px priority strip, accent circle checkbox, 45% done opacity)
   and HabitCard (28px accent checkbox). tsc clean.
+
+### Session 2 (2026-07-05) — Theme editor + PWA sync
+- Added a **Settings tab** (`app/(tabs)/settings.tsx`) + `components/settings/ThemeEditor.tsx`:
+  Light/Dark/System selector, a "custom colors" toggle, per-color hex editing with
+  preset swatches, reset, and sign-out.
+- Extended `lib/theme.tsx` to load + realtime-sync `user_preferences.custom_colors`
+  (shape `{enabled, colors:{bg,surface,text,muted,border,accent,accentText}}`) —
+  **identical contract + defaults to the web PWA** (`web/src/hooks/useAppearance.ts`),
+  so custom palettes sync both ways. `overridePalette()` maps the flat 7-color set
+  onto the app's richer tokens. `theme` (light/dark/system) was already synced.
+- Verified `custom_colors jsonb` column exists (migration 014). tsc clean.
+- NOT verified live (no simulator here) — confirm by changing theme on web and
+  watching the phone update, and vice versa.
 
 _Next session: start **Phase 1 (Tasks views)** — port schedule/weekly/monthly views
 from `web/src/components/todo/*`, recurrence (`web/src/lib/recurrence.ts`), and the

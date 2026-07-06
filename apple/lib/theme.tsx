@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Appearance } from 'react-native';
+import { Appearance as RNAppearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { useAuthContext } from '../hooks/useAuth';
@@ -94,6 +94,80 @@ const LIGHT: Palette = {
   skeleton: '#eeecff',
 };
 
+/**
+ * Custom palette the user can edit — MUST match the web PWA's `Appearance`
+ * (web/src/hooks/useAppearance.ts) exactly so the two apps sync through
+ * `user_preferences.custom_colors`. Same 7 semantic keys, same defaults.
+ */
+export interface Appearance {
+  bg: string;
+  surface: string;
+  text: string;
+  muted: string;
+  border: string;
+  accent: string;
+  accentText: string;
+}
+
+export const DEFAULT_APPEARANCE: Appearance = {
+  bg: '#f9fafb',
+  surface: '#ffffff',
+  text: '#111827',
+  muted: '#6b7280',
+  border: '#e5e7eb',
+  accent: '#1f2937',
+  accentText: '#ffffff',
+};
+
+export const APPEARANCE_FIELDS: { key: keyof Appearance; label: string; hint: string }[] = [
+  { key: 'bg', label: 'Background', hint: 'The screen behind everything.' },
+  { key: 'surface', label: 'Foreground', hint: 'Cards, sheets and inputs.' },
+  { key: 'text', label: 'Text', hint: 'Primary text color.' },
+  { key: 'muted', label: 'Muted text', hint: 'Secondary labels and hints.' },
+  { key: 'border', label: 'Borders', hint: 'Lines and dividers.' },
+  { key: 'accent', label: 'Accent', hint: 'Buttons, active tabs, highlights.' },
+  { key: 'accentText', label: 'Accent text', hint: 'Text on top of the accent.' },
+];
+
+interface AppearanceState {
+  enabled: boolean;
+  colors: Appearance;
+}
+
+/** Map the flat 7-color custom palette onto the app's richer token set. */
+function overridePalette(base: Palette, c: Appearance): Palette {
+  return {
+    ...base,
+    bg: c.bg,
+    surface: c.surface,
+    surfaceAlt: c.surface,
+    overlay: c.surface,
+    text: c.text,
+    muted: c.muted,
+    textTertiary: c.muted,
+    border: c.border,
+    borderStrong: c.border,
+    accent: c.accent,
+    accentMuted: c.accent,
+    accentSubtle: c.surface,
+    accentText: c.accentText,
+    skeleton: c.surface,
+    // success / warning / danger / info keep their semantic values
+  };
+}
+
+function normalizeAppearance(raw: unknown): AppearanceState | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as { enabled?: unknown; colors?: unknown };
+  return {
+    enabled: Boolean(o.enabled),
+    colors: {
+      ...DEFAULT_APPEARANCE,
+      ...(o.colors && typeof o.colors === 'object' ? (o.colors as Partial<Appearance>) : {}),
+    },
+  };
+}
+
 // Category / habit badge tints per ColorKey, matching the web COLOR_STYLES.
 const TINTS: Record<ColorKey, { l: [string, string]; d: [string, string] }> = {
   gray: { l: ['#e5e7eb', '#374151'], d: ['rgba(107,114,128,0.25)', '#d1d5db'] },
@@ -127,11 +201,18 @@ interface ThemeValue {
   setTheme: (p: ThemePref) => void;
   /** Badge {bg, text} for a category/habit color in the active scheme. */
   tint: (c: ColorKey) => { bg: string; text: string };
+  // Custom-color editing (synced with the PWA via custom_colors).
+  appearanceEnabled: boolean;
+  appearanceColors: Appearance;
+  setAppearanceEnabled: (on: boolean) => void;
+  setAppearanceColor: (key: keyof Appearance, value: string) => void;
+  resetAppearance: () => void;
 }
 
 const ThemeContext = createContext<ThemeValue | null>(null);
 
 const CACHE_KEY = 'theme-pref';
+const APPEARANCE_CACHE_KEY = 'appearance';
 
 function isPref(v: unknown): v is ThemePref {
   return v === 'light' || v === 'dark' || v === 'system';
@@ -143,37 +224,54 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const [pref, setPref] = useState<ThemePref>('system');
   const [systemScheme, setSystemScheme] = useState<Scheme>(
-    Appearance.getColorScheme() === 'dark' ? 'dark' : 'light'
+    RNAppearance.getColorScheme() === 'dark' ? 'dark' : 'light'
   );
+  const [appearance, setAppearance] = useState<AppearanceState>({
+    enabled: false,
+    colors: DEFAULT_APPEARANCE,
+  });
+
   const prefRef = useRef(pref);
   prefRef.current = pref;
+  const appearanceRef = useRef(appearance);
+  appearanceRef.current = appearance;
 
-  // Instant load of the last-known preference (no flash before Supabase resolves).
+  // Instant load of last-known values (no flash before Supabase resolves).
   useEffect(() => {
     AsyncStorage.getItem(CACHE_KEY).then((v) => {
       if (isPref(v)) setPref(v);
+    });
+    AsyncStorage.getItem(APPEARANCE_CACHE_KEY).then((v) => {
+      if (!v) return;
+      try {
+        const parsed = normalizeAppearance(JSON.parse(v));
+        if (parsed) setAppearance(parsed);
+      } catch {
+        /* ignore */
+      }
     });
   }, []);
 
   // Track OS light/dark while pref === 'system'.
   useEffect(() => {
-    const sub = Appearance.addChangeListener(({ colorScheme }) =>
+    const sub = RNAppearance.addChangeListener(({ colorScheme }) =>
       setSystemScheme(colorScheme === 'dark' ? 'dark' : 'light')
     );
     return () => sub.remove();
   }, []);
 
-  // On login: adopt the stored preference (or seed it if the row lacks one).
+  // On login: adopt stored theme + custom_colors (or seed the row if missing).
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase
         .from('user_preferences')
-        .select('theme')
+        .select('theme, custom_colors')
         .eq('user_id', userId)
         .maybeSingle();
       if (cancelled || error) return;
+
       if (data && isPref(data.theme)) {
         setPref(data.theme);
         AsyncStorage.setItem(CACHE_KEY, data.theme);
@@ -185,13 +283,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             { onConflict: 'user_id' }
           );
       }
+
+      const remote = normalizeAppearance(data?.custom_colors);
+      if (remote) {
+        setAppearance(remote);
+        AsyncStorage.setItem(APPEARANCE_CACHE_KEY, JSON.stringify(remote));
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [userId]);
 
-  // Realtime: a theme change on the web app updates the phone live.
+  // Realtime: theme / custom_colors changes on the web app update the phone live.
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
@@ -200,10 +304,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'user_preferences', filter: `user_id=eq.${userId}` },
         (payload) => {
-          const t = (payload.new as { theme?: unknown })?.theme;
-          if (isPref(t)) {
-            setPref(t);
-            AsyncStorage.setItem(CACHE_KEY, t);
+          const row = payload.new as { theme?: unknown; custom_colors?: unknown };
+          if (isPref(row?.theme)) {
+            setPref(row.theme);
+            AsyncStorage.setItem(CACHE_KEY, row.theme);
+          }
+          const remote = normalizeAppearance(row?.custom_colors);
+          if (remote) {
+            setAppearance(remote);
+            AsyncStorage.setItem(APPEARANCE_CACHE_KEY, JSON.stringify(remote));
           }
         }
       )
@@ -228,8 +337,50 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     [userId]
   );
 
+  const persistAppearance = useCallback(
+    (next: AppearanceState) => {
+      AsyncStorage.setItem(APPEARANCE_CACHE_KEY, JSON.stringify(next));
+      if (!userId) return;
+      void supabase
+        .from('user_preferences')
+        .upsert(
+          { user_id: userId, custom_colors: next, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' }
+        );
+    },
+    [userId]
+  );
+
+  const setAppearanceEnabled = useCallback(
+    (on: boolean) => {
+      const next: AppearanceState = { ...appearanceRef.current, enabled: on };
+      setAppearance(next);
+      persistAppearance(next);
+    },
+    [persistAppearance]
+  );
+
+  const setAppearanceColor = useCallback(
+    (key: keyof Appearance, value: string) => {
+      const next: AppearanceState = {
+        enabled: true,
+        colors: { ...appearanceRef.current.colors, [key]: value },
+      };
+      setAppearance(next);
+      persistAppearance(next);
+    },
+    [persistAppearance]
+  );
+
+  const resetAppearance = useCallback(() => {
+    const next: AppearanceState = { enabled: false, colors: DEFAULT_APPEARANCE };
+    setAppearance(next);
+    persistAppearance(next);
+  }, [persistAppearance]);
+
   const scheme: Scheme = pref === 'system' ? systemScheme : pref;
-  const colors = scheme === 'dark' ? DARK : LIGHT;
+  const base = scheme === 'dark' ? DARK : LIGHT;
+  const colors = appearance.enabled ? overridePalette(base, appearance.colors) : base;
 
   const tint = useCallback(
     (c: ColorKey) => {
@@ -241,8 +392,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<ThemeValue>(
-    () => ({ pref, scheme, colors, setTheme, tint }),
-    [pref, scheme, colors, setTheme, tint]
+    () => ({
+      pref,
+      scheme,
+      colors,
+      setTheme,
+      tint,
+      appearanceEnabled: appearance.enabled,
+      appearanceColors: appearance.colors,
+      setAppearanceEnabled,
+      setAppearanceColor,
+      resetAppearance,
+    }),
+    [
+      pref,
+      scheme,
+      colors,
+      setTheme,
+      tint,
+      appearance.enabled,
+      appearance.colors,
+      setAppearanceEnabled,
+      setAppearanceColor,
+      resetAppearance,
+    ]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
