@@ -13,7 +13,8 @@ import { AddTaskModal } from '../../components/tasks/AddTaskModal';
 import { EditTaskModal } from '../../components/tasks/EditTaskModal';
 import { SkeletonList } from '../../components/ui/Skeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Fab, PillRow, SectionHeader, SPACE } from '../../components/ui/kit';
+import { PillRow, SectionHeader, SPACE } from '../../components/ui/kit';
+import { DraggableFab } from '../../components/ui/DraggableFab';
 
 type Filter = 'all' | 'active' | 'done' | 'high';
 const FILTERS: { key: Filter; label: string }[] = [
@@ -163,7 +164,7 @@ export default function TasksScreen() {
         />
       )}
 
-      <Fab onPress={() => setAdding(true)} />
+      <DraggableFab onPress={() => setAdding(true)} />
 
       <AddTaskModal
         visible={adding}
