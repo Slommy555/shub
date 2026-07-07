@@ -47,6 +47,8 @@ export function DraggableFab({ actions }: { actions: FabAction[] }) {
 
   const pos = useRef(new Animated.ValueXY({ x: bounds.maxX, y: bounds.maxY })).current;
   const posRef = useRef({ x: bounds.maxX, y: bounds.maxY });
+  // Absolute position captured when a drag starts; move = start + gesture delta.
+  const dragStart = useRef({ x: bounds.maxX, y: bounds.maxY });
 
   const [open, setOpen] = useState(false);
   // Snapshot of the bubble's position when the menu opens, so the items stay
@@ -77,41 +79,48 @@ export function DraggableFab({ actions }: { actions: FabAction[] }) {
     setOpen(true);
   };
 
+  const settle = () => {
+    // Ease back inside the safe-area edges (leaves it wherever dropped otherwise).
+    const cur = posRef.current;
+    const clampedX = clamp(cur.x, bounds.minX, bounds.maxX);
+    const clampedY = clamp(cur.y, bounds.minY, bounds.maxY);
+    if (clampedX !== cur.x || clampedY !== cur.y) {
+      Animated.spring(pos, {
+        toValue: { x: clampedX, y: clampedY },
+        useNativeDriver: false,
+        friction: 7,
+        tension: 70,
+      }).start();
+    }
+  };
+
   const pan = useMemo(() => {
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
+      // Snapshot the absolute position; no Animated offset bookkeeping (that
+      // pattern left a stale offset after the first tap and flung the bubble
+      // off-screen). pos._value stays the true absolute position throughout.
       onPanResponderGrant: () => {
-        pos.setOffset({ x: posRef.current.x, y: posRef.current.y });
-        pos.setValue({ x: 0, y: 0 });
+        dragStart.current = { x: posRef.current.x, y: posRef.current.y };
       },
-      onPanResponderMove: Animated.event([null, { dx: pos.x, dy: pos.y }], {
-        useNativeDriver: false,
-      }),
+      onPanResponderMove: (_e, g) => {
+        pos.setValue({ x: dragStart.current.x + g.dx, y: dragStart.current.y + g.dy });
+      },
       onPanResponderRelease: (_e, g) => {
-        pos.flattenOffset();
         const moved = Math.abs(g.dx) > TAP_SLOP || Math.abs(g.dy) > TAP_SLOP;
         if (!moved) {
+          // Snap back to where the press started, then open the menu.
+          pos.setValue({ x: dragStart.current.x, y: dragStart.current.y });
           openMenu();
           return;
         }
-        // Leave it wherever it was dropped; only ease it back if it went
-        // past the safe-area edges.
-        const cur = posRef.current;
-        const clampedX = clamp(cur.x, bounds.minX, bounds.maxX);
-        const clampedY = clamp(cur.y, bounds.minY, bounds.maxY);
-        if (clampedX !== cur.x || clampedY !== cur.y) {
-          Animated.spring(pos, {
-            toValue: { x: clampedX, y: clampedY },
-            useNativeDriver: false,
-            friction: 7,
-            tension: 70,
-          }).start();
-        }
+        settle();
       },
+      onPanResponderTerminate: () => settle(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pos, width, bounds]);
+  }, [pos, bounds]);
 
   // --- expanded menu ---------------------------------------------------------
   if (open) {
