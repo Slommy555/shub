@@ -95,15 +95,19 @@ export function DraggableFab({ actions }: { actions: FabAction[] }) {
           openMenu();
           return;
         }
+        // Leave it wherever it was dropped; only ease it back if it went
+        // past the safe-area edges.
         const cur = posRef.current;
-        const snapX = cur.x + SIZE / 2 < width / 2 ? bounds.minX : bounds.maxX;
-        const snapY = clamp(cur.y, bounds.minY, bounds.maxY);
-        Animated.spring(pos, {
-          toValue: { x: snapX, y: snapY },
-          useNativeDriver: false,
-          friction: 6,
-          tension: 60,
-        }).start();
+        const clampedX = clamp(cur.x, bounds.minX, bounds.maxX);
+        const clampedY = clamp(cur.y, bounds.minY, bounds.maxY);
+        if (clampedX !== cur.x || clampedY !== cur.y) {
+          Animated.spring(pos, {
+            toValue: { x: clampedX, y: clampedY },
+            useNativeDriver: false,
+            friction: 7,
+            tension: 70,
+          }).start();
+        }
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
