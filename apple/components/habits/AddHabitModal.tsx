@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme, COLOR_DOT_HEX } from '../../lib/theme';
 import { COLOR_KEYS, type ColorKey, type HabitKind } from '../../lib/types';
 import type { NewHabitInput } from '../../hooks/useHabits';
@@ -73,9 +74,33 @@ export function AddHabitModal({
               marginBottom: 14,
             }}
           />
-          <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700', marginBottom: 14 }}>
-            New habit
-          </Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 14,
+            }}
+          >
+            <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>New habit</Text>
+            <Pressable
+              onPress={onClose}
+              hitSlop={10}
+              accessibilityLabel="Close"
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="close" size={20} color={colors.text} />
+            </Pressable>
+          </View>
 
           <ScrollView keyboardShouldPersistTaps="handled">
             <TextInput
