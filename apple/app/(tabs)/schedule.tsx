@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '../../hooks/useAuth';
 import { useTasks } from '../../hooks/useTasks';
 import { useCategories } from '../../hooks/useCategories';
+import { useWorkSchedule } from '../../hooks/useWorkSchedule';
 import { useTheme } from '../../lib/theme';
 import type { Task } from '../../lib/types';
 import { listDate } from '../../lib/taskOrder';
@@ -46,6 +47,7 @@ export default function ScheduleScreen() {
   const { tasks, updateTask, toggleTask, deleteTask, addSubtask, toggleSubtask, deleteSubtask } =
     useTasks(userId);
   const { categories, colorForCategory } = useCategories(userId);
+  const { schedule } = useWorkSchedule(userId);
 
   const [anchor, setAnchor] = useState(todayISO());
   const [editing, setEditing] = useState<Task | null>(null);
@@ -77,12 +79,27 @@ export default function ScheduleScreen() {
     };
   });
 
-  // Expand the visible window to fit anything outside 6am–midnight.
-  const startHour = blocks.length
-    ? Math.min(START_HOUR, Math.floor(Math.min(...blocks.map((b) => b.startMin)) / 60))
+  // Recurring work shift for this weekday (0 = Sun … 6 = Sat), if any.
+  const dow = parseISO(anchor).getDay();
+  const shiftCfg = schedule.workDays.includes(dow) ? schedule.shifts[dow] : undefined;
+  const shift = useMemo(() => {
+    if (!shiftCfg?.start || !shiftCfg?.end) return null;
+    const s = toMin(shiftCfg.start);
+    let e = toMin(shiftCfg.end);
+    if (e <= s) e = 24 * 60; // overnight — clamp the visible portion to end of day
+    return { startMin: s, endMin: e, cfg: shiftCfg };
+  }, [shiftCfg]);
+
+  // Expand the visible window to fit anything (tasks or the shift) outside 6am–midnight.
+  const spanMins = [
+    ...blocks.flatMap((b) => [b.startMin, b.endMin]),
+    ...(shift ? [shift.startMin, shift.endMin] : []),
+  ];
+  const startHour = spanMins.length
+    ? Math.min(START_HOUR, Math.floor(Math.min(...spanMins) / 60))
     : START_HOUR;
-  const endHour = blocks.length
-    ? Math.max(END_HOUR, Math.ceil(Math.max(...blocks.map((b) => b.endMin)) / 60))
+  const endHour = spanMins.length
+    ? Math.max(END_HOUR, Math.ceil(Math.max(...spanMins) / 60))
     : END_HOUR;
   const winStart = startHour * 60;
   const trackH = (endHour - startHour) * HOUR_PX + PAD_Y * 2;
@@ -189,6 +206,39 @@ export default function ScheduleScreen() {
                 />
               ))}
 
+              {/* work-shift background block (behind tasks) */}
+              {shift ? (() => {
+                const t = tint(shift.cfg.color ?? 'gray');
+                return (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: topFor(shift.startMin) + 1,
+                      height: Math.max(24, topFor(shift.endMin) - topFor(shift.startMin) - 2),
+                      backgroundColor: t.bg,
+                      borderRadius: RADIUS.sm,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Text style={{ color: t.text, fontSize: 12, fontWeight: '700' }}>Work</Text>
+                    <Text numberOfLines={1} style={{ color: t.text, fontSize: 10, opacity: 0.85 }}>
+                      {fmt(shift.startMin)} – {fmt(toMin(shift.cfg.end))}
+                    </Text>
+                    {shift.cfg.notes ? (
+                      <Text numberOfLines={1} style={{ color: t.text, fontSize: 10, opacity: 0.7 }}>
+                        {shift.cfg.notes}
+                      </Text>
+                    ) : null}
+                  </View>
+                );
+              })() : null}
+
               {trackW > 0 &&
                 sorted.map((b) => {
                 const col = colOf.get(b.id) ?? 0;
@@ -251,7 +301,7 @@ export default function ScheduleScreen() {
           </View>
         </Card>
 
-        {blocks.length === 0 ? (
+        {blocks.length === 0 && !shift ? (
           <Text
             style={{
               color: colors.textTertiary,
@@ -260,7 +310,8 @@ export default function ScheduleScreen() {
               marginTop: SPACE.md,
             }}
           >
-            No timed tasks this day. Add start & end times to a task to see it here.
+            No timed tasks or work shift this day. Add start & end times to a task, or set your work
+            schedule on the web app.
           </Text>
         ) : null}
 

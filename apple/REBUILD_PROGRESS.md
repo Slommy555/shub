@@ -58,7 +58,7 @@ orphans the data).
 | Design tokens / UI kit | `UI_SKILL.md` | ✅ **Phase 0 done** (theme.tsx + components/ui/kit.tsx) |
 | Tasks: list + filters | `components/todo/TodoView` | ✅ basic (needs UI_SKILL polish) |
 | Tasks: multi-day grouping | `components/todo/TodoView` | ✅ day sections (Overdue/Today/Tomorrow/…) |
-| Tasks: schedule (day timeline) | `components/todo/ScheduleView` | ✅ Schedule tab (no work-shift overlay yet) |
+| Tasks: schedule (day timeline) | `components/todo/ScheduleView` | ✅ Schedule tab + **work-shift overlay** (read-only, synced from PWA) |
 | Tasks: time-block editing | form | ✅ start/end time in task form → persists + shows on Schedule |
 | Tasks: weekly/monthly views | `components/todo/{Weekly,Monthly}View` | ❌ still TODO |
 | Tasks: recurrence | `lib/recurrence.ts` | ❌ Phase 1 |
@@ -111,6 +111,23 @@ orphans the data).
   now persists scheduled_date/start_time/end_time so tasks land on the timeline.
 - tsc clean. Still TODO in Phase 1: weekly + monthly views, recurrence,
   CategoryManager, and the work-shift overlay on the Schedule timeline.
+
+### Sessions 4–6 (2026-07-05) — login + Schedule crash fixes (were unlogged)
+- Switched login to **email + password** like the PWA (`components/LoginScreen.tsx`).
+- Fixed two Schedule crashes: render crash (measure track width via `onLayout`
+  instead of `%`-based layout) and a realtime crash (unique channel name per hook
+  instance — same fix pattern now used across `useTasks`/`useCategories`).
+
+### Session 7 (2026-07-06) — Phase 1: work-shift overlay
+- New read-only hook `hooks/useWorkSchedule.tsx`: loads
+  `user_preferences.work_schedule` (jsonb `{workDays, shifts, sleepHours}`,
+  migration 023) and keeps it live via a realtime subscription. Defensive
+  `normalize()` mirrors the web `useWorkScheduleSync` so a bad row can't crash.
+  Editing stays on the PWA (WorkShiftDialog); the phone only overlays.
+- Schedule tab now renders the day's recurring **work shift** as a full-width
+  background block (behind task columns), colored by the shift's `color` via
+  `tint()`, with time range + notes. The visible window and empty-state text
+  account for the shift too. tsc clean.
 
 _Next session: finish Phase 1 (weekly/monthly views + recurrence + CategoryManager),
 then Phase 2 (Habits streaks). Build from `components/ui/kit.tsx`._
