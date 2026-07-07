@@ -97,7 +97,7 @@ export default function HabitsScreen() {
           )}
           ListEmptyComponent={
             <EmptyState
-              icon="🔁"
+              icon="repeat-outline"
               title="No habits yet — start building your routine"
               actionLabel="Add a habit"
               onAction={() => setAdding(true)}

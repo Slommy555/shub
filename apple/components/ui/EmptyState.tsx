@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../lib/theme';
 
 export function EmptyState({
@@ -7,7 +8,8 @@ export function EmptyState({
   actionLabel,
   onAction,
 }: {
-  icon: string;
+  /** Ionicons glyph name (no emojis). Omit for a text-only empty state. */
+  icon?: keyof typeof Ionicons.glyphMap;
   title: string;
   actionLabel?: string;
   onAction?: () => void;
@@ -15,7 +17,9 @@ export function EmptyState({
   const { colors } = useTheme();
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 64, paddingHorizontal: 24 }}>
-      <Text style={{ fontSize: 44, marginBottom: 12 }}>{icon}</Text>
+      {icon ? (
+        <Ionicons name={icon} size={48} color={colors.textTertiary} style={{ marginBottom: 14 }} />
+      ) : null}
       <Text
         style={{
           color: colors.muted,

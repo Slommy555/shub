@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../lib/theme';
@@ -18,7 +19,9 @@ const ITEM = 44; // action bubbles
 const GAP = 60; // spacing between action bubbles
 const MARGIN = 16;
 const TAB_BAR = 56;
-const TAP_SLOP = 6;
+const TAP_SLOP = 6; // release movement under this = a tap (open menu), not a drag
+
+const FILL = { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 };
 
 export interface FabAction {
   icon: keyof typeof Ionicons.glyphMap;
@@ -27,10 +30,11 @@ export interface FabAction {
 }
 
 /**
- * A small circular bubble that floats in a corner, can be dragged anywhere on
- * screen (Android chat-head style, snapping to the nearest edge on release), and
- * on tap expands into a little speed-dial menu of `actions`. Built on the
- * built-in Animated/PanResponder — no gesture-handler provider needed.
+ * A small circular bubble that floats on a screen edge and can be dragged
+ * around (Android chat-head style). On release it always snaps to the nearest
+ * left/right edge, clamped inside the safe area — so it can never rest in the
+ * middle or off-screen. A tap expands a speed-dial menu of `actions` over a
+ * blurred backdrop. Built on Animated/PanResponder — no gesture provider.
  */
 export function DraggableFab({ actions }: { actions: FabAction[] }) {
   const { colors } = useTheme();
@@ -47,12 +51,9 @@ export function DraggableFab({ actions }: { actions: FabAction[] }) {
 
   const pos = useRef(new Animated.ValueXY({ x: bounds.maxX, y: bounds.maxY })).current;
   const posRef = useRef({ x: bounds.maxX, y: bounds.maxY });
-  // Absolute position captured when a drag starts; move = start + gesture delta.
   const dragStart = useRef({ x: bounds.maxX, y: bounds.maxY });
 
-  const [open, setOpen] = useState(false);
-  // Snapshot of the bubble's position when the menu opens, so the items stay
-  // put even though `pos` keeps tracking the (now-hidden) draggable bubble.
+  const [rendered, setRendered] = useState(false); // overlay mounted (incl. fade-out)
   const [anchor, setAnchor] = useState({ x: bounds.maxX, y: bounds.maxY });
   const menuAnim = useRef(new Animated.Value(0)).current;
 
@@ -63,198 +64,199 @@ export function DraggableFab({ actions }: { actions: FabAction[] }) {
     return () => pos.removeListener(id);
   }, [pos]);
 
-  useEffect(() => {
+  const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+  // Nearest left/right edge, vertically clamped into the safe area. This is the
+  // single guarantee that the bubble is always at a valid on-screen position.
+  const snapTarget = (cur: { x: number; y: number }) => ({
+    x: cur.x + SIZE / 2 < width / 2 ? bounds.minX : bounds.maxX,
+    y: clamp(cur.y, bounds.minY, bounds.maxY),
+  });
+
+  const snapTo = (target: { x: number; y: number }) => {
+    posRef.current = target;
+    Animated.spring(pos, {
+      toValue: target,
+      useNativeDriver: false,
+      friction: 7,
+      tension: 80,
+    }).start();
+  };
+
+  const openMenu = (at: { x: number; y: number }) => {
+    setAnchor(at);
+    setRendered(true);
     Animated.timing(menuAnim, {
-      toValue: open ? 1 : 0,
-      duration: 160,
+      toValue: 1,
+      duration: 200,
       easing: Easing.out(Easing.quad),
       useNativeDriver: true,
     }).start();
-  }, [open, menuAnim]);
-
-  const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
-
-  const openMenu = () => {
-    setAnchor({ x: posRef.current.x, y: posRef.current.y });
-    setOpen(true);
   };
 
-  const settle = () => {
-    // Ease back inside the safe-area edges (leaves it wherever dropped otherwise).
-    const cur = posRef.current;
-    const clampedX = clamp(cur.x, bounds.minX, bounds.maxX);
-    const clampedY = clamp(cur.y, bounds.minY, bounds.maxY);
-    if (clampedX !== cur.x || clampedY !== cur.y) {
-      Animated.spring(pos, {
-        toValue: { x: clampedX, y: clampedY },
-        useNativeDriver: false,
-        friction: 7,
-        tension: 70,
-      }).start();
-    }
-  };
-
-  const pan = useMemo(() => {
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
-      // Snapshot the absolute position; no Animated offset bookkeeping (that
-      // pattern left a stale offset after the first tap and flung the bubble
-      // off-screen). pos._value stays the true absolute position throughout.
-      onPanResponderGrant: () => {
-        dragStart.current = { x: posRef.current.x, y: posRef.current.y };
-      },
-      onPanResponderMove: (_e, g) => {
-        pos.setValue({ x: dragStart.current.x + g.dx, y: dragStart.current.y + g.dy });
-      },
-      onPanResponderRelease: (_e, g) => {
-        const moved = Math.abs(g.dx) > TAP_SLOP || Math.abs(g.dy) > TAP_SLOP;
-        if (!moved) {
-          // Snap back to where the press started, then open the menu.
-          pos.setValue({ x: dragStart.current.x, y: dragStart.current.y });
-          openMenu();
-          return;
-        }
-        settle();
-      },
-      onPanResponderTerminate: () => settle(),
+  const closeMenu = () => {
+    Animated.timing(menuAnim, {
+      toValue: 0,
+      duration: 200,
+      easing: Easing.in(Easing.quad),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setRendered(false);
     });
+  };
+
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
+        onPanResponderGrant: () => {
+          dragStart.current = { x: posRef.current.x, y: posRef.current.y };
+        },
+        onPanResponderMove: (_e, g) => {
+          pos.setValue({ x: dragStart.current.x + g.dx, y: dragStart.current.y + g.dy });
+        },
+        onPanResponderRelease: (_e, g) => {
+          const moved = Math.abs(g.dx) > TAP_SLOP || Math.abs(g.dy) > TAP_SLOP;
+          const target = snapTarget(posRef.current);
+          snapTo(target);
+          if (!moved) openMenu(target);
+        },
+        onPanResponderTerminate: () => snapTo(snapTarget(posRef.current)),
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pos, bounds]);
+    [pos, width, bounds]
+  );
 
-  // --- expanded menu ---------------------------------------------------------
-  if (open) {
-    const expandUp = anchor.y + SIZE / 2 > height / 2;
-    const dir = expandUp ? -1 : 1;
-    const labelsLeft = anchor.x + SIZE / 2 > width / 2;
-    const itemLeft = anchor.x + SIZE / 2 - ITEM / 2;
+  // --- menu geometry (relative to the snapped anchor) ------------------------
+  const expandUp = anchor.y + SIZE / 2 > height / 2;
+  const dir = expandUp ? -1 : 1;
+  const labelsLeft = anchor.x + SIZE / 2 > width / 2;
+  const itemLeft = anchor.x + SIZE / 2 - ITEM / 2;
 
-    const close = () => setOpen(false);
-    const run = (fn: () => void) => {
-      setOpen(false);
-      fn();
-    };
+  const runAction = (fn: () => void) => {
+    closeMenu();
+    fn();
+  };
 
-    return (
-      <View style={{ ...StyleSheetAbsolute, zIndex: 200 }} pointerEvents="box-none">
-        {/* backdrop */}
-        <Pressable
-          onPress={close}
-          style={{ ...StyleSheetAbsolute, backgroundColor: 'rgba(0,0,0,0.35)' }}
-        />
+  const bubbleShadow = {
+    shadowColor: colors.accent,
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  } as const;
 
-        {actions.map((a, i) => {
-          const centerY = anchor.y + SIZE / 2 + dir * (i + 1) * GAP;
-          const translateY = menuAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [dir * 12, 0],
-          });
-          return (
-            <Animated.View
-              key={a.label}
-              style={{ opacity: menuAnim, transform: [{ translateY }] }}
-              pointerEvents="box-none"
-            >
-              {/* label pill */}
-              <View
-                style={{
-                  position: 'absolute',
-                  top: centerY - 14,
-                  ...(labelsLeft
-                    ? { right: width - (itemLeft - 10) }
-                    : { left: itemLeft + ITEM + 10 }),
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  borderWidth: 1,
-                  borderRadius: RADIUS.full,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                }}
-              >
-                <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>{a.label}</Text>
-              </View>
-              {/* action bubble */}
-              <Pressable
-                onPress={() => run(a.onPress)}
-                style={{
-                  position: 'absolute',
-                  top: centerY - ITEM / 2,
-                  left: itemLeft,
-                  width: ITEM,
-                  height: ITEM,
-                  borderRadius: RADIUS.full,
-                  backgroundColor: colors.surfaceAlt,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Ionicons name={a.icon} size={20} color={colors.accent} />
-              </Pressable>
-            </Animated.View>
-          );
-        })}
-
-        {/* main bubble (now a close button) */}
-        <Pressable
-          onPress={close}
-          style={{
-            position: 'absolute',
-            left: anchor.x,
-            top: anchor.y,
-            width: SIZE,
-            height: SIZE,
-            borderRadius: RADIUS.full,
-            backgroundColor: colors.accent,
-            alignItems: 'center',
-            justifyContent: 'center',
-            shadowColor: colors.accent,
-            shadowOpacity: 0.3,
-            shadowRadius: 14,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 8,
-          }}
-        >
-          <Ionicons name="close" size={22} color={colors.accentText} />
-        </Pressable>
-      </View>
-    );
-  }
-
-  // --- collapsed draggable bubble --------------------------------------------
   return (
-    <Animated.View
-      {...pan.panHandlers}
-      accessibilityRole="button"
-      accessibilityLabel="Actions"
-      style={{
-        position: 'absolute',
-        left: pos.x,
-        top: pos.y,
-        width: SIZE,
-        height: SIZE,
-        borderRadius: RADIUS.full,
-        backgroundColor: colors.accent,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: colors.accent,
-        shadowOpacity: 0.3,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 8,
-        zIndex: 100,
-      }}
-    >
-      <Ionicons name="add" size={22} color={colors.accentText} />
-    </Animated.View>
+    <>
+      {/* draggable bubble (sits under the overlay while the menu is open) */}
+      <Animated.View
+        {...pan.panHandlers}
+        accessibilityRole="button"
+        accessibilityLabel="Actions"
+        style={{
+          position: 'absolute',
+          left: pos.x,
+          top: pos.y,
+          width: SIZE,
+          height: SIZE,
+          borderRadius: RADIUS.full,
+          backgroundColor: colors.accent,
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 100,
+          ...bubbleShadow,
+        }}
+      >
+        <Ionicons name="add" size={22} color={colors.accentText} />
+      </Animated.View>
+
+      {rendered ? (
+        <View style={{ ...FILL, zIndex: 200 }} pointerEvents="box-none">
+          {/* blurred dark backdrop — fades in/out with the menu */}
+          <Animated.View style={{ ...FILL, opacity: menuAnim }}>
+            <BlurView intensity={24} tint="dark" style={FILL} />
+            <View style={{ ...FILL, backgroundColor: 'rgba(22,22,31,0.7)' }} />
+            <Pressable style={FILL} onPress={closeMenu} accessibilityLabel="Close menu" />
+          </Animated.View>
+
+          {/* action items */}
+          {actions.map((a, i) => {
+            const centerY = anchor.y + SIZE / 2 + dir * (i + 1) * GAP;
+            const translateY = menuAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [dir * 12, 0],
+            });
+            return (
+              <Animated.View
+                key={a.label}
+                pointerEvents="box-none"
+                style={{ opacity: menuAnim, transform: [{ translateY }] }}
+              >
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: centerY - 14,
+                    ...(labelsLeft
+                      ? { right: width - (itemLeft - 10) }
+                      : { left: itemLeft + ITEM + 10 }),
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    borderRadius: RADIUS.full,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>
+                    {a.label}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => runAction(a.onPress)}
+                  style={{
+                    position: 'absolute',
+                    top: centerY - ITEM / 2,
+                    left: itemLeft,
+                    width: ITEM,
+                    height: ITEM,
+                    borderRadius: RADIUS.full,
+                    backgroundColor: colors.surfaceAlt,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name={a.icon} size={20} color={colors.accent} />
+                </Pressable>
+              </Animated.View>
+            );
+          })}
+
+          {/* main bubble (now a close button), at the snapped anchor */}
+          <Animated.View
+            style={{
+              position: 'absolute',
+              left: anchor.x,
+              top: anchor.y,
+              width: SIZE,
+              height: SIZE,
+              borderRadius: RADIUS.full,
+              backgroundColor: colors.accent,
+              opacity: menuAnim,
+              ...bubbleShadow,
+            }}
+          >
+            <Pressable
+              onPress={closeMenu}
+              style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Ionicons name="close" size={22} color={colors.accentText} />
+            </Pressable>
+          </Animated.View>
+        </View>
+      ) : null}
+    </>
   );
 }
-
-const StyleSheetAbsolute = {
-  position: 'absolute' as const,
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-};

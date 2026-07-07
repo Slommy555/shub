@@ -155,7 +155,7 @@ export default function TasksScreen() {
           )}
           ListEmptyComponent={
             <EmptyState
-              icon="🗒️"
+              icon="checkbox-outline"
               title={
                 isFiltered ? 'No tasks match your filters.' : 'No tasks yet — add your first one'
               }
