@@ -1,9 +1,19 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../lib/theme';
+import { ChromeProvider, useChrome } from '../../lib/chrome';
 
 export default function TabsLayout() {
+  return (
+    <ChromeProvider>
+      <TabsInner />
+    </ChromeProvider>
+  );
+}
+
+function TabsInner() {
   const { colors } = useTheme();
+  const { tabBarHidden } = useChrome();
   return (
     <Tabs
       screenOptions={{
@@ -14,6 +24,7 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
+          display: tabBarHidden ? 'none' : 'flex',
         },
       }}
     >

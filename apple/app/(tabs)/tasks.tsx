@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Pressable, RefreshControl, SectionList, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, SectionList, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '../../hooks/useAuth';
 import { useTasks } from '../../hooks/useTasks';
 import { useCategories } from '../../hooks/useCategories';
 import { useTheme } from '../../lib/theme';
+import { useChrome } from '../../lib/chrome';
 import type { Task } from '../../lib/types';
 import { buildDaySections } from '../../lib/taskOrder';
 import { TaskCard } from '../../components/tasks/TaskCard';
@@ -41,6 +42,7 @@ export default function TasksScreen() {
     deleteSubtask,
   } = useTasks(userId);
   const { categories, colorForCategory } = useCategories(userId);
+  const { tabBarHidden, toggleTabBar } = useChrome();
 
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
@@ -164,7 +166,22 @@ export default function TasksScreen() {
         />
       )}
 
-      <DraggableFab onPress={() => setAdding(true)} />
+      <DraggableFab
+        actions={[
+          { icon: 'add', label: 'Add task', onPress: () => setAdding(true) },
+          {
+            icon: 'mic-outline',
+            label: 'Voice',
+            onPress: () =>
+              Alert.alert('Voice', 'Voice capture is coming soon on the phone.'),
+          },
+          {
+            icon: tabBarHidden ? 'chevron-up' : 'chevron-down',
+            label: tabBarHidden ? 'Show menu bar' : 'Hide menu bar',
+            onPress: toggleTabBar,
+          },
+        ]}
+      />
 
       <AddTaskModal
         visible={adding}
