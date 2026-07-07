@@ -93,5 +93,102 @@ export function useCategories(userId: string | null) {
     [categories]
   );
 
-  return { categories, loading, colorForCategory };
+  const addCategory = useCallback(
+    async (name: string, color: ColorKey) => {
+      if (!userId) return;
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const id = uuid();
+      const position = categories.length;
+      const row: CategoryRecord = {
+        id,
+        user_id: userId,
+        name: trimmed,
+        color,
+        position,
+        created_at: new Date().toISOString(),
+      };
+      setCategories((prev) => [...prev, row].sort(byPosition));
+      const { error } = await supabase
+        .from('categories')
+        .insert({ id, user_id: userId, name: trimmed, color, position });
+      if (error) console.error('addCategory failed:', error.message);
+    },
+    [userId, categories.length]
+  );
+
+  const updateCategory = useCallback(
+    async (id: string, patch: { name?: string; color?: ColorKey }) => {
+      const current = categories.find((c) => c.id === id);
+      if (!current) return;
+      const nextName = patch.name?.trim();
+
+      setCategories((prev) =>
+        prev
+          .map((c) =>
+            c.id === id
+              ? {
+                  ...c,
+                  ...(nextName ? { name: nextName } : {}),
+                  ...(patch.color ? { color: patch.color } : {}),
+                }
+              : c
+          )
+          .sort(byPosition)
+      );
+
+      const dbPatch: { name?: string; color?: ColorKey } = {};
+      if (nextName && nextName !== current.name) dbPatch.name = nextName;
+      if (patch.color) dbPatch.color = patch.color;
+      if (Object.keys(dbPatch).length === 0) return;
+
+      const { error } = await supabase.from('categories').update(dbPatch).eq('id', id);
+      if (error) {
+        console.error('updateCategory failed:', error.message);
+        return;
+      }
+      // Rename: rewrite any tasks pointing at the old name.
+      if (dbPatch.name && userId) {
+        const { error: tErr } = await supabase
+          .from('tasks')
+          .update({ category: dbPatch.name })
+          .eq('user_id', userId)
+          .eq('category', current.name);
+        if (tErr) console.error('rename task reassignment failed:', tErr.message);
+      }
+    },
+    [categories, userId]
+  );
+
+  const deleteCategory = useCallback(
+    async (id: string) => {
+      const current = categories.find((c) => c.id === id);
+      if (!current) return;
+      // Keep at least one category around, and reassign this one's tasks to it.
+      const fallback = categories.find((c) => c.id !== id);
+      if (!fallback || !userId) return;
+
+      setCategories((prev) => prev.filter((c) => c.id !== id));
+
+      const { error: tErr } = await supabase
+        .from('tasks')
+        .update({ category: fallback.name })
+        .eq('user_id', userId)
+        .eq('category', current.name);
+      if (tErr) console.error('delete reassignment failed:', tErr.message);
+
+      const { error } = await supabase.from('categories').delete().eq('id', id);
+      if (error) console.error('deleteCategory failed:', error.message);
+    },
+    [categories, userId]
+  );
+
+  return {
+    categories,
+    loading,
+    colorForCategory,
+    addCategory,
+    updateCategory,
+    deleteCategory,
+  };
 }

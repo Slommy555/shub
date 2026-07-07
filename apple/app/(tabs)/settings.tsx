@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '../../hooks/useAuth';
 import { useTheme } from '../../lib/theme';
 import { ThemeEditor } from '../../components/settings/ThemeEditor';
+import { CategoryManager } from '../../components/settings/CategoryManager';
 import { Button, ScreenTitle, SectionHeader, Card, SPACE } from '../../components/ui/kit';
 
 export default function SettingsScreen() {
@@ -18,6 +19,8 @@ export default function SettingsScreen() {
         <ScreenTitle title="Settings" />
 
         <ThemeEditor />
+
+        <CategoryManager />
 
         <View>
           <SectionHeader label="Account" />

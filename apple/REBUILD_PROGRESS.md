@@ -62,7 +62,7 @@ orphans the data).
 | Tasks: time-block editing | form | ✅ start/end time in task form → persists + shows on Schedule |
 | Tasks: weekly/monthly views | `components/todo/{Weekly,Monthly}View` | ❌ still TODO |
 | Tasks: recurrence | `lib/recurrence.ts` | ❌ Phase 1 |
-| Categories management | `components/CategoryManager` | ❌ Phase 1 (hook exists) |
+| Categories management | `components/CategoryManager` | ✅ CategoryManager in Settings (add/rename/recolor/delete, cascades to tasks) |
 | Habits / Focus | `components/focus/*` | ✅ basic (needs streaks + polish) |
 | Budget | `components/budget/*`, `hooks/budget/*` | ❌ Phase 3 |
 | Workout | `components/workout/*`, `hooks/workout/*` | ❌ Phase 4 |
@@ -129,5 +129,15 @@ orphans the data).
   `tint()`, with time range + notes. The visible window and empty-state text
   account for the shift too. tsc clean.
 
-_Next session: finish Phase 1 (weekly/monthly views + recurrence + CategoryManager),
-then Phase 2 (Habits streaks). Build from `components/ui/kit.tsx`._
+### Session 8 (2026-07-06) — Phase 1: CategoryManager
+- Added write ops to `hooks/useCategories.ts` (`addCategory`/`updateCategory`/
+  `deleteCategory`) mirroring the web semantics: **rename cascades** to every
+  task using the old name; **delete reassigns** its tasks to a fallback category
+  and always keeps ≥1 category.
+- New `components/settings/CategoryManager.tsx` (mounted in the Settings tab):
+  per-row color dot + inline name edit + delete (with confirm Alert), a color
+  picker (9 swatches from `COLOR_DOT_HEX`/`COLOR_KEYS`), and an add row. Built
+  from `components/ui/kit`. tsc clean.
+
+_Next session: finish Phase 1 (weekly/monthly views + recurrence), then Phase 2
+(Habits streaks). Build from `components/ui/kit.tsx`._
