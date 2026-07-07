@@ -36,8 +36,13 @@ orphans the data).
   `EXPO_PUBLIC_DEV_*` env (see `components/LoginScreen.tsx`). Data is RLS-scoped
   to the signed-in user, shared with the web app (same Supabase project
   `cntmsrztqgejgavrsdfp`).
-- Expo SDK **54** (pinned to the iPhone's Expo Go). Don't bump without checking
-  Expo Go support.
+- Expo SDK **57** (React 19.2.3 / RN 0.86.0), matching the latest App Store
+  Expo Go (client 57.0.2). Expo Go bundles **only the newest SDK**, so the app's
+  SDK must track it — verify at expo.dev/go + `api.expo.dev/v2/versions/latest`
+  before/when Expo Go updates, then `npm i expo@~<v>` + `npx expo install --fix`.
+  (Was on 54 until 2026-07-07; Expo Go dropped 54 so we moved 54→57.) New arch is
+  the default in 57 (`newArchEnabled` removed from app.json schema). The
+  datetimepicker config plugin was removed from app.json (no-op in Expo Go).
 - LLM (Claude) calls must go through the `anthropic-proxy` Supabase Edge Function
   (server-side key). See root memory `llm-and-usda-direct-browser`.
 - Web-only tech that needs native replacements when porting:
