@@ -1,50 +1,67 @@
-# Session Spec — Repo Reorg (web/) + New Expo iOS App (apple/)
+# Session Spec — Budget Tab Rebuild (web/)
 
-> Supersedes the previous PROMPT.md (Schedule mobile fix, Budget delete/edit, Telegram brief — complete).
-> Reorganize the existing React + Vite + Supabase web app into a `web/` subfolder and create a
-> new React Native + Expo iOS app in an `apple/` subfolder. Both share the same Supabase backend.
-> iOS app starts with just Tasks and Habits. **Do not break the existing web app at any point.**
+> Supersedes the previous PROMPT.md (repo reorg + Expo scaffold — complete).
+> Rebuild the Budget tab from scratch in the web app. The existing tab is a blank
+> placeholder — build on top of it. Do not touch any other tab or feature.
+> Follow UI_SKILL.md for all visual decisions.
 
-## PART 1 — REPO REORGANIZATION
-Move the Vite app into `web/`: src/, public/, index.html, vite.config.ts, tailwind.config.js,
-postcss.config.js, tsconfig.json, tsconfig.node.json, .env.local, package.json, package-lock.json,
-.env.example. Delete node_modules/ and dist/ (reinstall/rebuild inside web/).
-Stay at root: supabase/, .git/, .gitignore, README.md, PROMPT.md, PROGRESS.md, CLAUDE.md, .vercel/.
-Update .gitignore for both apps. Add root vercel.json:
-`{ "buildCommand": "cd web && npm install && npm run build", "outputDirectory": "web/dist",
-"installCommand": "cd web && npm install", "framework": "vite" }`
-Then `cd web && npm install && npm run build` — confirm it passes. Fix any broken paths.
-Fallback: if Vercel breaks, set Root Directory = web in dashboard.
+## SUPABASE SCHEMA — migration 030_budget_rebuild.sql
+- **budget_periods**: id uuid pk, user_id uuid → auth.users, type text (weekly|monthly),
+  label text, start_date date, end_date date, income numeric default 0, created_at.
+  UNIQUE (user_id, type, start_date).
+- **budget_groups**: id uuid pk, user_id uuid → auth.users, name text, color text,
+  position integer, created_at. (Shared between weekly + monthly.)
+- **budget_allocations**: id uuid pk, user_id uuid → auth.users, period_id uuid →
+  budget_periods on delete cascade, group_id uuid → budget_groups on delete cascade,
+  budgeted numeric default 0, spent numeric default 0. UNIQUE (period_id, group_id).
+- RLS on all three; users read/write only their own rows. Realtime enabled.
 
-## PART 2 — EXPO SCAFFOLD (apple/)
-`npx create-expo-app apple --template blank-typescript`. Deps: expo-router, expo-constants,
-expo-linking, expo-status-bar, @supabase/supabase-js, expo-secure-store, expo-haptics,
-expo-notifications, @react-native-async-storage/async-storage, react-native-url-polyfill,
-nativewind, tailwindcss(dev). NativeWind config (babel plugin, tailwind content globs).
-lib/supabase.ts uses SecureStore adapter + EXPO_PUBLIC_ env. apple/.env.local mirrors web keys.
-Auth: app/_layout.tsx (session check + onAuthStateChange), components/LoginScreen.tsx (magic link
-via signInWithOtp). Nav: app/(tabs)/_layout.tsx bottom tabs Tasks + Habits. Theme: lib/theme.ts +
-useTheme() reading user_preferences (realtime), AsyncStorage cache, matching web palette.
+## TAB STRUCTURE
+Two sub-tabs at top: [ Weekly ] [ Monthly ]. Same layout/logic; only period type +
+date range differ. Default Weekly on first visit. Remember last sub-tab in localStorage.
 
-## PART 3 — TASKS  (reuse existing tasks table, no schema change)
-hooks/useTasks.ts (fetch/filter/realtime; add/toggle/delete/update task + subtasks).
-tasks.tsx (FlatList, filter pills All/Active/Done/High, search, FAB, pull-refresh, empty state).
-components/tasks/: TaskCard, AddTaskModal, EditTaskModal, SubtaskList.
+## WEEKLY / MONTHLY SUB-TAB
+- Period nav: ‹ | label | › (weekly = "Jun 29 – Jul 5" Mon–Sun; monthly = "July 2026").
+  Auto-create a budget_periods row (income 0) when navigating to a period with none.
+- Income entry: "Income this week/month", large currency input, placeholder "$0.00",
+  saves to budget_periods.income on blur/Enter, subtle "Saved" confirmation.
+- Summary strip: Income | Spent | Remaining (text-2xl/700, muted labels). Spent = sum of
+  allocations.spent. Remaining = income − spent, green if ≥0 else red. Recalcs instantly.
+- Expense groups: card per group — color dot + name, "$spent / $budgeted" right-aligned
+  (spent red if over), progress bar (accent fill, danger if over, capped 100% visually).
+  Tap card → inline edit panel (budgeted + spent inputs, save on blur). Auto-create an
+  allocation (0/0) when first tapped.
+- Add group: inline form at bottom — name input + 8 preset color swatches
+  (#e05c5c #f0a04b #f5e642 #4caf82 #5c9eff #b8a9f5 #f572b8 #8b8aa8) + Add.
+- Reorder: long-press → drag → save position on release.
+- Delete: swipe left → red Delete → confirm "Delete [name]? This will remove it from all
+  periods." → cascade deletes allocations.
+- Groups are SHARED across weekly + monthly; only allocations are per-period.
 
-## PART 4 — HABITS  (reuse existing habits table, check real name, no schema change)
-hooks/useHabits.ts (habits + today completions, realtime; add/delete/toggle/update).
-habits.tsx (cards, date + "N of M complete", progress bar, add btn, pull-refresh, empty state).
-components/habits/: HabitCard, AddHabitModal.
+## MOBILE (<640px)
+Full-width nav/inputs/cards; summary = 3 equal centered columns; inline panel stacks;
+inputs ≥48px height, large font.
 
-## PART 5 — POLISH
-Loading skeletons (animated opacity pulse), empty states, pull-to-refresh (RefreshControl),
-haptics (light on task toggle, medium on habit complete), push registration (request perms, save
-Expo push token to user_preferences.expo_push_token — new migration).
+## EMPTY STATE
+No groups: centered "No expense groups yet" (text-tertiary) + subtitle "Tap the button
+below to add your first group". No emoji/illustration. Add button stays visible.
 
-## MIGRATION
-`ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS expo_push_token text;` → npx supabase db push.
+## REAL-TIME SYNC
+Optimistic UI (local first, background write). Summary recalcs client-side instantly.
+Subscribe to realtime on budget_periods + budget_allocations.
 
-## FINAL
-cd web && npm run build (confirm). git add . && commit "Reorganize into web/ and apple/, scaffold
-Expo iOS app with tasks and habits" && push. Output SETUP CHECKLIST (copy env keys, Expo Go, expo
-start, verify Vercel).
+## FILE STRUCTURE (web/src)
+components/budget/: BudgetTab, BudgetPeriodView, IncomeInput, SummaryStrip, GroupCard,
+AddGroupForm. hooks/budget/: useBudgetPeriod, useBudgetGroups, useBudgetAllocations,
+useBudgetSummary. types/budget.ts.
+
+## MIGRATIONS
+After creating file: `npx supabase db push` (if duplicate key: `migration list`, skip applied).
+
+## AUTO DEPLOY
+When complete and `npm run build` passes: git add . && commit "Budget tab rebuild —
+weekly/monthly with income and expense groups" && push. Never push a failing build.
+
+Note: UI_SKILL.md's `--color-*` tokens are not defined in the web app (it uses Tailwind
+grays). They are injected scoped to a `.budget-scope` wrapper so the budget tab follows
+UI_SKILL exactly without affecting any other tab.
