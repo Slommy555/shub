@@ -205,3 +205,45 @@ html[data-theme-custom] [class~='dark:border-gray-700'],
 html[data-theme-custom] [class~='dark:border-gray-800'] {
   border-color: var(--c-border) !important;
 }
+
+/* ---------------------------------------------------------------------------
+   Budget tab design tokens (UI_SKILL.md). Scoped to `.budget-scope` so the
+   rebuilt Budget tab follows the dark/lavender design system exactly WITHOUT
+   affecting any other tab (which use the standard gray Tailwind palette). Dark
+   values are the default; light-mode values apply when <html> lacks `.dark`.
+--------------------------------------------------------------------------- */
+.budget-scope {
+  --color-bg-base: #16161f;
+  --color-bg-elevated: #1e1e2e;
+  --color-bg-surface: #252538;
+  --color-bg-overlay: #2d2d45;
+  --color-accent: #b8a9f5;
+  --color-accent-muted: #7c6fb0;
+  --color-accent-subtle: #2a2545;
+  --color-text-primary: #f0eeff;
+  --color-text-secondary: #8b8aa8;
+  --color-text-tertiary: #56556a;
+  --color-border: #2e2e45;
+  --color-border-strong: #3d3d5c;
+  --color-success: #4caf82;
+  --color-warning: #f0a04b;
+  --color-danger: #e05c5c;
+  --color-info: #5c9eff;
+}
+html:not(.dark) .budget-scope {
+  --color-bg-base: #f4f3ff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-surface: #eeecff;
+  --color-bg-overlay: #e8e6ff;
+  --color-accent: #7c6fb0;
+  --color-accent-muted: #b8a9f5;
+  --color-accent-subtle: #ede9ff;
+  --color-text-primary: #1a1830;
+  --color-text-secondary: #6b6888;
+  --color-text-tertiary: #a09db8;
+  --color-border: #e0ddf5;
+  --color-border-strong: #c8c4e8;
+}
+.budget-scope input::placeholder {
+  color: var(--color-text-tertiary);
+}

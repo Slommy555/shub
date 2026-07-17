@@ -2,12 +2,12 @@
 
 ## Budget Rebuild
 - [x] Supabase schema + migration
-- [ ] Weekly budget screen
-- [ ] Monthly budget screen
-- [ ] Income logging (weekly + monthly)
-- [ ] Expense groups (create, edit, delete, reorder)
-- [ ] Budget amounts per group
-- [ ] Remaining / spent calculations
-- [ ] Summary strip (income, spent, remaining)
-- [ ] Mobile layout verified
-- [ ] Build passing + git pushed
+- [x] Weekly budget screen
+- [x] Monthly budget screen
+- [x] Income logging (weekly + monthly)
+- [x] Expense groups (create, edit, delete, reorder)
+- [x] Budget amounts per group
+- [x] Remaining / spent calculations
+- [x] Summary strip (income, spent, remaining)
+- [x] Mobile layout verified
+- [x] Build passing + git pushed
