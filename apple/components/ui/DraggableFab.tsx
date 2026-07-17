@@ -83,6 +83,11 @@ export function DraggableFab({ actions }: { actions: FabAction[] }) {
     }).start();
   };
 
+  // Tap behaviour, kept in a ref so the (memoized) pan responder always runs
+  // the latest actions after a tab switch: one action → run it directly;
+  // several → open the speed-dial menu.
+  const onTapRef = useRef<(at: { x: number; y: number }) => void>(() => {});
+
   const openMenu = (at: { x: number; y: number }) => {
     setAnchor(at);
     setRendered(true);
@@ -120,13 +125,18 @@ export function DraggableFab({ actions }: { actions: FabAction[] }) {
           const moved = Math.abs(g.dx) > TAP_SLOP || Math.abs(g.dy) > TAP_SLOP;
           const target = snapTarget(posRef.current);
           snapTo(target);
-          if (!moved) openMenu(target);
+          if (!moved) onTapRef.current(target);
         },
         onPanResponderTerminate: () => snapTo(snapTarget(posRef.current)),
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [pos, width, bounds]
   );
+
+  onTapRef.current = (at) => {
+    if (actions.length <= 1) actions[0]?.onPress();
+    else openMenu(at);
+  };
 
   // --- menu geometry (relative to the snapped anchor) ------------------------
   const expandUp = anchor.y + SIZE / 2 > height / 2;

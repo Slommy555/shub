@@ -1,21 +1,19 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, RefreshControl, SectionList, Text, TextInput, View } from 'react-native';
+import { Pressable, RefreshControl, SectionList, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '../../hooks/useAuth';
 import { useTasks } from '../../hooks/useTasks';
 import { useCategories } from '../../hooks/useCategories';
 import { useTheme } from '../../lib/theme';
-import { useChrome } from '../../lib/chrome';
+import { useSheets } from '../../lib/sheets';
 import type { Task } from '../../lib/types';
 import { buildDaySections } from '../../lib/taskOrder';
 import { TaskCard } from '../../components/tasks/TaskCard';
-import { AddTaskModal } from '../../components/tasks/AddTaskModal';
 import { EditTaskModal } from '../../components/tasks/EditTaskModal';
 import { SkeletonList } from '../../components/ui/Skeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { PillRow, SectionHeader, SPACE } from '../../components/ui/kit';
-import { DraggableFab } from '../../components/ui/DraggableFab';
 
 type Filter = 'all' | 'active' | 'done' | 'high';
 const FILTERS: { key: Filter; label: string }[] = [
@@ -33,7 +31,6 @@ export default function TasksScreen() {
     tasks,
     loading,
     refetch,
-    addTask,
     updateTask,
     toggleTask,
     deleteTask,
@@ -42,12 +39,11 @@ export default function TasksScreen() {
     deleteSubtask,
   } = useTasks(userId);
   const { categories, colorForCategory } = useCategories(userId);
-  const { tabBarHidden, toggleTabBar } = useChrome();
+  const { openSheet } = useSheets();
 
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
 
   const sections = useMemo(() => {
@@ -160,44 +156,12 @@ export default function TasksScreen() {
                 isFiltered ? 'No tasks match your filters.' : 'No tasks yet — add your first one'
               }
               actionLabel={isFiltered ? undefined : 'Add a task'}
-              onAction={() => setAdding(true)}
+              onAction={() => openSheet('task')}
             />
           }
         />
       )}
 
-      <DraggableFab
-        actions={[
-          { icon: 'add', label: 'Add task', onPress: () => setAdding(true) },
-          {
-            icon: 'mic-outline',
-            label: 'Voice',
-            onPress: () =>
-              Alert.alert('Voice', 'Voice capture is coming soon on the phone.'),
-          },
-          {
-            icon: tabBarHidden ? 'chevron-up' : 'chevron-down',
-            label: tabBarHidden ? 'Show menu bar' : 'Hide menu bar',
-            onPress: toggleTabBar,
-          },
-        ]}
-      />
-
-      <AddTaskModal
-        visible={adding}
-        categories={categories}
-        onAdd={(v) =>
-          addTask({
-            text: v.text,
-            category: v.category,
-            priority: v.priority,
-            due_date: v.due_date,
-            start_time: v.start_time,
-            end_time: v.end_time,
-          })
-        }
-        onClose={() => setAdding(false)}
-      />
       <EditTaskModal
         visible={!!editing}
         task={editing}

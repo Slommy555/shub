@@ -4,6 +4,7 @@ import { useAuthContext } from '../../hooks/useAuth';
 import { useTheme } from '../../lib/theme';
 import { ThemeEditor } from '../../components/settings/ThemeEditor';
 import { CategoryManager } from '../../components/settings/CategoryManager';
+import { SleepWorkHours } from '../../components/settings/SleepWorkHours';
 import { Button, ScreenTitle, SectionHeader, Card, SPACE } from '../../components/ui/kit';
 
 export default function SettingsScreen() {

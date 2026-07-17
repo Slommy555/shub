@@ -1,17 +1,8 @@
 import { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme, COLOR_DOT_HEX } from '../../lib/theme';
+import { DragSheet } from '../ui/DragSheet';
 import { PRIORITIES, PRIORITY_LABEL, type CategoryRecord, type Priority } from '../../lib/types';
 import { formatDue, parseISO, toISODate, todayISO } from '../../lib/dates';
 
@@ -102,59 +93,7 @@ export function TaskFormSheet({
   const tomorrow = toISODate(new Date(Date.now() + 86400000));
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }} onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View
-          style={{
-            backgroundColor: colors.bg,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            paddingHorizontal: 20,
-            paddingTop: 12,
-            paddingBottom: 32,
-            maxHeight: '85%',
-          }}
-        >
-          <View
-            style={{
-              alignSelf: 'center',
-              width: 40,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: colors.border,
-              marginBottom: 14,
-            }}
-          />
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 14,
-            }}
-          >
-            <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>{title}</Text>
-            <Pressable
-              onPress={onClose}
-              hitSlop={10}
-              accessibilityLabel="Close"
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 17,
-                backgroundColor: colors.surface,
-                borderWidth: 1,
-                borderColor: colors.border,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Ionicons name="close" size={20} color={colors.text} />
-            </Pressable>
-          </View>
-
-          <ScrollView keyboardShouldPersistTaps="handled">
+    <DragSheet visible={visible} onClose={onClose} title={title}>
             <TextInput
               value={text}
               onChangeText={setText}
@@ -316,10 +255,7 @@ export function TaskFormSheet({
                 {submitLabel}
               </Text>
             </Pressable>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+    </DragSheet>
   );
 }
 
