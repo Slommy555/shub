@@ -1,7 +1,7 @@
 # Session Progress
 
 ## Budget Rebuild
-- [ ] Supabase schema + migration
+- [x] Supabase schema + migration
 - [ ] Weekly budget screen
 - [ ] Monthly budget screen
 - [ ] Income logging (weekly + monthly)
