@@ -90,6 +90,7 @@ function MoneyField({
 interface GroupCardProps {
   group: BudgetGroup;
   amount: number; // already scaled into the current timeframe
+  amountLabel: string;
   expanded: boolean;
   swipeX: number; // 0 or negative (swiped left)
   dragging: boolean;
@@ -105,6 +106,7 @@ interface GroupCardProps {
 export default function GroupCard({
   group,
   amount,
+  amountLabel,
   expanded,
   swipeX,
   dragging,
@@ -161,7 +163,7 @@ export default function GroupCard({
               className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
               style={{ background: 'var(--color-bg-surface)', color: 'var(--color-text-tertiary)' }}
             >
-              this period
+              balance
             </span>
           )}
           <span
@@ -216,7 +218,7 @@ export default function GroupCard({
                 <span className="block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                   {group.persistent
                     ? 'Same every day/week/month, converts across views'
-                    : 'One-time amount, only in this period'}
+                    : "A balance for the month, spread across the time left"}
                 </span>
               </span>
               <span
@@ -230,11 +232,7 @@ export default function GroupCard({
               </span>
             </button>
 
-            <MoneyField
-              label={group.persistent ? 'Amount' : 'Amount (this period)'}
-              value={amount}
-              onSave={onChangeAmount}
-            />
+            <MoneyField label={amountLabel} value={amount} onSave={onChangeAmount} />
           </div>
         )}
       </div>

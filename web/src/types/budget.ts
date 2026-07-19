@@ -140,6 +140,27 @@ export function shiftCursor(type: Timeframe, cursor: Date, dir: -1 | 1): Date {
   return new Date(cursor.getFullYear(), cursor.getMonth() + dir, 1);
 }
 
+/** Whole days left in `from`'s month, counting `from` itself (min 1). */
+export function daysRemainingInMonth(from: Date): number {
+  return Math.max(1, lastOfMonth(from).getDate() - from.getDate() + 1);
+}
+
+/** Whole weeks left in `from`'s month (ceil of remaining days ÷ 7, min 1). */
+export function weeksRemainingInMonth(from: Date): number {
+  return Math.max(1, Math.ceil(daysRemainingInMonth(from) / 7));
+}
+
+/**
+ * Divisor that spreads a non-persistent monthly balance into the selected
+ * timeframe, counting remaining time in `from`'s month from `from` onward.
+ * Monthly shows the full balance (÷1).
+ */
+export function spreadDivisor(type: Timeframe, from: Date): number {
+  if (type === 'daily') return daysRemainingInMonth(from);
+  if (type === 'weekly') return weeksRemainingInMonth(from);
+  return 1;
+}
+
 // --- money ------------------------------------------------------------------
 /** "$1,240" or "$1,240.50" — cents shown only when the value has a fraction. */
 export function formatMoney(n: number): string {
