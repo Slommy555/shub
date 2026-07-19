@@ -1,5 +1,10 @@
 import { formatMoney } from '../../types/budget';
-import type { BudgetSummary } from '../../hooks/budget/useBudgetSummary';
+
+export interface BudgetSummary {
+  income: number;
+  allocated: number;
+  remaining: number;
+}
 
 /** Income · Allocated · Remaining — three equal columns, numbers centered. */
 export default function SummaryStrip({ summary }: { summary: BudgetSummary }) {

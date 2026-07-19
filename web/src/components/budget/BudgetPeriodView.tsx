@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  daysRemainingInMonth,
   fromView,
   periodForCursor,
   shiftCursor,
-  spreadDivisor,
   toView,
-  weeksRemainingInMonth,
   TIMEFRAME_FACTOR,
   type BudgetGroup,
   type Timeframe,
@@ -14,16 +11,18 @@ import {
 import { useBudgetPeriod } from '../../hooks/budget/useBudgetPeriod';
 import { useBudgetGroups } from '../../hooks/budget/useBudgetGroups';
 import { useBudgetAllocations } from '../../hooks/budget/useBudgetAllocations';
-import { useBudgetSummary } from '../../hooks/budget/useBudgetSummary';
 import { useWeeklyIncomeSum } from '../../hooks/budget/useWeeklyIncomeSum';
+import { useMonthlyGroupSums } from '../../hooks/budget/useMonthlyGroupSums';
 import IncomeInput from './IncomeInput';
 import SummaryStrip from './SummaryStrip';
 import GroupCard from './GroupCard';
 import AddGroupForm from './AddGroupForm';
+import SplitCalculator from './SplitCalculator';
 
 /** One navigable budget period: income, summary, and editable expense groups. */
 export default function BudgetPeriodView({ userId, type }: { userId: string; type: Timeframe }) {
   const factor = TIMEFRAME_FACTOR[type];
+  const isMonthly = type === 'monthly';
 
   const [cursor, setCursor] = useState<Date>(() => new Date());
   const bounds = useMemo(() => periodForCursor(type, cursor), [type, cursor]);
@@ -32,45 +31,46 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
   const groupsApi = useBudgetGroups(userId);
   const allocApi = useBudgetAllocations(userId, period?.id ?? null);
 
-  // Non-persistent items are a balance for the CURRENT month, spread across the
-  // days/weeks left from today. Their monthly total lives on today's monthly
-  // period; in the weekly/daily tabs we load that "anchor" month alongside.
-  const today = useMemo(() => new Date(), []);
-  const divisor = useMemo(() => spreadDivisor(type, today), [type, today]);
-  const daysLeft = useMemo(() => daysRemainingInMonth(today), [today]);
-  const weeksLeft = useMemo(() => weeksRemainingInMonth(today), [today]);
+  // Monthly rolls up its weeks: income + each non-persistent group are summed
+  // across the weekly periods that start in the month (read-only on monthly).
+  const weeklyIncomeSum = useWeeklyIncomeSum(userId, bounds.start_date, bounds.end_date, isMonthly);
+  const monthlyGroupSums = useMonthlyGroupSums(userId, bounds.start_date, bounds.end_date, isMonthly);
+  const income = isMonthly ? weeklyIncomeSum : period?.income ?? 0;
 
-  const anchorUserId = type === 'monthly' ? null : userId; // monthly tab already IS the month
-  const anchorBounds = useMemo(() => periodForCursor('monthly', today), [today]);
-  const anchor = useBudgetPeriod(anchorUserId, 'monthly', anchorBounds);
-  const anchorAllocApi = useBudgetAllocations(anchorUserId, anchor.period?.id ?? null);
-
-  // Where a non-persistent group's monthly total is read/written from.
-  const monthlyAllocs = type === 'monthly' ? allocApi.allocations : anchorAllocApi.allocations;
-  const setMonthlyAmount = type === 'monthly' ? allocApi.setAmount : anchorAllocApi.setAmount;
-
-  // Monthly income rolls up the weekly incomes for weeks starting in the month.
-  const weeklyIncomeSum = useWeeklyIncomeSum(userId, bounds.start_date, bounds.end_date, type === 'monthly');
-  const income = type === 'monthly' ? weeklyIncomeSum : period?.income ?? 0;
-
-  const summary = useBudgetSummary(income, groupsApi.groups, monthlyAllocs, factor, divisor);
+  /** A non-persistent group's value: monthly sums its weeks, else the period's flat amount. */
+  const nonPersistentValue = (g: BudgetGroup) =>
+    isMonthly ? monthlyGroupSums[g.id] ?? 0 : allocApi.allocations[g.id]?.amount ?? 0;
 
   /** The amount shown for a group in this view. */
   const displayedAmount = (g: BudgetGroup) =>
-    g.persistent ? toView(g.amount, type) : (monthlyAllocs[g.id]?.amount ?? 0) / divisor;
+    g.persistent ? toView(g.amount, type) : nonPersistentValue(g);
 
-  /** Save an edited amount back to the right place for the group's mode. */
+  const allocated = useMemo(
+    () =>
+      groupsApi.groups.reduce((sum, g) => {
+        const value = g.persistent
+          ? (Number(g.amount) || 0) * factor
+          : isMonthly
+            ? monthlyGroupSums[g.id] ?? 0
+            : allocApi.allocations[g.id]?.amount ?? 0;
+        return sum + value;
+      }, 0),
+    [groupsApi.groups, monthlyGroupSums, allocApi.allocations, factor, isMonthly]
+  );
+  const summary = { income, allocated, remaining: income - allocated };
+
+  /** Save an edited amount. Persistent → shared value; non-persistent → this
+   *  period's flat amount. Monthly non-persistent is read-only (summed weeks). */
   const saveAmount = (g: BudgetGroup, entered: number) => {
     if (g.persistent) void groupsApi.updateGroup(g.id, { amount: fromView(entered, type) });
-    else void setMonthlyAmount(g.id, entered * divisor); // back-calc the monthly total
+    else if (!isMonthly) void allocApi.setAmount(g.id, entered);
   };
 
-  /** Label under the amount field, spelling out how a non-persistent value maps. */
+  /** Label under the amount field. */
   const amountLabelFor = (g: BudgetGroup) => {
     if (g.persistent) return 'Amount';
-    if (type === 'monthly') return "This month's balance";
-    if (type === 'weekly') return `Per week (${weeksLeft} left this month)`;
-    return `Per day (${daysLeft} left this month)`;
+    if (isMonthly) return 'Sum of this month’s weeks';
+    return 'Amount (this period)';
   };
 
   /** Flip a group's persistence, carrying its current shown value across so it
@@ -81,8 +81,8 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
       // → persistent: store the shown value as the shared weekly-base amount.
       void groupsApi.updateGroup(g.id, { persistent: true, amount: fromView(shown, type) });
     } else {
-      // → non-persistent: set the monthly total so this view shows the same value.
-      void setMonthlyAmount(g.id, shown * divisor);
+      // → non-persistent: seed this period's flat amount (not on monthly — read-only).
+      if (!isMonthly) void allocApi.setAmount(g.id, shown);
       void groupsApi.updateGroup(g.id, { persistent: false });
     }
   };
@@ -259,7 +259,7 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
         </button>
       </div>
 
-      {type === 'monthly' ? (
+      {isMonthly ? (
         <IncomeInput label="Income" value={income} onSave={() => {}} readOnly hint="sum of weekly incomes" />
       ) : (
         <IncomeInput label="Income" value={period?.income ?? 0} onSave={setIncome} />
@@ -284,6 +284,7 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
               group={g}
               amount={displayedAmount(g)}
               amountLabel={amountLabelFor(g)}
+              amountReadOnly={isMonthly && !g.persistent}
               expanded={expandedId === g.id}
               swipeX={swipe && swipe.id === g.id ? swipe.x : 0}
               dragging={dragId === g.id}
@@ -303,6 +304,7 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
       )}
 
       <AddGroupForm onAdd={groupsApi.addGroup} />
+      <SplitCalculator />
     </div>
   );
 }

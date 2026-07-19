@@ -91,6 +91,7 @@ interface GroupCardProps {
   group: BudgetGroup;
   amount: number; // already scaled into the current timeframe
   amountLabel: string;
+  amountReadOnly?: boolean;
   expanded: boolean;
   swipeX: number; // 0 or negative (swiped left)
   dragging: boolean;
@@ -107,6 +108,7 @@ export default function GroupCard({
   group,
   amount,
   amountLabel,
+  amountReadOnly = false,
   expanded,
   swipeX,
   dragging,
@@ -218,7 +220,7 @@ export default function GroupCard({
                 <span className="block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                   {group.persistent
                     ? 'Same every day/week/month, converts across views'
-                    : "A balance for the month, spread across the time left"}
+                    : 'Entered per period; the month adds up its weeks'}
                 </span>
               </span>
               <span
@@ -232,7 +234,26 @@ export default function GroupCard({
               </span>
             </button>
 
-            <MoneyField label={amountLabel} value={amount} onSave={onChangeAmount} />
+            {amountReadOnly ? (
+              <label className="block">
+                <span className="mb-1.5 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  {amountLabel}
+                </span>
+                <div
+                  className="flex w-full items-center rounded-xl border px-3 text-base tabular-nums"
+                  style={{
+                    height: '48px',
+                    background: 'var(--color-bg-surface)',
+                    borderColor: 'var(--color-border)',
+                    color: 'var(--color-text-primary)',
+                  }}
+                >
+                  {formatMoney(amount)}
+                </div>
+              </label>
+            ) : (
+              <MoneyField label={amountLabel} value={amount} onSave={onChangeAmount} />
+            )}
           </div>
         )}
       </div>
