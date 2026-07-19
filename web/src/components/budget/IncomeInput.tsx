@@ -10,10 +10,14 @@ export default function IncomeInput({
   label,
   value,
   onSave,
+  readOnly = false,
+  hint,
 }: {
   label: string;
   value: number;
   onSave: (n: number) => void;
+  readOnly?: boolean;
+  hint?: string;
 }) {
   const [focused, setFocused] = useState(false);
   const [text, setText] = useState('');
@@ -25,6 +29,34 @@ export default function IncomeInput({
       if (savedTimer.current) window.clearTimeout(savedTimer.current);
     };
   }, []);
+
+  if (readOnly) {
+    return (
+      <div className="mb-5">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+            {label}
+          </span>
+          {hint && (
+            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              {hint}
+            </span>
+          )}
+        </div>
+        <div
+          className="flex w-full items-center rounded-xl border px-4 text-2xl font-bold tabular-nums"
+          style={{
+            height: '56px',
+            background: 'var(--color-bg-surface)',
+            borderColor: 'var(--color-border)',
+            color: 'var(--color-text-primary)',
+          }}
+        >
+          {formatMoney(value)}
+        </div>
+      </div>
+    );
+  }
 
   const commit = () => {
     setFocused(false);

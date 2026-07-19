@@ -15,6 +15,7 @@ import { useBudgetPeriod } from '../../hooks/budget/useBudgetPeriod';
 import { useBudgetGroups } from '../../hooks/budget/useBudgetGroups';
 import { useBudgetAllocations } from '../../hooks/budget/useBudgetAllocations';
 import { useBudgetSummary } from '../../hooks/budget/useBudgetSummary';
+import { useWeeklyIncomeSum } from '../../hooks/budget/useWeeklyIncomeSum';
 import IncomeInput from './IncomeInput';
 import SummaryStrip from './SummaryStrip';
 import GroupCard from './GroupCard';
@@ -48,7 +49,11 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
   const monthlyAllocs = type === 'monthly' ? allocApi.allocations : anchorAllocApi.allocations;
   const setMonthlyAmount = type === 'monthly' ? allocApi.setAmount : anchorAllocApi.setAmount;
 
-  const summary = useBudgetSummary(period?.income ?? 0, groupsApi.groups, monthlyAllocs, factor, divisor);
+  // Monthly income rolls up the weekly incomes for weeks starting in the month.
+  const weeklyIncomeSum = useWeeklyIncomeSum(userId, bounds.start_date, bounds.end_date, type === 'monthly');
+  const income = type === 'monthly' ? weeklyIncomeSum : period?.income ?? 0;
+
+  const summary = useBudgetSummary(income, groupsApi.groups, monthlyAllocs, factor, divisor);
 
   /** The amount shown for a group in this view. */
   const displayedAmount = (g: BudgetGroup) =>
@@ -254,7 +259,11 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
         </button>
       </div>
 
-      <IncomeInput label="Income" value={period?.income ?? 0} onSave={setIncome} />
+      {type === 'monthly' ? (
+        <IncomeInput label="Income" value={income} onSave={() => {}} readOnly hint="sum of weekly incomes" />
+      ) : (
+        <IncomeInput label="Income" value={period?.income ?? 0} onSave={setIncome} />
+      )}
       <SummaryStrip summary={summary} />
 
       {/* Expense groups */}
