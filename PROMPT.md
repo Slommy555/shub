@@ -1,67 +1,58 @@
-# Session Spec — Budget Tab Rebuild (web/)
+# Session Spec — Budget Tab: Period Isolation, Multiple Budgets, Savings Pool
 
-> Supersedes the previous PROMPT.md (repo reorg + Expo scaffold — complete).
-> Rebuild the Budget tab from scratch in the web app. The existing tab is a blank
-> placeholder — build on top of it. Do not touch any other tab or feature.
-> Follow UI_SKILL.md for all visual decisions.
+> Supersedes the previous PROMPT.md (Budget tab rebuild — complete).
+> Three fixes/additions to the Budget tab only. Do not touch any other part of
+> the app. Follow UI_SKILL.md for all visual decisions.
 
-## SUPABASE SCHEMA — migration 030_budget_rebuild.sql
-- **budget_periods**: id uuid pk, user_id uuid → auth.users, type text (weekly|monthly),
-  label text, start_date date, end_date date, income numeric default 0, created_at.
-  UNIQUE (user_id, type, start_date).
-- **budget_groups**: id uuid pk, user_id uuid → auth.users, name text, color text,
-  position integer, created_at. (Shared between weekly + monthly.)
-- **budget_allocations**: id uuid pk, user_id uuid → auth.users, period_id uuid →
-  budget_periods on delete cascade, group_id uuid → budget_groups on delete cascade,
-  budgeted numeric default 0, spent numeric default 0. UNIQUE (period_id, group_id).
-- RLS on all three; users read/write only their own rows. Realtime enabled.
+## FIX 1 — PERIOD ISOLATION
+Group amounts set in one period (July) must NOT persist into other periods
+(August). Each period is completely independent. When navigating to a period
+with no allocations yet, show all groups at $0 / empty inputs — never copy or
+inherit amounts from any other period.
 
-## TAB STRUCTURE
-Two sub-tabs at top: [ Weekly ] [ Monthly ]. Same layout/logic; only period type +
-date range differ. Default Weekly on first visit. Remember last sub-tab in localStorage.
+Root cause: groups default to `persistent: true`, storing `amount` on the group
+row (shared across all periods + scaled across timeframes). Fix: amounts live
+per-period in `budget_allocations`; each period starts blank.
 
-## WEEKLY / MONTHLY SUB-TAB
-- Period nav: ‹ | label | › (weekly = "Jun 29 – Jul 5" Mon–Sun; monthly = "July 2026").
-  Auto-create a budget_periods row (income 0) when navigating to a period with none.
-- Income entry: "Income this week/month", large currency input, placeholder "$0.00",
-  saves to budget_periods.income on blur/Enter, subtle "Saved" confirmation.
-- Summary strip: Income | Spent | Remaining (text-2xl/700, muted labels). Spent = sum of
-  allocations.spent. Remaining = income − spent, green if ≥0 else red. Recalcs instantly.
-- Expense groups: card per group — color dot + name, "$spent / $budgeted" right-aligned
-  (spent red if over), progress bar (accent fill, danger if over, capped 100% visually).
-  Tap card → inline edit panel (budgeted + spent inputs, save on blur). Auto-create an
-  allocation (0/0) when first tapped.
-- Add group: inline form at bottom — name input + 8 preset color swatches
-  (#e05c5c #f0a04b #f5e642 #4caf82 #5c9eff #b8a9f5 #f572b8 #8b8aa8) + Add.
-- Reorder: long-press → drag → save position on release.
-- Delete: swipe left → red Delete → confirm "Delete [name]? This will remove it from all
-  periods." → cascade deletes allocations.
-- Groups are SHARED across weekly + monthly; only allocations are per-period.
+Verify: set $500 Food in July → August shows $0 → back to July still $500.
 
-## MOBILE (<640px)
-Full-width nav/inputs/cards; summary = 3 equal centered columns; inline panel stacks;
-inputs ≥48px height, large font.
+## FIX 2 — MULTIPLE BUDGETS
+Independent budgets ("Personal", "Business", "Trip"). Each has its own income,
+groups, amounts, and savings pool. Nothing shared.
 
-## EMPTY STATE
-No groups: centered "No expense groups yet" (text-tertiary) + subtitle "Tap the button
-below to add your first group". No emoji/illustration. Add button stays visible.
+Schema (new migration): `budgets` table (id, user_id, name, position,
+created_at). Add `budget_id` to `budget_periods` + `budget_groups` (cascade).
+RLS filters by budget ownership. Data migration: create "My Budget" default and
+assign existing rows to it.
 
-## REAL-TIME SYNC
-Optimistic UI (local first, background write). Summary recalcs client-side instantly.
-Subscribe to realtime on budget_periods + budget_allocations.
+UI: budget switcher at top of Budget tab above sub-tabs — `[←] [ Name ▾ ] [→]`.
+Picker sheet: list to switch, "New budget", long-press to rename/delete, cannot
+delete last, delete warns + cascades. Active budget_id in localStorage; all
+queries filter by it.
 
-## FILE STRUCTURE (web/src)
-components/budget/: BudgetTab, BudgetPeriodView, IncomeInput, SummaryStrip, GroupCard,
-AddGroupForm. hooks/budget/: useBudgetPeriod, useBudgetGroups, useBudgetAllocations,
-useBudgetSummary. types/budget.ts.
+## FIX 3 — SAVINGS POOL
+A pool of set-aside money; earmark dollar amounts toward specific groups. An
+earmark offsets that group's cost from income.
+
+Schema: `budget_savings_pools` (id, user_id, budget_id, period_id, total_saved,
+UNIQUE(budget_id, period_id)). `budget_savings_earmarks` (id, user_id, pool_id,
+group_id, amount, UNIQUE(pool_id, group_id)). RLS on both.
+
+UI: collapsible "Savings Pool" section below groups. Total-set-aside input + one
+earmark input per group. Cannot earmark more than total (cap + warning).
+Allocated = Σ earmarks; Remaining = total − allocated. Save on blur.
+
+Summary strip (4 values, 2×2 on mobile): Income | From Savings | Needs Funding |
+Remaining. Needs Funding = Σ max(0, group.amount − earmark). Remaining = income −
+needs funding (green ≥0 / red <0). From Savings = Σ earmarks.
+
+Group card: if earmark > 0 show "🏦 $X from savings" (piggy-bank/vault icon,
+--color-success, 12px) + "$Y from income".
 
 ## MIGRATIONS
-After creating file: `npx supabase db push` (if duplicate key: `migration list`, skip applied).
+After creating file: `npx supabase db push` (duplicate key → `migration list`,
+skip applied).
 
 ## AUTO DEPLOY
-When complete and `npm run build` passes: git add . && commit "Budget tab rebuild —
-weekly/monthly with income and expense groups" && push. Never push a failing build.
-
-Note: UI_SKILL.md's `--color-*` tokens are not defined in the web app (it uses Tailwind
-grays). They are injected scoped to a `.budget-scope` wrapper so the budget tab follows
-UI_SKILL exactly without affecting any other tab.
+When complete + `npm run build` passes: git add . && commit "Budget: period
+isolation, multiple budgets, savings pool" && push. Never push a failing build.

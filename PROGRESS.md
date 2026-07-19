@@ -1,13 +1,9 @@
 # Session Progress
 
-## Budget Rebuild
-- [x] Supabase schema + migration
-- [x] Weekly budget screen
-- [x] Monthly budget screen
-- [x] Income logging (weekly + monthly)
-- [x] Expense groups (create, edit, delete, reorder)
-- [x] Budget amounts per group
-- [x] Remaining / spent calculations
-- [x] Summary strip (income, spent, remaining)
-- [x] Mobile layout verified
-- [x] Build passing + git pushed
+## Budget Fixes
+- [ ] Schema migration (budgets table, savings pool, fix period isolation)
+- [ ] Multiple budgets UI (switcher, create, rename, delete)
+- [ ] Period isolation fix (amounts per period, not persisting across months)
+- [ ] Savings pool feature
+- [ ] Summary strip updated for savings pool
+- [ ] Build passing + git pushed
