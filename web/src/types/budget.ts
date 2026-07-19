@@ -88,13 +88,13 @@ function addDays(d: Date, n: number): Date {
   return c;
 }
 
-/** Monday of the week containing d (weeks run Monday–Sunday). */
-function mondayOf(d: Date): Date {
-  const day = d.getDay(); // 0=Sun … 6=Sat
-  const diff = day === 0 ? -6 : 1 - day;
-  const m = addDays(d, diff);
-  m.setHours(0, 0, 0, 0);
-  return m;
+/** Thursday of the week containing d (weeks run Thursday–Wednesday). */
+function thursdayOf(d: Date): Date {
+  const day = d.getDay(); // 0=Sun … 6=Sat; 4=Thu
+  const diff = -((day - 4 + 7) % 7); // step back to the most recent Thursday
+  const t = addDays(d, diff);
+  t.setHours(0, 0, 0, 0);
+  return t;
 }
 
 const firstOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
@@ -120,7 +120,7 @@ export function periodForCursor(type: Timeframe, cursor: Date): PeriodBounds {
     };
   }
   if (type === 'weekly') {
-    const s = mondayOf(cursor);
+    const s = thursdayOf(cursor);
     const e = addDays(s, 6);
     return { start_date: toISODate(s), end_date: toISODate(e), label: `${shortDate(s)} – ${shortDate(e)}` };
   }
