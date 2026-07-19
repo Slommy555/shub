@@ -53,7 +53,7 @@ export default function BudgetTab({ userId }: { userId: string }) {
           ))}
         </div>
 
-        <BudgetPeriodView userId={userId} timeframe={timeframe} />
+        <BudgetPeriodView key={timeframe} userId={userId} type={timeframe} />
       </div>
     </div>
   );

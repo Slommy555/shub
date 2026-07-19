@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { fromView, toView, TIMEFRAME_FACTOR, TIMEFRAME_LABEL, type Timeframe } from '../../types/budget';
+import {
+  fromView,
+  periodForCursor,
+  shiftCursor,
+  toView,
+  TIMEFRAME_FACTOR,
+  type BudgetGroup,
+  type Timeframe,
+} from '../../types/budget';
 import { useBudgetPeriod } from '../../hooks/budget/useBudgetPeriod';
 import { useBudgetGroups } from '../../hooks/budget/useBudgetGroups';
 import { useBudgetAllocations } from '../../hooks/budget/useBudgetAllocations';
@@ -9,14 +17,41 @@ import SummaryStrip from './SummaryStrip';
 import GroupCard from './GroupCard';
 import AddGroupForm from './AddGroupForm';
 
-/** The single persistent budget: income, summary, and editable expense groups. */
-export default function BudgetPeriodView({ userId, timeframe }: { userId: string; timeframe: Timeframe }) {
-  const factor = TIMEFRAME_FACTOR[timeframe];
+/** One navigable budget period: income, summary, and editable expense groups. */
+export default function BudgetPeriodView({ userId, type }: { userId: string; type: Timeframe }) {
+  const factor = TIMEFRAME_FACTOR[type];
 
-  const { period, setIncome } = useBudgetPeriod(userId);
+  const [cursor, setCursor] = useState<Date>(() => new Date());
+  const bounds = useMemo(() => periodForCursor(type, cursor), [type, cursor]);
+
+  const { period, setIncome } = useBudgetPeriod(userId, type, bounds);
   const groupsApi = useBudgetGroups(userId);
   const allocApi = useBudgetAllocations(userId, period?.id ?? null);
-  const summary = useBudgetSummary(period?.income ?? 0, allocApi.allocations, factor);
+  const summary = useBudgetSummary(period?.income ?? 0, groupsApi.groups, allocApi.allocations, factor);
+
+  /** The amount shown for a group in this view: persistent scales, flat doesn't. */
+  const displayedAmount = (g: BudgetGroup) =>
+    g.persistent ? toView(g.amount, type) : allocApi.allocations[g.id]?.amount ?? 0;
+
+  /** Save an edited amount back to the right place for the group's mode. */
+  const saveAmount = (g: BudgetGroup, entered: number) => {
+    if (g.persistent) void groupsApi.updateGroup(g.id, { amount: fromView(entered, type) });
+    else void allocApi.setAmount(g.id, entered);
+  };
+
+  /** Flip a group's persistence, carrying its current shown value across so it
+   *  doesn't jump to 0 when the storage location changes. */
+  const togglePersistent = (g: BudgetGroup, next: boolean) => {
+    const shown = displayedAmount(g);
+    if (next) {
+      // → persistent: store the shown value as the shared weekly-base amount.
+      void groupsApi.updateGroup(g.id, { persistent: true, amount: fromView(shown, type) });
+    } else {
+      // → non-persistent: seed this period's flat allocation with the shown value.
+      void allocApi.setAmount(g.id, shown);
+      void groupsApi.updateGroup(g.id, { persistent: false });
+    }
+  };
 
   // --- gesture state --------------------------------------------------------
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -161,11 +196,36 @@ export default function BudgetPeriodView({ userId, timeframe }: { userId: string
 
   return (
     <div>
-      <IncomeInput
-        label={`${TIMEFRAME_LABEL[timeframe]} income`}
-        value={toView(period?.income ?? 0, timeframe)}
-        onSave={(n) => setIncome(fromView(n, timeframe))}
-      />
+      {/* Period navigation */}
+      <div className="mb-5 flex items-center justify-between">
+        <button
+          type="button"
+          aria-label="Previous period"
+          onClick={() => setCursor((c) => shiftCursor(type, c, -1))}
+          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <span className="text-[17px] font-semibold tabular-nums" style={{ color: 'var(--color-text-primary)' }}>
+          {bounds.label}
+        </span>
+        <button
+          type="button"
+          aria-label="Next period"
+          onClick={() => setCursor((c) => shiftCursor(type, c, 1))}
+          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+      </div>
+
+      <IncomeInput label="Income" value={period?.income ?? 0} onSave={setIncome} />
       <SummaryStrip summary={summary} />
 
       {/* Expense groups */}
@@ -184,14 +244,15 @@ export default function BudgetPeriodView({ userId, timeframe }: { userId: string
             <GroupCard
               key={g.id}
               group={g}
-              amount={toView(allocApi.allocations[g.id]?.amount ?? 0, timeframe)}
+              amount={displayedAmount(g)}
               expanded={expandedId === g.id}
               swipeX={swipe && swipe.id === g.id ? swipe.x : 0}
               dragging={dragId === g.id}
               onHeaderPointerDown={(e) => onHeaderPointerDown(g.id, e)}
-              onChangeAmount={(n) => allocApi.setAmount(g.id, fromView(n, timeframe))}
+              onChangeAmount={(n) => saveAmount(g, n)}
               onChangeName={(name) => groupsApi.updateGroup(g.id, { name })}
               onChangeColor={(color) => groupsApi.updateGroup(g.id, { color })}
+              onTogglePersistent={(v) => togglePersistent(g, v)}
               onDelete={() => deleteGroup(g.id, g.name)}
               rowRef={(el) => {
                 if (el) rowEls.current.set(g.id, el);

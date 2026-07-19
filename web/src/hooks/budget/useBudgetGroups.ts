@@ -84,31 +84,46 @@ export function useBudgetGroups(userId: string | null) {
         name: trimmed,
         color,
         position,
+        persistent: true,
+        amount: 0,
         created_at: new Date().toISOString(),
       };
       setGroups((prev) => [...prev, row].sort(byPosition));
       const { error } = await supabase
         .from('budget_groups')
-        .insert({ id, user_id: userId, name: trimmed, color, position });
+        .insert({ id, user_id: userId, name: trimmed, color, position, persistent: true, amount: 0 });
       if (error) console.error('addGroup failed:', error.message);
     },
     [userId]
   );
 
-  const updateGroup = useCallback(async (id: string, patch: { name?: string; color?: string }) => {
-    const name = patch.name?.trim();
-    setGroups((prev) =>
-      prev.map((g) =>
-        g.id === id ? { ...g, ...(name ? { name } : {}), ...(patch.color ? { color: patch.color } : {}) } : g
-      )
-    );
-    const dbPatch: { name?: string; color?: string } = {};
-    if (name) dbPatch.name = name;
-    if (patch.color) dbPatch.color = patch.color;
-    if (Object.keys(dbPatch).length === 0) return;
-    const { error } = await supabase.from('budget_groups').update(dbPatch).eq('id', id);
-    if (error) console.error('updateGroup failed:', error.message);
-  }, []);
+  const updateGroup = useCallback(
+    async (id: string, patch: { name?: string; color?: string; persistent?: boolean; amount?: number }) => {
+      const name = patch.name?.trim();
+      setGroups((prev) =>
+        prev.map((g) =>
+          g.id === id
+            ? {
+                ...g,
+                ...(name ? { name } : {}),
+                ...(patch.color ? { color: patch.color } : {}),
+                ...(patch.persistent !== undefined ? { persistent: patch.persistent } : {}),
+                ...(patch.amount !== undefined ? { amount: patch.amount } : {}),
+              }
+            : g
+        )
+      );
+      const dbPatch: { name?: string; color?: string; persistent?: boolean; amount?: number } = {};
+      if (name) dbPatch.name = name;
+      if (patch.color) dbPatch.color = patch.color;
+      if (patch.persistent !== undefined) dbPatch.persistent = patch.persistent;
+      if (patch.amount !== undefined) dbPatch.amount = patch.amount;
+      if (Object.keys(dbPatch).length === 0) return;
+      const { error } = await supabase.from('budget_groups').update(dbPatch).eq('id', id);
+      if (error) console.error('updateGroup failed:', error.message);
+    },
+    []
+  );
 
   const deleteGroup = useCallback(async (id: string) => {
     setGroups((prev) => prev.filter((g) => g.id !== id));

@@ -97,6 +97,7 @@ interface GroupCardProps {
   onChangeAmount: (n: number) => void;
   onChangeName: (name: string) => void;
   onChangeColor: (color: string) => void;
+  onTogglePersistent: (persistent: boolean) => void;
   onDelete: () => void;
   rowRef?: (el: HTMLDivElement | null) => void;
 }
@@ -111,6 +112,7 @@ export default function GroupCard({
   onChangeAmount,
   onChangeName,
   onChangeColor,
+  onTogglePersistent,
   onDelete,
   rowRef,
 }: GroupCardProps) {
@@ -154,6 +156,14 @@ export default function GroupCard({
           >
             {group.name}
           </span>
+          {!group.persistent && (
+            <span
+              className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              style={{ background: 'var(--color-bg-surface)', color: 'var(--color-text-tertiary)' }}
+            >
+              this period
+            </span>
+          )}
           <span
             className="shrink-0 text-sm font-medium tabular-nums"
             style={{ color: 'var(--color-text-primary)' }}
@@ -191,7 +201,40 @@ export default function GroupCard({
               </div>
             </div>
 
-            <MoneyField label="Amount" value={amount} onSave={onChangeAmount} />
+            {/* Persistence toggle */}
+            <button
+              data-no-drag
+              type="button"
+              onClick={() => onTogglePersistent(!group.persistent)}
+              className="flex items-center justify-between rounded-xl border px-3 py-2.5 text-left"
+              style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-border)' }}
+            >
+              <span className="min-w-0 pr-3">
+                <span className="block text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                  Repeats every period
+                </span>
+                <span className="block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  {group.persistent
+                    ? 'Same every day/week/month, converts across views'
+                    : 'One-time amount, only in this period'}
+                </span>
+              </span>
+              <span
+                className="relative h-6 w-10 shrink-0 rounded-full transition-colors"
+                style={{ background: group.persistent ? 'var(--color-accent)' : 'var(--color-border-strong)' }}
+              >
+                <span
+                  className="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform"
+                  style={{ transform: group.persistent ? 'translateX(18px)' : 'translateX(2px)' }}
+                />
+              </span>
+            </button>
+
+            <MoneyField
+              label={group.persistent ? 'Amount' : 'Amount (this period)'}
+              value={amount}
+              onSave={onChangeAmount}
+            />
           </div>
         )}
       </div>

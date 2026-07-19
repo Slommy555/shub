@@ -1,14 +1,7 @@
-// Types + helpers for the Budget tab (a single persistent budget).
+// Types + helpers for the Budget tab.
 
-export type PeriodType = 'weekly' | 'monthly' | 'standalone';
-
-/**
- * The Budget tab is now one persistent budget per user (no weekly/monthly
- * split). Its income lives on a singleton budget_periods row keyed by these
- * fixed bounds so the (user_id, type, start_date) unique index yields one row.
- */
-export const STANDALONE_START = '2000-01-01';
-export const STANDALONE_END = '2999-12-31';
+/** A navigable period type. ('standalone' is a legacy DB value, no longer used.) */
+export type PeriodType = 'daily' | 'weekly' | 'monthly' | 'standalone';
 
 export interface BudgetPeriod {
   id: string;
@@ -27,6 +20,10 @@ export interface BudgetGroup {
   name: string;
   color: string;
   position: number;
+  /** true = repeats every period + scales across timeframes (uses `amount`). */
+  persistent: boolean;
+  /** the shared weekly-base amount, used only when persistent. */
+  amount: number;
   created_at?: string;
 }
 
@@ -111,7 +108,17 @@ export interface PeriodBounds {
 }
 
 /** Derive the period bounds + display label from a cursor date and type. */
-export function periodForCursor(type: PeriodType, cursor: Date): PeriodBounds {
+export function periodForCursor(type: Timeframe, cursor: Date): PeriodBounds {
+  if (type === 'daily') {
+    const s = new Date(cursor);
+    s.setHours(0, 0, 0, 0);
+    const iso = toISODate(s);
+    return {
+      start_date: iso,
+      end_date: iso,
+      label: s.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }),
+    };
+  }
   if (type === 'weekly') {
     const s = mondayOf(cursor);
     const e = addDays(s, 6);
@@ -127,7 +134,8 @@ export function periodForCursor(type: PeriodType, cursor: Date): PeriodBounds {
 }
 
 /** Move the cursor one period earlier (-1) or later (+1). */
-export function shiftCursor(type: PeriodType, cursor: Date, dir: -1 | 1): Date {
+export function shiftCursor(type: Timeframe, cursor: Date, dir: -1 | 1): Date {
+  if (type === 'daily') return addDays(cursor, dir);
   if (type === 'weekly') return addDays(cursor, dir * 7);
   return new Date(cursor.getFullYear(), cursor.getMonth() + dir, 1);
 }
