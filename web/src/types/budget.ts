@@ -1,6 +1,14 @@
-// Types + helpers for the rebuilt Budget tab (weekly + monthly).
+// Types + helpers for the Budget tab (a single persistent budget).
 
-export type PeriodType = 'weekly' | 'monthly';
+export type PeriodType = 'weekly' | 'monthly' | 'standalone';
+
+/**
+ * The Budget tab is now one persistent budget per user (no weekly/monthly
+ * split). Its income lives on a singleton budget_periods row keyed by these
+ * fixed bounds so the (user_id, type, start_date) unique index yields one row.
+ */
+export const STANDALONE_START = '2000-01-01';
+export const STANDALONE_END = '2999-12-31';
 
 export interface BudgetPeriod {
   id: string;

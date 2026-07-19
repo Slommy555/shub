@@ -1,5 +1,41 @@
-import { useState } from 'react';
-import { formatMoney, parseMoney, type BudgetAllocation, type BudgetGroup } from '../../types/budget';
+import { useEffect, useState } from 'react';
+import { formatMoney, parseMoney, PRESET_COLORS, type BudgetAllocation, type BudgetGroup } from '../../types/budget';
+
+/** Text field for renaming a group (saves on blur / Enter, reverts if emptied). */
+function NameField({ value, onSave }: { value: string; onSave: (s: string) => void }) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+
+  const commit = () => {
+    const trimmed = text.trim();
+    if (trimmed && trimmed !== value) onSave(trimmed);
+    else setText(value);
+  };
+
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+        Name
+      </span>
+      <input
+        data-no-drag
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+        className="w-full rounded-xl border px-3 text-base outline-none"
+        style={{
+          height: '48px',
+          background: 'var(--color-bg-surface)',
+          borderColor: 'var(--color-border)',
+          color: 'var(--color-text-primary)',
+        }}
+      />
+    </label>
+  );
+}
 
 /** A single money field used inside the inline edit panel (saves on blur). */
 function MoneyField({
@@ -59,6 +95,8 @@ interface GroupCardProps {
   dragging: boolean;
   onHeaderPointerDown: (e: React.PointerEvent) => void;
   onChangeAmount: (n: number) => void;
+  onChangeName: (name: string) => void;
+  onChangeColor: (color: string) => void;
   onDelete: () => void;
   rowRef?: (el: HTMLDivElement | null) => void;
 }
@@ -71,6 +109,8 @@ export default function GroupCard({
   dragging,
   onHeaderPointerDown,
   onChangeAmount,
+  onChangeName,
+  onChangeColor,
   onDelete,
   rowRef,
 }: GroupCardProps) {
@@ -126,7 +166,33 @@ export default function GroupCard({
 
         {/* Inline edit panel */}
         {expanded && (
-          <div className="border-t px-4 py-4" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex flex-col gap-3 border-t px-4 py-4" style={{ borderColor: 'var(--color-border)' }}>
+            <NameField value={group.name} onSave={onChangeName} />
+
+            <div>
+              <span className="mb-1.5 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                Color
+              </span>
+              <div className="flex flex-wrap gap-2.5" data-no-drag>
+                {PRESET_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    data-no-drag
+                    type="button"
+                    onClick={() => onChangeColor(c)}
+                    aria-label={`Choose color ${c}`}
+                    aria-pressed={group.color === c}
+                    className="h-9 w-9 rounded-full transition-transform active:scale-95"
+                    style={{
+                      background: c,
+                      outline: group.color === c ? '2px solid var(--color-text-primary)' : 'none',
+                      outlineOffset: '2px',
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
             <MoneyField label="Amount" value={amount} onSave={onChangeAmount} />
           </div>
         )}

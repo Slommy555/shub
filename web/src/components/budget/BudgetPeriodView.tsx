@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { periodForCursor, shiftCursor, type PeriodType } from '../../types/budget';
 import { useBudgetPeriod } from '../../hooks/budget/useBudgetPeriod';
 import { useBudgetGroups } from '../../hooks/budget/useBudgetGroups';
 import { useBudgetAllocations } from '../../hooks/budget/useBudgetAllocations';
@@ -9,12 +8,9 @@ import SummaryStrip from './SummaryStrip';
 import GroupCard from './GroupCard';
 import AddGroupForm from './AddGroupForm';
 
-/** Shared layout used by both the Weekly and Monthly sub-tabs. */
-export default function BudgetPeriodView({ userId, type }: { userId: string; type: PeriodType }) {
-  const [cursor, setCursor] = useState<Date>(() => new Date());
-  const bounds = useMemo(() => periodForCursor(type, cursor), [type, cursor]);
-
-  const { period, setIncome } = useBudgetPeriod(userId, type, bounds);
+/** The single persistent budget: income, summary, and editable expense groups. */
+export default function BudgetPeriodView({ userId }: { userId: string }) {
+  const { period, setIncome } = useBudgetPeriod(userId);
   const groupsApi = useBudgetGroups(userId);
   const allocApi = useBudgetAllocations(userId, period?.id ?? null);
   const summary = useBudgetSummary(period?.income ?? 0, allocApi.allocations);
@@ -160,40 +156,9 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
     }
   };
 
-  const incomeLabel = type === 'weekly' ? 'Income this week' : 'Income this month';
-
   return (
     <div>
-      {/* Period navigation */}
-      <div className="mb-5 flex items-center justify-between">
-        <button
-          type="button"
-          aria-label="Previous period"
-          onClick={() => setCursor((c) => shiftCursor(type, c, -1))}
-          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <span className="text-[17px] font-semibold tabular-nums" style={{ color: 'var(--color-text-primary)' }}>
-          {bounds.label}
-        </span>
-        <button
-          type="button"
-          aria-label="Next period"
-          onClick={() => setCursor((c) => shiftCursor(type, c, 1))}
-          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-        </button>
-      </div>
-
-      <IncomeInput label={incomeLabel} value={period?.income ?? 0} onSave={setIncome} />
+      <IncomeInput label="Income" value={period?.income ?? 0} onSave={setIncome} />
       <SummaryStrip summary={summary} />
 
       {/* Expense groups */}
@@ -218,6 +183,8 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
               dragging={dragId === g.id}
               onHeaderPointerDown={(e) => onHeaderPointerDown(g.id, e)}
               onChangeAmount={(n) => allocApi.setAmount(g.id, n)}
+              onChangeName={(name) => groupsApi.updateGroup(g.id, { name })}
+              onChangeColor={(color) => groupsApi.updateGroup(g.id, { color })}
               onDelete={() => deleteGroup(g.id, g.name)}
               rowRef={(el) => {
                 if (el) rowEls.current.set(g.id, el);
