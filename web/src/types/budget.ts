@@ -27,8 +27,7 @@ export interface BudgetAllocation {
   user_id: string;
   period_id: string;
   group_id: string;
-  budgeted: number;
-  spent: number;
+  amount: number;
 }
 
 /** Tap-to-pick swatches for new groups (no full color wheel). */

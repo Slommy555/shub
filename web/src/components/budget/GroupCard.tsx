@@ -58,8 +58,7 @@ interface GroupCardProps {
   swipeX: number; // 0 or negative (swiped left)
   dragging: boolean;
   onHeaderPointerDown: (e: React.PointerEvent) => void;
-  onChangeBudgeted: (n: number) => void;
-  onChangeSpent: (n: number) => void;
+  onChangeAmount: (n: number) => void;
   onDelete: () => void;
   rowRef?: (el: HTMLDivElement | null) => void;
 }
@@ -71,15 +70,11 @@ export default function GroupCard({
   swipeX,
   dragging,
   onHeaderPointerDown,
-  onChangeBudgeted,
-  onChangeSpent,
+  onChangeAmount,
   onDelete,
   rowRef,
 }: GroupCardProps) {
-  const budgeted = allocation?.budgeted ?? 0;
-  const spent = allocation?.spent ?? 0;
-  const overspent = budgeted > 0 && spent > budgeted;
-  const pct = budgeted > 0 ? Math.min(100, (spent / budgeted) * 100) : spent > 0 ? 100 : 0;
+  const amount = allocation?.amount ?? 0;
 
   return (
     <div ref={rowRef} className="relative mb-2 select-none">
@@ -111,7 +106,7 @@ export default function GroupCard({
         {/* Header (gesture surface: tap = expand, long-press = reorder, swipe = delete) */}
         <div
           onPointerDown={onHeaderPointerDown}
-          className="flex items-center gap-3 px-4 pt-4"
+          className="flex items-center gap-3 px-4 py-4"
           style={{ touchAction: 'pan-y', cursor: dragging ? 'grabbing' : 'pointer' }}
         >
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: group.color }} />
@@ -122,36 +117,17 @@ export default function GroupCard({
             {group.name}
           </span>
           <span
-            className="shrink-0 text-sm tabular-nums"
-            style={{ color: overspent ? 'var(--color-danger)' : 'var(--color-text-primary)' }}
+            className="shrink-0 text-sm font-medium tabular-nums"
+            style={{ color: 'var(--color-text-primary)' }}
           >
-            {formatMoney(spent)} / {formatMoney(budgeted)}
+            {formatMoney(amount)}
           </span>
-        </div>
-
-        {/* Progress bar */}
-        <div
-          onPointerDown={onHeaderPointerDown}
-          className="mx-4 mb-4 mt-3 h-1.5 overflow-hidden rounded-full"
-          style={{ background: 'var(--color-bg-surface)', touchAction: 'pan-y' }}
-        >
-          <div
-            className="h-full rounded-full"
-            style={{
-              width: `${pct}%`,
-              background: overspent ? 'var(--color-danger)' : 'var(--color-accent)',
-              transition: 'width 200ms ease',
-            }}
-          />
         </div>
 
         {/* Inline edit panel */}
         {expanded && (
           <div className="border-t px-4 py-4" style={{ borderColor: 'var(--color-border)' }}>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <MoneyField label="Budgeted amount" value={budgeted} onSave={onChangeBudgeted} />
-              <MoneyField label="Spent so far" value={spent} onSave={onChangeSpent} />
-            </div>
+            <MoneyField label="Amount" value={amount} onSave={onChangeAmount} />
           </div>
         )}
       </div>

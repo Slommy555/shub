@@ -217,8 +217,7 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
               swipeX={swipe && swipe.id === g.id ? swipe.x : 0}
               dragging={dragId === g.id}
               onHeaderPointerDown={(e) => onHeaderPointerDown(g.id, e)}
-              onChangeBudgeted={(n) => allocApi.setField(g.id, 'budgeted', n)}
-              onChangeSpent={(n) => allocApi.setField(g.id, 'spent', n)}
+              onChangeAmount={(n) => allocApi.setAmount(g.id, n)}
               onDelete={() => deleteGroup(g.id, g.name)}
               rowRef={(el) => {
                 if (el) rowEls.current.set(g.id, el);

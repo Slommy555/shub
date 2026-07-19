@@ -5,10 +5,10 @@ import type { BudgetAllocation } from '../../types/budget';
 type AllocMap = Record<string, BudgetAllocation>; // keyed by group_id
 
 /**
- * Loads the allocations (budgeted + spent per group) for one period, keyed by
+ * Loads the allocations (a single `amount` per group) for one period, keyed by
  * group_id, and keeps them synced via realtime. Writes are optimistic and go
  * through an upsert on (period_id, group_id) so re-editing the same group just
- * updates its row. Rows are auto-created (0/0) on demand.
+ * updates its row. Rows are auto-created (amount 0) on demand.
  */
 export function useBudgetAllocations(userId: string | null, periodId: string | null) {
   const [allocations, setAllocations] = useState<AllocMap>({});
@@ -74,7 +74,7 @@ export function useBudgetAllocations(userId: string | null, periodId: string | n
     };
   }, [userId, periodId]);
 
-  /** Ensure a 0/0 allocation exists for a group (called when a card is opened). */
+  /** Ensure a 0-amount allocation exists for a group (called when a card is opened). */
   const ensureAllocation = useCallback(
     async (groupId: string) => {
       if (!userId || !periodId || ref.current[groupId]) return;
@@ -83,14 +83,13 @@ export function useBudgetAllocations(userId: string | null, periodId: string | n
         user_id: userId,
         period_id: periodId,
         group_id: groupId,
-        budgeted: 0,
-        spent: 0,
+        amount: 0,
       };
       setAllocations((prev) => (prev[groupId] ? prev : { ...prev, [groupId]: optimistic }));
       const { data, error } = await supabase
         .from('budget_allocations')
         .upsert(
-          { user_id: userId, period_id: periodId, group_id: groupId, budgeted: 0, spent: 0 },
+          { user_id: userId, period_id: periodId, group_id: groupId, amount: 0 },
           { onConflict: 'period_id,group_id' }
         )
         .select()
@@ -104,27 +103,25 @@ export function useBudgetAllocations(userId: string | null, periodId: string | n
     [userId, periodId]
   );
 
-  const setField = useCallback(
-    async (groupId: string, field: 'budgeted' | 'spent', value: number) => {
+  /** Set a group's allocated amount for this period (optimistic upsert). */
+  const setAmount = useCallback(
+    async (groupId: string, value: number) => {
       if (!userId || !periodId) return;
-      const existing = ref.current[groupId];
-      const budgeted = field === 'budgeted' ? value : existing?.budgeted ?? 0;
-      const spent = field === 'spent' ? value : existing?.spent ?? 0;
 
       setAllocations((prev) => {
         const base =
           prev[groupId] ??
-          ({ id: crypto.randomUUID(), user_id: userId, period_id: periodId, group_id: groupId, budgeted: 0, spent: 0 } as BudgetAllocation);
-        return { ...prev, [groupId]: { ...base, budgeted, spent } };
+          ({ id: crypto.randomUUID(), user_id: userId, period_id: periodId, group_id: groupId, amount: 0 } as BudgetAllocation);
+        return { ...prev, [groupId]: { ...base, amount: value } };
       });
 
       const { data, error } = await supabase
         .from('budget_allocations')
-        .upsert({ user_id: userId, period_id: periodId, group_id: groupId, budgeted, spent }, { onConflict: 'period_id,group_id' })
+        .upsert({ user_id: userId, period_id: periodId, group_id: groupId, amount: value }, { onConflict: 'period_id,group_id' })
         .select()
         .single();
       if (error) {
-        console.error('setField failed:', error.message);
+        console.error('setAmount failed:', error.message);
         return;
       }
       if (data) setAllocations((prev) => ({ ...prev, [groupId]: data as BudgetAllocation }));
@@ -132,7 +129,7 @@ export function useBudgetAllocations(userId: string | null, periodId: string | n
     [userId, periodId]
   );
 
-  return { allocations, loading, ensureAllocation, setField };
+  return { allocations, loading, ensureAllocation, setAmount };
 }
 
 export type UseBudgetAllocations = ReturnType<typeof useBudgetAllocations>;

@@ -1,7 +1,7 @@
 import { formatMoney } from '../../types/budget';
 import type { BudgetSummary } from '../../hooks/budget/useBudgetSummary';
 
-/** Income · Spent · Remaining — three equal columns, numbers centered. */
+/** Income · Allocated · Remaining — three equal columns, numbers centered. */
 export default function SummaryStrip({ summary }: { summary: BudgetSummary }) {
   const remainingColor = summary.remaining >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
 
@@ -25,7 +25,7 @@ export default function SummaryStrip({ summary }: { summary: BudgetSummary }) {
       style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
     >
       <Cell label="Income" value={formatMoney(summary.income)} />
-      <Cell label="Spent" value={formatMoney(summary.spent)} />
+      <Cell label="Allocated" value={formatMoney(summary.allocated)} />
       <Cell label="Remaining" value={formatMoney(summary.remaining)} color={remainingColor} />
     </div>
   );
