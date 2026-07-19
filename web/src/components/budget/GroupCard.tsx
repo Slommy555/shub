@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { formatMoney, parseMoney, PRESET_COLORS, type BudgetAllocation, type BudgetGroup } from '../../types/budget';
+import { formatMoney, parseMoney, PRESET_COLORS, type BudgetGroup } from '../../types/budget';
 
 /** Text field for renaming a group (saves on blur / Enter, reverts if emptied). */
 function NameField({ value, onSave }: { value: string; onSave: (s: string) => void }) {
@@ -89,7 +89,7 @@ function MoneyField({
 
 interface GroupCardProps {
   group: BudgetGroup;
-  allocation?: BudgetAllocation;
+  amount: number; // already scaled into the current timeframe
   expanded: boolean;
   swipeX: number; // 0 or negative (swiped left)
   dragging: boolean;
@@ -103,7 +103,7 @@ interface GroupCardProps {
 
 export default function GroupCard({
   group,
-  allocation,
+  amount,
   expanded,
   swipeX,
   dragging,
@@ -114,8 +114,6 @@ export default function GroupCard({
   onDelete,
   rowRef,
 }: GroupCardProps) {
-  const amount = allocation?.amount ?? 0;
-
   return (
     <div ref={rowRef} className="relative mb-2 select-none">
       {/* Delete button behind the card, revealed on swipe-left */}

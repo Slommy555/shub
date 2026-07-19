@@ -38,6 +38,33 @@ export interface BudgetAllocation {
   amount: number;
 }
 
+// --- timeframes -------------------------------------------------------------
+// Daily / Weekly / Monthly are three VIEWS of the same expense, not separate
+// data. Every amount + income is stored once at a weekly base and scaled for
+// display; editing any timeframe converts back to the weekly base. Chain:
+// daily ×7 = weekly, weekly ×4 = monthly (so daily ×28 = monthly).
+export type Timeframe = 'daily' | 'weekly' | 'monthly';
+
+export const TIMEFRAMES: Timeframe[] = ['daily', 'weekly', 'monthly'];
+
+export const TIMEFRAME_FACTOR: Record<Timeframe, number> = {
+  daily: 1 / 7,
+  weekly: 1,
+  monthly: 4,
+};
+
+export const TIMEFRAME_LABEL: Record<Timeframe, string> = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+};
+
+/** Weekly-base canonical value → the amount shown in the selected timeframe. */
+export const toView = (canonical: number, tf: Timeframe): number => canonical * TIMEFRAME_FACTOR[tf];
+
+/** Amount typed in the selected timeframe → weekly-base canonical for storage. */
+export const fromView = (value: number, tf: Timeframe): number => value / TIMEFRAME_FACTOR[tf];
+
 /** Tap-to-pick swatches for new groups (no full color wheel). */
 export const PRESET_COLORS = [
   '#e05c5c',

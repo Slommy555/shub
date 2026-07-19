@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { fromView, toView, TIMEFRAME_FACTOR, TIMEFRAME_LABEL, type Timeframe } from '../../types/budget';
 import { useBudgetPeriod } from '../../hooks/budget/useBudgetPeriod';
 import { useBudgetGroups } from '../../hooks/budget/useBudgetGroups';
 import { useBudgetAllocations } from '../../hooks/budget/useBudgetAllocations';
@@ -9,11 +10,13 @@ import GroupCard from './GroupCard';
 import AddGroupForm from './AddGroupForm';
 
 /** The single persistent budget: income, summary, and editable expense groups. */
-export default function BudgetPeriodView({ userId }: { userId: string }) {
+export default function BudgetPeriodView({ userId, timeframe }: { userId: string; timeframe: Timeframe }) {
+  const factor = TIMEFRAME_FACTOR[timeframe];
+
   const { period, setIncome } = useBudgetPeriod(userId);
   const groupsApi = useBudgetGroups(userId);
   const allocApi = useBudgetAllocations(userId, period?.id ?? null);
-  const summary = useBudgetSummary(period?.income ?? 0, allocApi.allocations);
+  const summary = useBudgetSummary(period?.income ?? 0, allocApi.allocations, factor);
 
   // --- gesture state --------------------------------------------------------
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -158,7 +161,11 @@ export default function BudgetPeriodView({ userId }: { userId: string }) {
 
   return (
     <div>
-      <IncomeInput label="Income" value={period?.income ?? 0} onSave={setIncome} />
+      <IncomeInput
+        label={`${TIMEFRAME_LABEL[timeframe]} income`}
+        value={toView(period?.income ?? 0, timeframe)}
+        onSave={(n) => setIncome(fromView(n, timeframe))}
+      />
       <SummaryStrip summary={summary} />
 
       {/* Expense groups */}
@@ -177,12 +184,12 @@ export default function BudgetPeriodView({ userId }: { userId: string }) {
             <GroupCard
               key={g.id}
               group={g}
-              allocation={allocApi.allocations[g.id]}
+              amount={toView(allocApi.allocations[g.id]?.amount ?? 0, timeframe)}
               expanded={expandedId === g.id}
               swipeX={swipe && swipe.id === g.id ? swipe.x : 0}
               dragging={dragId === g.id}
               onHeaderPointerDown={(e) => onHeaderPointerDown(g.id, e)}
-              onChangeAmount={(n) => allocApi.setAmount(g.id, n)}
+              onChangeAmount={(n) => allocApi.setAmount(g.id, fromView(n, timeframe))}
               onChangeName={(name) => groupsApi.updateGroup(g.id, { name })}
               onChangeColor={(color) => groupsApi.updateGroup(g.id, { color })}
               onDelete={() => deleteGroup(g.id, g.name)}
