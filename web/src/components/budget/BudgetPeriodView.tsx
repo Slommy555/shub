@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  creditCardAmountForPeriod,
   fromView,
   periodForCursor,
   shiftCursor,
@@ -53,11 +54,12 @@ export default function BudgetPeriodView({
 
   /** The amount shown for a group in this view. */
   const amountOf = (g: BudgetGroup) => {
+    if (g.kind === 'credit_card') return creditCardAmountForPeriod(g, type, bounds);
     if (g.persistent) return toView(Number(g.amount) || 0, type);
     return isMonthly ? monthlyGroupSums[g.id] ?? 0 : allocApi.allocations[g.id]?.amount ?? 0;
   };
-  /** Per-week items are read-only on the monthly view; persistent items never are. */
-  const amountReadOnlyFor = (g: BudgetGroup) => !g.persistent && isMonthly;
+  /** Credit-card amounts are computed; per-week items are read-only on monthly. */
+  const amountReadOnlyFor = (g: BudgetGroup) => g.kind === 'credit_card' || (!g.persistent && isMonthly);
   const amountLabelFor = (g: BudgetGroup) => {
     if (g.persistent) return 'Amount';
     return isMonthly ? 'Sum of this month’s weeks' : 'Amount (this week)';
@@ -69,16 +71,19 @@ export default function BudgetPeriodView({
   const needsFunding = useMemo(() => {
     let needs = 0;
     for (const g of groupsApi.groups) {
-      const amount = g.persistent
-        ? toView(Number(g.amount) || 0, type)
-        : isMonthly
-          ? monthlyGroupSums[g.id] ?? 0
-          : allocApi.allocations[g.id]?.amount ?? 0;
+      const amount =
+        g.kind === 'credit_card'
+          ? creditCardAmountForPeriod(g, type, bounds)
+          : g.persistent
+            ? toView(Number(g.amount) || 0, type)
+            : isMonthly
+              ? monthlyGroupSums[g.id] ?? 0
+              : allocApi.allocations[g.id]?.amount ?? 0;
       const earmark = savings.earmarkAmounts[g.id] ?? 0;
       needs += Math.max(0, amount - earmark);
     }
     return needs;
-  }, [groupsApi.groups, allocApi.allocations, monthlyGroupSums, savings.earmarkAmounts, isMonthly, type]);
+  }, [groupsApi.groups, allocApi.allocations, monthlyGroupSums, savings.earmarkAmounts, isMonthly, type, bounds]);
 
   // From savings = total earmarked from the pool across all groups.
   const summary = {
@@ -93,6 +98,14 @@ export default function BudgetPeriodView({
   const saveAmount = (g: BudgetGroup, entered: number) => {
     if (g.persistent) void groupsApi.updateGroup(g.id, { amount: fromView(entered, type) });
     else if (!isMonthly) void allocApi.setAmount(g.id, entered);
+  };
+
+  /** Turn a group into a credit-card payoff (or back to a standard group). */
+  const toggleCredit = (g: BudgetGroup, next: boolean) => {
+    void groupsApi.updateGroup(g.id, { kind: next ? 'credit_card' : 'standard' });
+  };
+  const changeCredit = (g: BudgetGroup, patch: { cc_total?: number; cc_weeks?: number; cc_due_date?: string | null }) => {
+    void groupsApi.updateGroup(g.id, patch);
   };
 
   /** Flip persistence, carrying the currently-shown value across so it doesn't
@@ -316,6 +329,8 @@ export default function BudgetPeriodView({
               onChangeName={(name) => groupsApi.updateGroup(g.id, { name })}
               onChangeColor={(color) => groupsApi.updateGroup(g.id, { color })}
               onTogglePersistent={(v) => togglePersistent(g, v)}
+              onToggleCredit={(v) => toggleCredit(g, v)}
+              onChangeCredit={(patch) => changeCredit(g, patch)}
               onDelete={() => deleteGroup(g.id, g.name)}
               rowRef={(el) => {
                 if (el) rowEls.current.set(g.id, el);

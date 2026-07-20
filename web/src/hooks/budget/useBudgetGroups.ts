@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import type { BudgetGroup } from '../../types/budget';
+import type { BudgetGroup, GroupKind } from '../../types/budget';
+
+interface GroupPatch {
+  name?: string;
+  color?: string;
+  persistent?: boolean;
+  amount?: number;
+  kind?: GroupKind;
+  cc_total?: number;
+  cc_weeks?: number;
+  cc_due_date?: string | null;
+}
 
 const byPosition = (a: BudgetGroup, b: BudgetGroup) => a.position - b.position;
 
@@ -91,6 +102,10 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
         position,
         persistent: false,
         amount: 0,
+        kind: 'standard',
+        cc_total: 0,
+        cc_weeks: 0,
+        cc_due_date: null,
         created_at: new Date().toISOString(),
       };
       setGroups((prev) => [...prev, row].sort(byPosition));
@@ -103,7 +118,7 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
   );
 
   const updateGroup = useCallback(
-    async (id: string, patch: { name?: string; color?: string; persistent?: boolean; amount?: number }) => {
+    async (id: string, patch: GroupPatch) => {
       const name = patch.name?.trim();
       setGroups((prev) =>
         prev.map((g) =>
@@ -114,15 +129,23 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
                 ...(patch.color ? { color: patch.color } : {}),
                 ...(patch.persistent !== undefined ? { persistent: patch.persistent } : {}),
                 ...(patch.amount !== undefined ? { amount: patch.amount } : {}),
+                ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+                ...(patch.cc_total !== undefined ? { cc_total: patch.cc_total } : {}),
+                ...(patch.cc_weeks !== undefined ? { cc_weeks: patch.cc_weeks } : {}),
+                ...(patch.cc_due_date !== undefined ? { cc_due_date: patch.cc_due_date } : {}),
               }
             : g
         )
       );
-      const dbPatch: { name?: string; color?: string; persistent?: boolean; amount?: number } = {};
+      const dbPatch: GroupPatch = {};
       if (name) dbPatch.name = name;
       if (patch.color) dbPatch.color = patch.color;
       if (patch.persistent !== undefined) dbPatch.persistent = patch.persistent;
       if (patch.amount !== undefined) dbPatch.amount = patch.amount;
+      if (patch.kind !== undefined) dbPatch.kind = patch.kind;
+      if (patch.cc_total !== undefined) dbPatch.cc_total = patch.cc_total;
+      if (patch.cc_weeks !== undefined) dbPatch.cc_weeks = patch.cc_weeks;
+      if (patch.cc_due_date !== undefined) dbPatch.cc_due_date = patch.cc_due_date;
       if (Object.keys(dbPatch).length === 0) return;
       const { error } = await supabase.from('budget_groups').update(dbPatch).eq('id', id);
       if (error) console.error('updateGroup failed:', error.message);

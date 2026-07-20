@@ -24,6 +24,8 @@ export interface BudgetPeriod {
   created_at?: string;
 }
 
+export type GroupKind = 'standard' | 'credit_card';
+
 export interface BudgetGroup {
   id: string;
   user_id: string;
@@ -36,6 +38,12 @@ export interface BudgetGroup {
   persistent: boolean;
   /** the shared weekly-base amount, used only when persistent. */
   amount: number;
+  /** 'credit_card' groups compute a weekly payment from the fields below. */
+  kind: GroupKind;
+  /** credit card: total owed, weeks to pay it off, and the due date. */
+  cc_total: number;
+  cc_weeks: number;
+  cc_due_date: string | null; // YYYY-MM-DD
   created_at?: string;
 }
 
@@ -204,6 +212,51 @@ export function periodForCursor(type: Timeframe, cursor: Date): PeriodBounds {
     end_date: toISODate(e),
     label: s.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
   };
+}
+
+// --- credit-card payoff -----------------------------------------------------
+/** The weekly payment for a card: total owed divided by the number of weeks. */
+export const creditCardWeekly = (total: number, weeks: number): number =>
+  weeks > 0 ? (Number(total) || 0) / weeks : 0;
+
+/** The `weeks` Thursdays (ISO) of the payoff window, ending at the due date's week. */
+function payoffWindowThursdays(dueDateISO: string, weeks: number): Set<string> {
+  const set = new Set<string>();
+  if (!dueDateISO || weeks <= 0) return set;
+  const [y, m, d] = dueDateISO.split('-').map(Number);
+  let thu = thursdayOf(new Date(y, m - 1, d));
+  for (let k = 0; k < weeks; k++) {
+    set.add(toISODate(thu));
+    thu = addDays(thu, -7);
+  }
+  return set;
+}
+
+/**
+ * A credit-card group's amount for a given period: the weekly payment counted
+ * only in the weeks of its payoff window (the `weeks` weeks up to and including
+ * the due date's week). Weekly → the payment if this week is in the window;
+ * daily → payment ÷ 7; monthly → payment × (window weeks that fall in the month).
+ */
+export function creditCardAmountForPeriod(
+  cc: { cc_total: number; cc_weeks: number; cc_due_date: string | null },
+  type: Timeframe,
+  bounds: PeriodBounds
+): number {
+  const weekly = creditCardWeekly(cc.cc_total, Number(cc.cc_weeks) || 0);
+  if (weekly <= 0 || !cc.cc_due_date) return 0;
+  const window = payoffWindowThursdays(cc.cc_due_date, Number(cc.cc_weeks) || 0);
+  if (window.size === 0) return 0;
+
+  if (type === 'weekly') return window.has(bounds.start_date) ? weekly : 0;
+  if (type === 'daily') {
+    const [y, m, d] = bounds.start_date.split('-').map(Number);
+    const thu = toISODate(thursdayOf(new Date(y, m - 1, d)));
+    return window.has(thu) ? weekly / 7 : 0;
+  }
+  // monthly: count the month's Thursdays that fall in the payoff window
+  const count = thursdaysInMonth(bounds.start_date).filter((t) => window.has(t)).length;
+  return count * weekly;
 }
 
 /** Move the cursor one period earlier (-1) or later (+1). */
