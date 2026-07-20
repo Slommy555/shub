@@ -8,13 +8,18 @@ import type { BudgetPeriod, PeriodBounds, Timeframe } from '../../types/budget';
  * Each navigable period (a specific day/week/month) holds its own income. When
  * the user navigates to a period that has no row yet, one is created (income 0).
  */
-export function useBudgetPeriod(userId: string | null, type: Timeframe, bounds: PeriodBounds) {
+export function useBudgetPeriod(
+  userId: string | null,
+  budgetId: string | null,
+  type: Timeframe,
+  bounds: PeriodBounds
+) {
   const { start_date, end_date, label } = bounds;
   const [period, setPeriod] = useState<BudgetPeriod | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId) {
+    if (!userId || !budgetId) {
       setPeriod(null);
       setLoading(false);
       return;
@@ -28,6 +33,7 @@ export function useBudgetPeriod(userId: string | null, type: Timeframe, bounds: 
         .from('budget_periods')
         .select('*')
         .eq('user_id', userId)
+        .eq('budget_id', budgetId)
         .eq('type', type)
         .eq('start_date', start_date)
         .maybeSingle();
@@ -47,6 +53,7 @@ export function useBudgetPeriod(userId: string | null, type: Timeframe, bounds: 
       const row: BudgetPeriod = {
         id: crypto.randomUUID(),
         user_id: userId,
+        budget_id: budgetId,
         type,
         label,
         start_date,
@@ -69,6 +76,7 @@ export function useBudgetPeriod(userId: string | null, type: Timeframe, bounds: 
         .from('budget_periods')
         .select('*')
         .eq('user_id', userId)
+        .eq('budget_id', budgetId)
         .eq('type', type)
         .eq('start_date', start_date)
         .maybeSingle();
@@ -80,7 +88,7 @@ export function useBudgetPeriod(userId: string | null, type: Timeframe, bounds: 
     return () => {
       cancelled = true;
     };
-  }, [userId, type, start_date, end_date, label]);
+  }, [userId, budgetId, type, start_date, end_date, label]);
 
   // Realtime — keep the currently-shown period's income in sync across devices.
   useEffect(() => {

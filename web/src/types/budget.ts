@@ -3,9 +3,19 @@
 /** A navigable period type. ('standalone' is a legacy DB value, no longer used.) */
 export type PeriodType = 'daily' | 'weekly' | 'monthly' | 'standalone';
 
+/** A named, fully-independent budget (Personal, Business, ...). */
+export interface Budget {
+  id: string;
+  user_id: string;
+  name: string;
+  position: number;
+  created_at?: string;
+}
+
 export interface BudgetPeriod {
   id: string;
   user_id: string;
+  budget_id: string;
   type: PeriodType;
   label: string;
   start_date: string; // YYYY-MM-DD
@@ -17,16 +27,14 @@ export interface BudgetPeriod {
 export interface BudgetGroup {
   id: string;
   user_id: string;
+  budget_id: string;
   name: string;
   color: string;
   position: number;
-  /** true = repeats every period + scales across timeframes (uses `amount`). */
-  persistent: boolean;
-  /** the shared weekly-base amount, used only when persistent. */
-  amount: number;
   created_at?: string;
 }
 
+/** Per-period amount for a group. Amounts are ISOLATED per period. */
 export interface BudgetAllocation {
   id: string;
   user_id: string;
@@ -35,32 +43,37 @@ export interface BudgetAllocation {
   amount: number;
 }
 
+/** A pool of set-aside money for one (budget, period). */
+export interface SavingsPool {
+  id: string;
+  user_id: string;
+  budget_id: string;
+  period_id: string;
+  total_saved: number;
+}
+
+/** How much of a savings pool is earmarked toward a group. */
+export interface SavingsEarmark {
+  id: string;
+  user_id: string;
+  pool_id: string;
+  group_id: string;
+  amount: number;
+}
+
 // --- timeframes -------------------------------------------------------------
-// Daily / Weekly / Monthly are three VIEWS of the same expense, not separate
-// data. Every amount + income is stored once at a weekly base and scaled for
-// display; editing any timeframe converts back to the weekly base. Chain:
-// daily ×7 = weekly, weekly ×4 = monthly (so daily ×28 = monthly).
+// Daily / Weekly / Monthly are independent period lenses. Each navigable period
+// (a specific day / week / month) holds its OWN income + amounts — nothing is
+// shared or scaled between periods or timeframes.
 export type Timeframe = 'daily' | 'weekly' | 'monthly';
 
 export const TIMEFRAMES: Timeframe[] = ['daily', 'weekly', 'monthly'];
-
-export const TIMEFRAME_FACTOR: Record<Timeframe, number> = {
-  daily: 1 / 7,
-  weekly: 1,
-  monthly: 4,
-};
 
 export const TIMEFRAME_LABEL: Record<Timeframe, string> = {
   daily: 'Daily',
   weekly: 'Weekly',
   monthly: 'Monthly',
 };
-
-/** Weekly-base canonical value → the amount shown in the selected timeframe. */
-export const toView = (canonical: number, tf: Timeframe): number => canonical * TIMEFRAME_FACTOR[tf];
-
-/** Amount typed in the selected timeframe → weekly-base canonical for storage. */
-export const fromView = (value: number, tf: Timeframe): number => value / TIMEFRAME_FACTOR[tf];
 
 /** Tap-to-pick swatches for new groups (no full color wheel). */
 export const PRESET_COLORS = [

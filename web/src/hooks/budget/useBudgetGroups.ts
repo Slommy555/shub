@@ -9,14 +9,14 @@ const byPosition = (a: BudgetGroup, b: BudgetGroup) => a.position - b.position;
  * keeps them synced via realtime, and exposes CRUD + drag-to-reorder. Deleting a
  * group cascades to its allocations via the foreign key.
  */
-export function useBudgetGroups(userId: string | null) {
+export function useBudgetGroups(userId: string | null, budgetId: string | null) {
   const [groups, setGroups] = useState<BudgetGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const groupsRef = useRef<BudgetGroup[]>([]);
   groupsRef.current = groups;
 
   useEffect(() => {
-    if (!userId) {
+    if (!userId || !budgetId) {
       setGroups([]);
       setLoading(false);
       return;
@@ -28,6 +28,7 @@ export function useBudgetGroups(userId: string | null) {
         .from('budget_groups')
         .select('*')
         .eq('user_id', userId)
+        .eq('budget_id', budgetId)
         .order('position', { ascending: true });
       if (cancelled) return;
       if (error) {
@@ -41,13 +42,13 @@ export function useBudgetGroups(userId: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, budgetId]);
 
   // Realtime
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !budgetId) return;
     const channel = supabase
-      .channel(`budget_groups-rt-${userId}`)
+      .channel(`budget_groups-rt-${userId}-${budgetId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'budget_groups', filter: `user_id=eq.${userId}` },
@@ -57,6 +58,7 @@ export function useBudgetGroups(userId: string | null) {
             setGroups((prev) => prev.filter((g) => g.id !== id));
           } else {
             const row = payload.new as BudgetGroup;
+            if (row.budget_id !== budgetId) return; // ignore other budgets' groups
             setGroups((prev) => {
               const exists = prev.some((g) => g.id === row.id);
               const next = exists ? prev.map((g) => (g.id === row.id ? row : g)) : [...prev, row];
@@ -69,11 +71,11 @@ export function useBudgetGroups(userId: string | null) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, budgetId]);
 
   const addGroup = useCallback(
     async (name: string, color: string) => {
-      if (!userId) return;
+      if (!userId || !budgetId) return;
       const trimmed = name.trim();
       if (!trimmed) return;
       const id = crypto.randomUUID();
@@ -81,24 +83,23 @@ export function useBudgetGroups(userId: string | null) {
       const row: BudgetGroup = {
         id,
         user_id: userId,
+        budget_id: budgetId,
         name: trimmed,
         color,
         position,
-        persistent: true,
-        amount: 0,
         created_at: new Date().toISOString(),
       };
       setGroups((prev) => [...prev, row].sort(byPosition));
       const { error } = await supabase
         .from('budget_groups')
-        .insert({ id, user_id: userId, name: trimmed, color, position, persistent: true, amount: 0 });
+        .insert({ id, user_id: userId, budget_id: budgetId, name: trimmed, color, position });
       if (error) console.error('addGroup failed:', error.message);
     },
-    [userId]
+    [userId, budgetId]
   );
 
   const updateGroup = useCallback(
-    async (id: string, patch: { name?: string; color?: string; persistent?: boolean; amount?: number }) => {
+    async (id: string, patch: { name?: string; color?: string }) => {
       const name = patch.name?.trim();
       setGroups((prev) =>
         prev.map((g) =>
@@ -107,17 +108,13 @@ export function useBudgetGroups(userId: string | null) {
                 ...g,
                 ...(name ? { name } : {}),
                 ...(patch.color ? { color: patch.color } : {}),
-                ...(patch.persistent !== undefined ? { persistent: patch.persistent } : {}),
-                ...(patch.amount !== undefined ? { amount: patch.amount } : {}),
               }
             : g
         )
       );
-      const dbPatch: { name?: string; color?: string; persistent?: boolean; amount?: number } = {};
+      const dbPatch: { name?: string; color?: string } = {};
       if (name) dbPatch.name = name;
       if (patch.color) dbPatch.color = patch.color;
-      if (patch.persistent !== undefined) dbPatch.persistent = patch.persistent;
-      if (patch.amount !== undefined) dbPatch.amount = patch.amount;
       if (Object.keys(dbPatch).length === 0) return;
       const { error } = await supabase.from('budget_groups').update(dbPatch).eq('id', id);
       if (error) console.error('updateGroup failed:', error.message);

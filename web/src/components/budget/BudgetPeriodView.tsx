@@ -1,91 +1,70 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  fromView,
   periodForCursor,
   shiftCursor,
-  toView,
-  TIMEFRAME_FACTOR,
   type BudgetGroup,
   type Timeframe,
 } from '../../types/budget';
 import { useBudgetPeriod } from '../../hooks/budget/useBudgetPeriod';
 import { useBudgetGroups } from '../../hooks/budget/useBudgetGroups';
 import { useBudgetAllocations } from '../../hooks/budget/useBudgetAllocations';
-import { useWeeklyIncomeSum } from '../../hooks/budget/useWeeklyIncomeSum';
-import { useMonthlyGroupSums } from '../../hooks/budget/useMonthlyGroupSums';
+import { useSavingsPool } from '../../hooks/budget/useSavingsPool';
 import IncomeInput from './IncomeInput';
 import SummaryStrip from './SummaryStrip';
 import GroupCard from './GroupCard';
 import AddGroupForm from './AddGroupForm';
+import SavingsPoolSection from './SavingsPoolSection';
 import SplitCalculator from './SplitCalculator';
 
-/** One navigable budget period: income, summary, and editable expense groups. */
-export default function BudgetPeriodView({ userId, type }: { userId: string; type: Timeframe }) {
-  const factor = TIMEFRAME_FACTOR[type];
-  const isMonthly = type === 'monthly';
-
+/**
+ * One navigable budget period for the active budget. Amounts are ISOLATED per
+ * period: navigating to a period with no allocations shows every group at $0.
+ * A savings pool can earmark money toward groups, offsetting what income funds.
+ */
+export default function BudgetPeriodView({
+  userId,
+  budgetId,
+  type,
+}: {
+  userId: string;
+  budgetId: string;
+  type: Timeframe;
+}) {
   const [cursor, setCursor] = useState<Date>(() => new Date());
   const bounds = useMemo(() => periodForCursor(type, cursor), [type, cursor]);
 
-  const { period, setIncome } = useBudgetPeriod(userId, type, bounds);
-  const groupsApi = useBudgetGroups(userId);
+  const { period, setIncome } = useBudgetPeriod(userId, budgetId, type, bounds);
+  const groupsApi = useBudgetGroups(userId, budgetId);
   const allocApi = useBudgetAllocations(userId, period?.id ?? null);
+  const savings = useSavingsPool(userId, budgetId, period?.id ?? null);
 
-  // Monthly rolls up its weeks: income + each non-persistent group are summed
-  // across the weekly periods that start in the month (read-only on monthly).
-  const weeklyIncomeSum = useWeeklyIncomeSum(userId, bounds.start_date, bounds.end_date, isMonthly);
-  const monthlyGroupSums = useMonthlyGroupSums(userId, bounds.start_date, bounds.end_date, isMonthly);
-  const income = isMonthly ? weeklyIncomeSum : period?.income ?? 0;
+  const income = period?.income ?? 0;
 
-  /** A non-persistent group's value: monthly sums its weeks, else the period's flat amount. */
-  const nonPersistentValue = (g: BudgetGroup) =>
-    isMonthly ? monthlyGroupSums[g.id] ?? 0 : allocApi.allocations[g.id]?.amount ?? 0;
+  /** This period's amount for a group (0 when no allocation exists yet). */
+  const amountOf = (g: BudgetGroup) => allocApi.allocations[g.id]?.amount ?? 0;
+  /** How much of the savings pool is earmarked toward a group this period. */
+  const earmarkOf = (g: BudgetGroup) => savings.earmarkAmounts[g.id] ?? 0;
 
-  /** The amount shown for a group in this view. */
-  const displayedAmount = (g: BudgetGroup) =>
-    g.persistent ? toView(g.amount, type) : nonPersistentValue(g);
-
-  const allocated = useMemo(
-    () =>
-      groupsApi.groups.reduce((sum, g) => {
-        const value = g.persistent
-          ? (Number(g.amount) || 0) * factor
-          : isMonthly
-            ? monthlyGroupSums[g.id] ?? 0
-            : allocApi.allocations[g.id]?.amount ?? 0;
-        return sum + value;
-      }, 0),
-    [groupsApi.groups, monthlyGroupSums, allocApi.allocations, factor, isMonthly]
-  );
-  const summary = { income, allocated, remaining: income - allocated };
-
-  /** Save an edited amount. Persistent → shared value; non-persistent → this
-   *  period's flat amount. Monthly non-persistent is read-only (summed weeks). */
-  const saveAmount = (g: BudgetGroup, entered: number) => {
-    if (g.persistent) void groupsApi.updateGroup(g.id, { amount: fromView(entered, type) });
-    else if (!isMonthly) void allocApi.setAmount(g.id, entered);
-  };
-
-  /** Label under the amount field. */
-  const amountLabelFor = (g: BudgetGroup) => {
-    if (g.persistent) return 'Amount';
-    if (isMonthly) return 'Sum of this month’s weeks';
-    return 'Amount (this period)';
-  };
-
-  /** Flip a group's persistence, carrying its current shown value across so it
-   *  doesn't jump to 0 when the storage location changes. */
-  const togglePersistent = (g: BudgetGroup, next: boolean) => {
-    const shown = displayedAmount(g);
-    if (next) {
-      // → persistent: store the shown value as the shared weekly-base amount.
-      void groupsApi.updateGroup(g.id, { persistent: true, amount: fromView(shown, type) });
-    } else {
-      // → non-persistent: seed this period's flat amount (not on monthly — read-only).
-      if (!isMonthly) void allocApi.setAmount(g.id, shown);
-      void groupsApi.updateGroup(g.id, { persistent: false });
+  // Needs funding = what income must cover after savings offsets each group.
+  const needsFunding = useMemo(() => {
+    let needs = 0;
+    for (const g of groupsApi.groups) {
+      const amount = allocApi.allocations[g.id]?.amount ?? 0;
+      const earmark = savings.earmarkAmounts[g.id] ?? 0;
+      needs += Math.max(0, amount - earmark);
     }
+    return needs;
+  }, [groupsApi.groups, allocApi.allocations, savings.earmarkAmounts]);
+
+  // From savings = total earmarked from the pool across all groups.
+  const summary = {
+    income,
+    fromSavings: savings.allocated,
+    needsFunding,
+    remaining: income - needsFunding,
   };
+
+  const saveAmount = (g: BudgetGroup, entered: number) => void allocApi.setAmount(g.id, entered);
 
   // --- gesture state --------------------------------------------------------
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -259,11 +238,7 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
         </button>
       </div>
 
-      {isMonthly ? (
-        <IncomeInput label="Income" value={income} onSave={() => {}} readOnly hint="sum of weekly incomes" />
-      ) : (
-        <IncomeInput label="Income" value={period?.income ?? 0} onSave={setIncome} />
-      )}
+      <IncomeInput label="Income" value={income} onSave={setIncome} />
       <SummaryStrip summary={summary} />
 
       {/* Expense groups */}
@@ -282,9 +257,9 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
             <GroupCard
               key={g.id}
               group={g}
-              amount={displayedAmount(g)}
-              amountLabel={amountLabelFor(g)}
-              amountReadOnly={isMonthly && !g.persistent}
+              amount={amountOf(g)}
+              amountLabel="Amount (this period)"
+              earmark={earmarkOf(g)}
               expanded={expandedId === g.id}
               swipeX={swipe && swipe.id === g.id ? swipe.x : 0}
               dragging={dragId === g.id}
@@ -292,7 +267,6 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
               onChangeAmount={(n) => saveAmount(g, n)}
               onChangeName={(name) => groupsApi.updateGroup(g.id, { name })}
               onChangeColor={(color) => groupsApi.updateGroup(g.id, { color })}
-              onTogglePersistent={(v) => togglePersistent(g, v)}
               onDelete={() => deleteGroup(g.id, g.name)}
               rowRef={(el) => {
                 if (el) rowEls.current.set(g.id, el);
@@ -304,6 +278,17 @@ export default function BudgetPeriodView({ userId, type }: { userId: string; typ
       )}
 
       <AddGroupForm onAdd={groupsApi.addGroup} />
+
+      <SavingsPoolSection
+        groups={orderedGroups}
+        totalSaved={savings.totalSaved}
+        earmarkAmounts={savings.earmarkAmounts}
+        allocated={savings.allocated}
+        remaining={savings.remaining}
+        onSetTotal={savings.setTotal}
+        onSetEarmark={savings.setEarmark}
+      />
+
       <SplitCalculator />
     </div>
   );

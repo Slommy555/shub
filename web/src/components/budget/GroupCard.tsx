@@ -87,11 +87,34 @@ function MoneyField({
   );
 }
 
+/** Piggy-bank glyph shown when a group is offset by savings. */
+function PiggyBank() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0"
+      aria-hidden="true"
+    >
+      <path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.4-1.5 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z" />
+      <path d="M2 9v1c0 1.1.9 2 2 2h1" />
+      <path d="M16 11h0" />
+    </svg>
+  );
+}
+
 interface GroupCardProps {
   group: BudgetGroup;
-  amount: number; // already scaled into the current timeframe
+  amount: number; // this period's allocated amount
   amountLabel: string;
-  amountReadOnly?: boolean;
+  /** how much of the savings pool is earmarked toward this group */
+  earmark: number;
   expanded: boolean;
   swipeX: number; // 0 or negative (swiped left)
   dragging: boolean;
@@ -99,7 +122,6 @@ interface GroupCardProps {
   onChangeAmount: (n: number) => void;
   onChangeName: (name: string) => void;
   onChangeColor: (color: string) => void;
-  onTogglePersistent: (persistent: boolean) => void;
   onDelete: () => void;
   rowRef?: (el: HTMLDivElement | null) => void;
 }
@@ -108,7 +130,7 @@ export default function GroupCard({
   group,
   amount,
   amountLabel,
-  amountReadOnly = false,
+  earmark,
   expanded,
   swipeX,
   dragging,
@@ -116,10 +138,11 @@ export default function GroupCard({
   onChangeAmount,
   onChangeName,
   onChangeColor,
-  onTogglePersistent,
   onDelete,
   rowRef,
 }: GroupCardProps) {
+  const hasEarmark = earmark > 0;
+  const fromIncome = Math.max(0, amount - earmark);
   return (
     <div ref={rowRef} className="relative mb-2 select-none">
       {/* Delete button behind the card, revealed on swipe-left */}
@@ -160,19 +183,24 @@ export default function GroupCard({
           >
             {group.name}
           </span>
-          {!group.persistent && (
-            <span
-              className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
-              style={{ background: 'var(--color-bg-surface)', color: 'var(--color-text-tertiary)' }}
-            >
-              balance
+          <span className="flex shrink-0 flex-col items-end">
+            <span className="text-sm font-medium tabular-nums" style={{ color: 'var(--color-text-primary)' }}>
+              {formatMoney(amount)}
             </span>
-          )}
-          <span
-            className="shrink-0 text-sm font-medium tabular-nums"
-            style={{ color: 'var(--color-text-primary)' }}
-          >
-            {formatMoney(amount)}
+            {hasEarmark && (
+              <>
+                <span
+                  className="mt-0.5 flex items-center gap-1 text-[12px] tabular-nums"
+                  style={{ color: 'var(--color-success)' }}
+                >
+                  <PiggyBank />
+                  {formatMoney(earmark)} from savings
+                </span>
+                <span className="text-[12px] tabular-nums" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {formatMoney(fromIncome)} from income
+                </span>
+              </>
+            )}
           </span>
         </div>
 
@@ -205,55 +233,7 @@ export default function GroupCard({
               </div>
             </div>
 
-            {/* Persistence toggle */}
-            <button
-              data-no-drag
-              type="button"
-              onClick={() => onTogglePersistent(!group.persistent)}
-              className="flex items-center justify-between rounded-xl border px-3 py-2.5 text-left"
-              style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-border)' }}
-            >
-              <span className="min-w-0 pr-3">
-                <span className="block text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                  Repeats every period
-                </span>
-                <span className="block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                  {group.persistent
-                    ? 'Same every day/week/month, converts across views'
-                    : 'Entered per period; the month adds up its weeks'}
-                </span>
-              </span>
-              <span
-                className="relative h-6 w-10 shrink-0 rounded-full transition-colors"
-                style={{ background: group.persistent ? 'var(--color-accent)' : 'var(--color-border-strong)' }}
-              >
-                <span
-                  className="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform"
-                  style={{ transform: group.persistent ? 'translateX(18px)' : 'translateX(2px)' }}
-                />
-              </span>
-            </button>
-
-            {amountReadOnly ? (
-              <label className="block">
-                <span className="mb-1.5 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                  {amountLabel}
-                </span>
-                <div
-                  className="flex w-full items-center rounded-xl border px-3 text-base tabular-nums"
-                  style={{
-                    height: '48px',
-                    background: 'var(--color-bg-surface)',
-                    borderColor: 'var(--color-border)',
-                    color: 'var(--color-text-primary)',
-                  }}
-                >
-                  {formatMoney(amount)}
-                </div>
-              </label>
-            ) : (
-              <MoneyField label={amountLabel} value={amount} onSave={onChangeAmount} />
-            )}
+            <MoneyField label={amountLabel} value={amount} onSave={onChangeAmount} />
           </div>
         )}
       </div>
