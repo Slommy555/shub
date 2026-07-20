@@ -1,27 +1,29 @@
 import { useEffect, useState } from 'react';
-import BudgetPeriodView from './BudgetPeriodView';
+import BudgetView, { type BudgetViewMode } from './BudgetView';
 import BudgetSwitcher from './BudgetSwitcher';
 import { useBudgets } from '../../hooks/budget/useBudgets';
-import { TIMEFRAMES, TIMEFRAME_LABEL, type Timeframe } from '../../types/budget';
 
-const TF_KEY = 'budget.timeframe';
+const VIEW_KEY = 'budget.view';
 const BUDGET_KEY = 'budget.activeBudgetId';
+
+const VIEWS: { id: BudgetViewMode; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'paycheck', label: 'Paycheck' },
+];
 
 /**
  * Budget tab shell. A budget switcher at the top chooses between fully
- * independent budgets; below it, a Daily / Weekly / Monthly lens picks the
- * period type (last choice remembered). Each period is isolated — amounts set in
- * one period never carry into another. `.budget-scope` injects the UI_SKILL.md
- * color tokens scoped to this tab only.
+ * independent budgets; below it, a segmented toggle switches between the
+ * Overview table (all groups with linked monthly + weekly amounts) and the
+ * Paycheck waterfall. `.budget-scope` injects the UI_SKILL.md color tokens
+ * scoped to this tab only.
  */
 export default function BudgetTab({ userId }: { userId: string }) {
-  const [timeframe, setTimeframe] = useState<Timeframe>(
-    () => (localStorage.getItem(TF_KEY) as Timeframe | null) ?? 'monthly'
+  const [view, setView] = useState<BudgetViewMode>(
+    () => (localStorage.getItem(VIEW_KEY) as BudgetViewMode | null) ?? 'overview'
   );
   const { budgets, loading, createBudget, renameBudget, deleteBudget } = useBudgets(userId);
-  const [activeId, setActiveId] = useState<string | null>(
-    () => localStorage.getItem(BUDGET_KEY)
-  );
+  const [activeId, setActiveId] = useState<string | null>(() => localStorage.getItem(BUDGET_KEY));
 
   // Keep the active budget valid: fall back to the first budget if the stored
   // one no longer exists (deleted, or first load).
@@ -37,9 +39,9 @@ export default function BudgetTab({ userId }: { userId: string }) {
     localStorage.setItem(BUDGET_KEY, id);
   };
 
-  const selectTimeframe = (t: Timeframe) => {
-    setTimeframe(t);
-    localStorage.setItem(TF_KEY, t);
+  const selectView = (v: BudgetViewMode) => {
+    setView(v);
+    localStorage.setItem(VIEW_KEY, v);
   };
 
   const onCreate = async (name: string) => {
@@ -47,7 +49,8 @@ export default function BudgetTab({ userId }: { userId: string }) {
     if (created) selectBudget(created.id);
   };
 
-  const activeBudgetId = activeId && budgets.some((b) => b.id === activeId) ? activeId : budgets[0]?.id ?? null;
+  const activeBudgetId =
+    activeId && budgets.some((b) => b.id === activeId) ? activeId : budgets[0]?.id ?? null;
 
   return (
     <div
@@ -68,36 +71,28 @@ export default function BudgetTab({ userId }: { userId: string }) {
           onDelete={deleteBudget}
         />
 
-        {/* Timeframe lens */}
-        <div
-          className="mb-5 flex gap-1 rounded-full p-1"
-          style={{ background: 'var(--color-bg-surface)' }}
-        >
-          {TIMEFRAMES.map((t) => (
+        {/* Overview / Paycheck toggle */}
+        <div className="mb-5 flex gap-1 rounded-full p-1" style={{ background: 'var(--color-bg-surface)' }}>
+          {VIEWS.map((v) => (
             <button
-              key={t}
+              key={v.id}
               type="button"
-              onClick={() => selectTimeframe(t)}
-              aria-pressed={timeframe === t}
+              onClick={() => selectView(v.id)}
+              aria-pressed={view === v.id}
               className="flex-1 rounded-full py-2.5 text-sm font-semibold transition-colors"
               style={
-                timeframe === t
+                view === v.id
                   ? { background: 'var(--color-accent)', color: '#16161f' }
                   : { color: 'var(--color-text-secondary)' }
               }
             >
-              {TIMEFRAME_LABEL[t]}
+              {v.label}
             </button>
           ))}
         </div>
 
         {activeBudgetId ? (
-          <BudgetPeriodView
-            key={`${activeBudgetId}-${timeframe}`}
-            userId={userId}
-            budgetId={activeBudgetId}
-            type={timeframe}
-          />
+          <BudgetView key={activeBudgetId} userId={userId} budgetId={activeBudgetId} view={view} />
         ) : (
           <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
             {loading ? 'Loading…' : 'No budget yet.'}
