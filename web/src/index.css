@@ -207,42 +207,50 @@ html[data-theme-custom] [class~='dark:border-gray-800'] {
 }
 
 /* ---------------------------------------------------------------------------
-   Budget tab design tokens (UI_SKILL.md). Scoped to `.budget-scope` so the
-   rebuilt Budget tab follows the dark/lavender design system exactly WITHOUT
-   affecting any other tab (which use the standard gray Tailwind palette). Dark
-   values are the default; light-mode values apply when <html> lacks `.dark`.
+   Budget tab design tokens. Scoped to `.budget-scope`; the budget components all
+   read these variables, so remapping them onto the app's standard gray Tailwind
+   palette makes the Budget tab match the rest of the site without changing any
+   component. Dark values are the default; light-mode values apply when <html>
+   lacks `.dark`. Accent is the app's monochrome invert (dark button in light
+   mode, light button in dark mode) with `--color-accent-text` for label color.
 --------------------------------------------------------------------------- */
 .budget-scope {
-  --color-bg-base: #16161f;
-  --color-bg-elevated: #1e1e2e;
-  --color-bg-surface: #252538;
-  --color-bg-overlay: #2d2d45;
-  --color-accent: #b8a9f5;
-  --color-accent-muted: #7c6fb0;
-  --color-accent-subtle: #2a2545;
-  --color-text-primary: #f0eeff;
-  --color-text-secondary: #8b8aa8;
-  --color-text-tertiary: #56556a;
-  --color-border: #2e2e45;
-  --color-border-strong: #3d3d5c;
-  --color-success: #4caf82;
-  --color-warning: #f0a04b;
-  --color-danger: #e05c5c;
-  --color-info: #5c9eff;
+  --color-bg-base: #030712; /* gray-950 */
+  --color-bg-elevated: #111827; /* gray-900 */
+  --color-bg-surface: #1f2937; /* gray-800 */
+  --color-bg-overlay: #1f2937; /* gray-800 */
+  --color-accent: #e5e7eb; /* gray-200 */
+  --color-accent-text: #111827; /* gray-900 */
+  --color-accent-muted: #6b7280; /* gray-500 */
+  --color-accent-subtle: #374151; /* gray-700 */
+  --color-text-primary: #f3f4f6; /* gray-100 */
+  --color-text-secondary: #9ca3af; /* gray-400 */
+  --color-text-tertiary: #6b7280; /* gray-500 */
+  --color-border: #1f2937; /* gray-800 */
+  --color-border-strong: #374151; /* gray-700 */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #6366f1;
 }
 html:not(.dark) .budget-scope {
-  --color-bg-base: #f4f3ff;
+  --color-bg-base: #f9fafb; /* gray-50 */
   --color-bg-elevated: #ffffff;
-  --color-bg-surface: #eeecff;
-  --color-bg-overlay: #e8e6ff;
-  --color-accent: #7c6fb0;
-  --color-accent-muted: #b8a9f5;
-  --color-accent-subtle: #ede9ff;
-  --color-text-primary: #1a1830;
-  --color-text-secondary: #6b6888;
-  --color-text-tertiary: #a09db8;
-  --color-border: #e0ddf5;
-  --color-border-strong: #c8c4e8;
+  --color-bg-surface: #f3f4f6; /* gray-100 */
+  --color-bg-overlay: #f3f4f6; /* gray-100 */
+  --color-accent: #1f2937; /* gray-800 */
+  --color-accent-text: #ffffff;
+  --color-accent-muted: #9ca3af; /* gray-400 */
+  --color-accent-subtle: #e5e7eb; /* gray-200 */
+  --color-text-primary: #111827; /* gray-900 */
+  --color-text-secondary: #4b5563; /* gray-600 */
+  --color-text-tertiary: #9ca3af; /* gray-400 */
+  --color-border: #e5e7eb; /* gray-200 */
+  --color-border-strong: #d1d5db; /* gray-300 */
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-info: #4f46e5;
 }
 .budget-scope input::placeholder {
   color: var(--color-text-tertiary);

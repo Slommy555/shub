@@ -82,7 +82,7 @@ export default function BudgetTab({ userId }: { userId: string }) {
               className="flex-1 rounded-full py-2.5 text-sm font-semibold transition-colors"
               style={
                 view === v.id
-                  ? { background: 'var(--color-accent)', color: '#16161f' }
+                  ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' }
                   : { color: 'var(--color-text-secondary)' }
               }
             >

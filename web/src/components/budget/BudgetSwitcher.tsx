@@ -186,7 +186,7 @@ export default function BudgetSwitcher({ budgets, activeId, onSelect, onCreate, 
                   type="button"
                   onClick={submitCreate}
                   className="rounded-full px-5 text-sm font-semibold"
-                  style={{ background: 'var(--color-accent)', color: '#16161f', minHeight: '48px' }}
+                  style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)', minHeight: '48px' }}
                 >
                   Create
                 </button>
@@ -196,7 +196,7 @@ export default function BudgetSwitcher({ budgets, activeId, onSelect, onCreate, 
                 type="button"
                 onClick={() => setCreating(true)}
                 className="w-full rounded-full py-3.5 text-sm font-semibold active:opacity-85"
-                style={{ background: 'var(--color-accent)', color: '#16161f', minHeight: '48px' }}
+                style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)', minHeight: '48px' }}
               >
                 + New budget
               </button>

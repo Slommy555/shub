@@ -25,7 +25,7 @@ export default function AddGroupForm({ onAdd }: { onAdd: (name: string, color: s
         type="button"
         onClick={() => setOpen(true)}
         className="mt-4 w-full rounded-full py-3.5 text-sm font-semibold transition-opacity active:opacity-85"
-        style={{ background: 'var(--color-accent)', color: '#16161f', minHeight: '48px' }}
+        style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)', minHeight: '48px' }}
       >
         + Add expense group
       </button>
@@ -75,7 +75,7 @@ export default function AddGroupForm({ onAdd }: { onAdd: (name: string, color: s
           type="button"
           onClick={submit}
           className="flex-1 rounded-full py-3 text-sm font-semibold active:opacity-85"
-          style={{ background: 'var(--color-accent)', color: '#16161f', minHeight: '48px' }}
+          style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)', minHeight: '48px' }}
         >
           Add
         </button>

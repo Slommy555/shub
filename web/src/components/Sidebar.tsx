@@ -48,13 +48,20 @@ export default function Sidebar({ active, onSelect, open = false, onClose }: Pro
 
   return (
     <>
-      {/* Backdrop (mobile only, when the drawer is open). Tap to close. */}
+      {/* Backdrop (mobile only, when the drawer is open). Tap to close. The blur
+          is set inline with the -webkit- prefix so iOS Safari actually frosts the
+          page behind the drawer instead of just dimming it. */}
       {open && (
         <button
           type="button"
           aria-label="Close menu"
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-gray-900/40 backdrop-blur-sm sm:hidden"
+          className="fixed inset-0 z-40 sm:hidden"
+          style={{
+            background: 'rgba(17, 24, 39, 0.3)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+          }}
         />
       )}
 

@@ -207,7 +207,7 @@ export default function CreditCardBox({ cards, monthlyOf, onAdd, onUpdate, onDel
               type="button"
               onClick={submit}
               className="rounded-full px-5 text-sm font-semibold"
-              style={{ background: 'var(--color-accent)', color: '#16161f', minHeight: '46px' }}
+              style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)', minHeight: '46px' }}
             >
               Add
             </button>
