@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
+import type { SavingsDeposit } from '../../hooks/budget/useSavingsDeposits';
 
 /** A compact money input that shows the raw number while editing, formats on blur. */
 function MoneyInput({
   value,
   onSave,
   placeholder = '$0',
+  fullWidth = false,
 }: {
   value: number;
   onSave: (n: number) => void;
   placeholder?: string;
+  fullWidth?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const [text, setText] = useState('');
@@ -34,7 +37,7 @@ function MoneyInput({
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
       }}
-      className="w-32 rounded-xl border px-3 text-right text-base tabular-nums outline-none"
+      className={`${fullWidth ? 'w-full' : 'w-32'} rounded-xl border px-3 text-right text-base tabular-nums outline-none`}
       style={{
         height: '44px',
         background: 'var(--color-bg-surface)',
@@ -49,10 +52,13 @@ interface Props {
   /** Groups you can earmark savings toward (excludes the Savings category). */
   groups: BudgetGroup[];
   hasSavingsCategory: boolean;
-  /** The monthly "Savings" category amount. */
-  monthlyContribution: number;
-  /** How many months of contributions are counted through the selected month. */
-  monthsCounted: number;
+  /** This month's four pay-day deposits (custom weekly amounts to put away). */
+  deposits: SavingsDeposit[];
+  onSetDeposit: (weekStart: string, n: number) => void;
+  /** Sum of this month's deposits. */
+  monthDepositTotal: number;
+  /** Cumulative deposits put away from the start month through this month. */
+  contributionsThrough: number;
   startMonthLabel: string;
   startingBalance: number;
   onSetStartingBalance: (n: number) => void;
@@ -72,8 +78,10 @@ interface Props {
 export default function SavingsPoolSection({
   groups,
   hasSavingsCategory,
-  monthlyContribution,
-  monthsCounted,
+  deposits,
+  onSetDeposit,
+  monthDepositTotal,
+  contributionsThrough,
   startMonthLabel,
   startingBalance,
   onSetStartingBalance,
@@ -85,7 +93,7 @@ export default function SavingsPoolSection({
   const [open, setOpen] = useState(false);
   const [warnId, setWarnId] = useState<string | null>(null);
 
-  const contributions = monthlyContribution * monthsCounted;
+  const contributions = contributionsThrough;
   const balance = available - allocated;
 
   const commitEarmark = (groupId: string, entered: number) => {
@@ -152,17 +160,30 @@ export default function SavingsPoolSection({
             </div>
           </label>
 
+          {/* Custom weekly deposits — how much to put away each pay day */}
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              Put away each week
+            </span>
+            <span className="text-xs tabular-nums" style={{ color: 'var(--color-text-tertiary)' }}>
+              {formatMoney(monthDepositTotal)} this month
+            </span>
+          </div>
+          <div className="mb-4 grid grid-cols-2 gap-3">
+            {deposits.map((d) => (
+              <label key={d.date} className="block">
+                <span className="mb-1.5 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {d.label}
+                </span>
+                <MoneyInput value={d.amount} onSave={(n) => onSetDeposit(d.date, n)} fullWidth />
+              </label>
+            ))}
+          </div>
+
           {/* Balance breakdown */}
           <div className="mb-4 flex flex-col gap-2 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-surface)' }}>
             <Line label="Starting balance" value={formatMoney(startingBalance)} />
-            <Line
-              label={
-                hasSavingsCategory
-                  ? `+ Savings budgeted (${monthsCounted} mo × ${formatMoney(monthlyContribution)})`
-                  : '+ Savings budgeted'
-              }
-              value={formatMoney(contributions)}
-            />
+            <Line label="+ Deposits to date" value={formatMoney(contributions)} />
             <Line label="− Allocated to date" value={formatMoney(startingBalance + contributions - balance)} />
             <div className="mt-1 border-t pt-2" style={{ borderColor: 'var(--color-border)' }}>
               <Line label="Balance" value={formatMoney(balance)} strong />
@@ -171,7 +192,7 @@ export default function SavingsPoolSection({
 
           {!hasSavingsCategory && (
             <p className="mb-4 text-[12px]" style={{ color: 'var(--color-text-tertiary)' }}>
-              Add an expense group named “Savings” to contribute to this balance every month.
+              Tip: add an expense group named “Savings” to show what you put away as a line in your budget.
             </p>
           )}
 

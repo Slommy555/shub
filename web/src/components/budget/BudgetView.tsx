@@ -15,6 +15,7 @@ import { useMonthPeriodId } from '../../hooks/budget/useMonthPeriodId';
 import { useSavingsPool } from '../../hooks/budget/useSavingsPool';
 import { useSavingsAccount } from '../../hooks/budget/useSavingsAccount';
 import { useSavingsWithdrawnBefore } from '../../hooks/budget/useSavingsWithdrawnBefore';
+import { useSavingsDeposits } from '../../hooks/budget/useSavingsDeposits';
 import OverviewTable from './OverviewTable';
 import PaycheckList from './PaycheckList';
 import CreditCardBox, { CARD_COLOR } from './CreditCardBox';
@@ -54,28 +55,31 @@ export default function BudgetView({
   const savings = useSavingsPool(userId, budgetId, monthPeriodId);
   const account = useSavingsAccount(userId, budgetId);
   const withdrawnBefore = useSavingsWithdrawnBefore(userId, budgetId, account.startMonth, monthBounds.start_date);
+  const deposits = useSavingsDeposits(userId, budgetId, monthBounds.start_date, account.startMonth);
   const weeklyIncome = monthlyIncome / 4;
 
   const cards = useMemo(
     () => groupsApi.groups.filter((g) => g.kind === 'credit_card'),
     [groupsApi.groups]
   );
-  // The "Savings" category (a group named Savings) funds the running balance and
-  // is excluded from the list of things you can earmark savings toward.
+  // The "Savings" category (a group named Savings) is the expense line for what
+  // you put away; its amount is driven by the custom weekly deposits, and it is
+  // excluded from the list of things you can earmark savings toward.
   const savingsGroup = useMemo(
     () => groupsApi.groups.find((g) => g.name.trim().toLowerCase() === 'savings') ?? null,
     [groupsApi.groups]
   );
+  const isCard = (g: BudgetGroup) => g.kind === 'credit_card';
+  const isSavings = (g: BudgetGroup) => !!savingsGroup && g.id === savingsGroup.id;
 
   /** A card's payment attributable to the selected month (payoff-window aware). */
   const cardMonthlyOf = (g: BudgetGroup) => creditCardAmountForPeriod(g, 'monthly', monthBounds);
-  /** Weekly obligation: a card's flat weekly payment, else the recurring amount. */
+  /** Weekly obligation: card payment, Savings deposits ÷ 4, else recurring amount. */
   const weeklyOf = (g: BudgetGroup) =>
-    g.kind === 'credit_card' ? creditCardWeekly(g.cc_total, g.cc_weeks) : Number(g.amount) || 0;
-  /** Monthly cost: a card's payoff-window payment this month, else amount × 4. */
+    isCard(g) ? creditCardWeekly(g.cc_total, g.cc_weeks) : isSavings(g) ? deposits.monthTotal / 4 : Number(g.amount) || 0;
+  /** Monthly cost: card payment, this month's Savings deposits, else amount × 4. */
   const monthlyOf = (g: BudgetGroup) =>
-    g.kind === 'credit_card' ? cardMonthlyOf(g) : toView(Number(g.amount) || 0, 'monthly');
-  const isCard = (g: BudgetGroup) => g.kind === 'credit_card';
+    isCard(g) ? cardMonthlyOf(g) : isSavings(g) ? deposits.monthTotal : toView(Number(g.amount) || 0, 'monthly');
 
   /** Edits to either column resolve to the same canonical weekly-base amount. */
   const saveWeekly = (g: BudgetGroup, entered: number) =>
@@ -112,18 +116,16 @@ export default function BudgetView({
   const monthlyRemaining = monthlyIncome - (allMonthly - monthlyCovered);
   const weeklyRemaining = weeklyIncome - (allWeekly - weeklyCovered);
 
-  // Running savings balance: starting point + monthly Savings-category
-  // contributions through this month − everything allocated in prior months.
-  const monthlyContribution = savingsGroup ? monthlyOf(savingsGroup) : 0;
-  const monthsCounted = monthsInclusive(account.startMonth, monthBounds.start_date);
-  const savingsAvailable = account.startingBalance + monthlyContribution * monthsCounted - withdrawnBefore;
+  // Running savings balance: starting point + custom weekly deposits put away
+  // through this month − everything allocated in prior months.
+  const savingsAvailable = account.startingBalance + deposits.contributionsThrough - withdrawnBefore;
   const earmarkTargets = groupsApi.groups.filter((g) => g.id !== savingsGroup?.id);
 
   return (
     <>
       <OverviewTable
         groups={groupsApi.groups}
-        amountReadOnly={isCard}
+        amountReadOnly={(g) => isCard(g) || isSavings(g)}
         monthLabel={monthBounds.label}
         onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
         onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
@@ -151,8 +153,10 @@ export default function BudgetView({
       <SavingsPoolSection
         groups={earmarkTargets}
         hasSavingsCategory={!!savingsGroup}
-        monthlyContribution={monthlyContribution}
-        monthsCounted={monthsCounted}
+        deposits={deposits.deposits}
+        onSetDeposit={deposits.setDeposit}
+        monthDepositTotal={deposits.monthTotal}
+        contributionsThrough={deposits.contributionsThrough}
         startMonthLabel={monthLabelOf(account.startMonth)}
         startingBalance={account.startingBalance}
         onSetStartingBalance={account.setStartingBalance}
@@ -201,14 +205,6 @@ function RemainingCell({
       )}
     </div>
   );
-}
-
-/** Months from `startISO` to `selectedISO` inclusive (0 if the view is earlier). */
-function monthsInclusive(startISO: string, selectedISO: string): number {
-  const [sy, sm] = startISO.split('-').map(Number);
-  const [ty, tm] = selectedISO.split('-').map(Number);
-  const diff = (ty - sy) * 12 + (tm - sm);
-  return diff < 0 ? 0 : diff + 1;
 }
 
 /** "July 2026" from a YYYY-MM-DD (first-of-month) string. */
