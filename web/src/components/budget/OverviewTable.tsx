@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
+import type { PayDay } from '../../hooks/budget/usePayDayIncomes';
 import AddGroupForm from './AddGroupForm';
 
 // Column geometry (mobile-first). Name is fixed; the two money columns share the
@@ -18,14 +19,17 @@ interface EditState {
 
 interface Props {
   groups: BudgetGroup[];
+  monthLabel: string;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+  payDays: PayDay[];
   weeklyIncome: number;
   monthlyIncome: number;
+  onSetPayDayIncome: (thursday: string, n: number) => void;
   weeklyOf: (g: BudgetGroup) => number;
   monthlyOf: (g: BudgetGroup) => number;
   onSaveWeekly: (g: BudgetGroup, n: number) => void;
   onSaveMonthly: (g: BudgetGroup, n: number) => void;
-  onSetWeeklyIncome: (n: number) => void;
-  onSetMonthlyIncome: (n: number) => void;
   onAddGroup: (name: string, color: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
@@ -150,14 +154,17 @@ function NameInput({
 
 export default function OverviewTable({
   groups,
+  monthLabel,
+  onPrevMonth,
+  onNextMonth,
+  payDays,
   weeklyIncome,
   monthlyIncome,
+  onSetPayDayIncome,
   weeklyOf,
   monthlyOf,
   onSaveWeekly,
   onSaveMonthly,
-  onSetWeeklyIncome,
-  onSetMonthlyIncome,
   onAddGroup,
   onRename,
   onDelete,
@@ -243,10 +250,82 @@ export default function OverviewTable({
 
   return (
     <div>
-      {/* Income row */}
-      <div className="mb-5 flex gap-3">
-        <IncomeField label="Monthly income" value={monthlyIncome} onSave={onSetMonthlyIncome} />
-        <IncomeField label="Weekly income" value={weeklyIncome} onSave={onSetWeeklyIncome} />
+      {/* Month navigator */}
+      <div className="mb-4 flex items-center justify-between">
+        <button
+          type="button"
+          aria-label="Previous month"
+          onClick={onPrevMonth}
+          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <span className="text-[17px] font-semibold" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+          {monthLabel}
+        </span>
+        <button
+          type="button"
+          aria-label="Next month"
+          onClick={onNextMonth}
+          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Pay-day incomes for the month */}
+      <div className="mb-2 flex items-center justify-between">
+        <span
+          className="text-[11px] font-medium uppercase"
+          style={{ letterSpacing: '0.08em', color: 'var(--color-text-secondary)' }}
+        >
+          Pay days
+        </span>
+        <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+          Weekly income
+        </span>
+      </div>
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        {payDays.map((p) => (
+          <IncomeField
+            key={p.date}
+            label={p.label}
+            value={p.income}
+            onSave={(n) => onSetPayDayIncome(p.date, n)}
+          />
+        ))}
+      </div>
+
+      {/* Income totals */}
+      <div className="mb-5 grid grid-cols-2 gap-3">
+        <div
+          className="rounded-2xl border p-4"
+          style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
+        >
+          <span className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+            Monthly income
+          </span>
+          <span className="text-xl font-bold tabular-nums" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+            {formatMoney(monthlyIncome)}
+          </span>
+        </div>
+        <div
+          className="rounded-2xl border p-4"
+          style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
+        >
+          <span className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+            Weekly (avg)
+          </span>
+          <span className="text-xl font-bold tabular-nums" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+            {formatMoney(weeklyIncome)}
+          </span>
+        </div>
       </div>
 
       {/* Table */}
