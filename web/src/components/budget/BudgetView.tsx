@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
 import {
+  creditCardAmountForPeriod,
+  creditCardWeekly,
+  formatMoney,
   fromView,
   periodForCursor,
   shiftCursor,
@@ -8,25 +11,28 @@ import {
 } from '../../types/budget';
 import { useBudgetGroups } from '../../hooks/budget/useBudgetGroups';
 import { usePayDayIncomes } from '../../hooks/budget/usePayDayIncomes';
+import { useMonthPeriodId } from '../../hooks/budget/useMonthPeriodId';
+import { useSavingsPool } from '../../hooks/budget/useSavingsPool';
 import OverviewTable from './OverviewTable';
 import PaycheckList from './PaycheckList';
+import CreditCardBox, { CARD_COLOR } from './CreditCardBox';
+import SavingsPoolSection from './SavingsPoolSection';
 
 export type BudgetViewMode = 'overview' | 'paycheck';
 
 /**
- * Shared data layer for the two budget views. Every expense group carries one
- * canonical weekly-base `amount`; Monthly is simply that × 4 (the app's existing
- * TIMEFRAME_FACTOR). Editing either the Monthly or the Weekly cell writes back
- * through `toView` / `fromView`, so the two columns stay linked.
+ * Shared data layer for the two budget views. Every standard group carries one
+ * canonical weekly-base `amount`; Monthly is that × 4 (the app's TIMEFRAME_FACTOR)
+ * and editing either column writes back through `toView` / `fromView`.
  *
- * A selectable month drives the income side: its four pay-day Thursdays each hold
- * an editable weekly income, and the monthly income is their sum (weekly income =
- * monthly ÷ 4, matching the app's four-pay-periods-per-month convention). Group
- * amounts are recurring, so they stay constant as you move between months —
- * changing months compares the same expenses against that month's paychecks.
+ * Credit cards live in their own box (groups with kind='credit_card'): their
+ * payoff-window payment for the selected month counts toward the budget. A
+ * savings pool (per selected month) can earmark funds toward any group, offsetting
+ * what income must cover — so Remaining = income − (expenses + cards − savings).
  *
- * Toggling between Overview and Paycheck keeps this data mounted, so switching is
- * instant and never re-fetches.
+ * A selectable month drives the income side (its four pay-day Thursdays) and the
+ * card payments / savings pool; standard group amounts are recurring and stay
+ * constant across months.
  */
 export default function BudgetView({
   userId,
@@ -42,10 +48,28 @@ export default function BudgetView({
 
   const groupsApi = useBudgetGroups(userId, budgetId);
   const { payDays, monthlyIncome, setIncome } = usePayDayIncomes(userId, budgetId, monthBounds.start_date);
+  const monthPeriodId = useMonthPeriodId(userId, budgetId, monthBounds);
+  const savings = useSavingsPool(userId, budgetId, monthPeriodId);
   const weeklyIncome = monthlyIncome / 4;
 
-  const weeklyOf = (g: BudgetGroup) => Number(g.amount) || 0;
+  const cards = useMemo(
+    () => groupsApi.groups.filter((g) => g.kind === 'credit_card'),
+    [groupsApi.groups]
+  );
+  const standardGroups = useMemo(
+    () => groupsApi.groups.filter((g) => g.kind !== 'credit_card'),
+    [groupsApi.groups]
+  );
+
+  /** Weekly obligation: a card's flat weekly payment, else the recurring amount. */
+  const weeklyOf = (g: BudgetGroup) =>
+    g.kind === 'credit_card' ? creditCardWeekly(g.cc_total, g.cc_weeks) : Number(g.amount) || 0;
   const monthlyOf = (g: BudgetGroup) => toView(weeklyOf(g), 'monthly');
+  /** A card's payment attributable to the selected month (payoff-window aware). */
+  const cardMonthlyOf = (g: BudgetGroup) => creditCardAmountForPeriod(g, 'monthly', monthBounds);
+  /** A group's monthly cost, used to size how much savings can cover it. */
+  const monthlyCostOf = (g: BudgetGroup) =>
+    g.kind === 'credit_card' ? cardMonthlyOf(g) : monthlyOf(g);
 
   /** Edits to either column resolve to the same canonical weekly-base amount. */
   const saveWeekly = (g: BudgetGroup, entered: number) =>
@@ -57,23 +81,108 @@ export default function BudgetView({
     return <PaycheckList groups={groupsApi.groups} seedIncome={weeklyIncome} weeklyOf={weeklyOf} />;
   }
 
+  // Budget bottom line: expenses + card payments, offset by earmarked savings.
+  const standardMonthly = standardGroups.reduce((s, g) => s + monthlyOf(g), 0);
+  const standardWeekly = standardGroups.reduce((s, g) => s + weeklyOf(g), 0);
+  const cardsMonthly = cards.reduce((s, g) => s + cardMonthlyOf(g), 0);
+  const cardsWeekly = cardsMonthly / 4;
+  const monthlyCovered = groupsApi.groups.reduce(
+    (s, g) => s + Math.min(savings.earmarkAmounts[g.id] ?? 0, monthlyCostOf(g)),
+    0
+  );
+  const weeklyCovered = monthlyCovered / 4;
+
+  const monthlyRemaining = monthlyIncome - (standardMonthly + cardsMonthly - monthlyCovered);
+  const weeklyRemaining = weeklyIncome - (standardWeekly + cardsWeekly - weeklyCovered);
+
   return (
-    <OverviewTable
-      groups={groupsApi.groups}
-      monthLabel={monthBounds.label}
-      onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
-      onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
-      payDays={payDays}
-      monthlyIncome={monthlyIncome}
-      weeklyIncome={weeklyIncome}
-      onSetPayDayIncome={setIncome}
-      weeklyOf={weeklyOf}
-      monthlyOf={monthlyOf}
-      onSaveWeekly={saveWeekly}
-      onSaveMonthly={saveMonthly}
-      onAddGroup={groupsApi.addGroup}
-      onRename={(id, name) => void groupsApi.updateGroup(id, { name })}
-      onDelete={groupsApi.deleteGroup}
-    />
+    <>
+      <OverviewTable
+        groups={standardGroups}
+        monthLabel={monthBounds.label}
+        onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
+        onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
+        payDays={payDays}
+        monthlyIncome={monthlyIncome}
+        weeklyIncome={weeklyIncome}
+        onSetPayDayIncome={setIncome}
+        weeklyOf={weeklyOf}
+        monthlyOf={monthlyOf}
+        onSaveWeekly={saveWeekly}
+        onSaveMonthly={saveMonthly}
+        onAddGroup={groupsApi.addGroup}
+        onRename={(id, name) => void groupsApi.updateGroup(id, { name })}
+        onDelete={groupsApi.deleteGroup}
+      />
+
+      <CreditCardBox
+        cards={cards}
+        monthlyOf={cardMonthlyOf}
+        onAdd={(name) => void groupsApi.addGroup(name, CARD_COLOR, 'credit_card')}
+        onUpdate={(id, patch) => void groupsApi.updateGroup(id, patch)}
+        onDelete={groupsApi.deleteGroup}
+      />
+
+      <SavingsPoolSection
+        groups={groupsApi.groups}
+        totalSaved={savings.totalSaved}
+        earmarkAmounts={savings.earmarkAmounts}
+        allocated={savings.allocated}
+        remaining={savings.remaining}
+        onSetTotal={savings.setTotal}
+        onSetEarmark={savings.setEarmark}
+      />
+
+      {/* Bottom line */}
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <RemainingCell
+          label="Monthly remaining"
+          value={monthlyRemaining}
+          cards={cardsMonthly}
+          savings={monthlyCovered}
+        />
+        <RemainingCell
+          label="Weekly remaining"
+          value={weeklyRemaining}
+          cards={cardsWeekly}
+          savings={weeklyCovered}
+        />
+      </div>
+    </>
+  );
+}
+
+function RemainingCell({
+  label,
+  value,
+  cards,
+  savings,
+}: {
+  label: string;
+  value: number;
+  cards: number;
+  savings: number;
+}) {
+  const color = value >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  const parts: string[] = [];
+  if (cards > 0) parts.push(`− ${formatMoney(cards)} cards`);
+  if (savings > 0) parts.push(`+ ${formatMoney(savings)} savings`);
+  return (
+    <div
+      className="rounded-2xl border p-4"
+      style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
+    >
+      <span className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+        {label}
+      </span>
+      <span className="text-xl font-bold tabular-nums" style={{ color, letterSpacing: '-0.02em' }}>
+        {formatMoney(value)}
+      </span>
+      {parts.length > 0 && (
+        <span className="mt-1 block text-[11px] tabular-nums" style={{ color: 'var(--color-text-tertiary)' }}>
+          {parts.join(' · ')}
+        </span>
+      )}
+    </div>
   );
 }

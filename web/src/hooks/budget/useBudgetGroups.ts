@@ -85,7 +85,7 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
   }, [userId, budgetId]);
 
   const addGroup = useCallback(
-    async (name: string, color: string) => {
+    async (name: string, color: string, kind: GroupKind = 'standard') => {
       if (!userId || !budgetId) return;
       const trimmed = name.trim();
       if (!trimmed) return;
@@ -102,7 +102,7 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
         position,
         persistent: false,
         amount: 0,
-        kind: 'standard',
+        kind,
         cc_total: 0,
         cc_weeks: 0,
         cc_due_date: null,
@@ -111,7 +111,7 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
       setGroups((prev) => [...prev, row].sort(byPosition));
       const { error } = await supabase
         .from('budget_groups')
-        .insert({ id, user_id: userId, budget_id: budgetId, name: trimmed, color, position, persistent: false, amount: 0 });
+        .insert({ id, user_id: userId, budget_id: budgetId, name: trimmed, color, position, persistent: false, amount: 0, kind });
       if (error) console.error('addGroup failed:', error.message);
     },
     [userId, budgetId]

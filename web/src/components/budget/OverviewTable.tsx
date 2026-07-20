@@ -184,9 +184,6 @@ export default function OverviewTable({
     return { monthly: m, weekly: w };
   }, [groups, monthlyOf, weeklyOf]);
 
-  const monthlyRemaining = monthlyIncome - totals.monthly;
-  const weeklyRemaining = weeklyIncome - totals.weekly;
-
   // Single pointer arbiter per row: a horizontal drag swipes to reveal delete; a
   // tap either closes an open swipe or opens the tapped cell's inline editor; a
   // vertical drag is abandoned so the page scrolls normally.
@@ -498,30 +495,7 @@ export default function OverviewTable({
         </div>
       </div>
 
-      {/* Remaining */}
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <RemainingCell label="Monthly remaining" value={monthlyRemaining} />
-        <RemainingCell label="Weekly remaining" value={weeklyRemaining} />
-      </div>
-
       <AddGroupForm onAdd={onAddGroup} />
-    </div>
-  );
-}
-
-function RemainingCell({ label, value }: { label: string; value: number }) {
-  const color = value >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  return (
-    <div
-      className="rounded-2xl border p-4"
-      style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
-    >
-      <span className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-        {label}
-      </span>
-      <span className="text-xl font-bold tabular-nums" style={{ color, letterSpacing: '-0.02em' }}>
-        {formatMoney(value)}
-      </span>
     </div>
   );
 }
