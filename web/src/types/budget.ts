@@ -133,6 +133,23 @@ export function thursdaysInMonth(monthStartISO: string): string[] {
   return out;
 }
 
+/**
+ * The pay Thursdays whose INCOME counts toward a month, normalised to 4 pay
+ * periods. A month keeps its first four Thursdays; a 5th Thursday overflows into
+ * the next month's income. So a month's income = its own first four Thursdays +
+ * the previous month's overflow 5th (when the previous month had five). This
+ * only reassigns income dollars — group amounts still sum by calendar month.
+ */
+export function payThursdaysForMonth(monthStartISO: string): string[] {
+  const own = thursdaysInMonth(monthStartISO);
+  const counted = own.slice(0, 4); // this month keeps at most its first four
+  const [y, m] = monthStartISO.split('-').map(Number);
+  const prev = new Date(y, m - 2, 1); // first day of the previous month (handles Jan→Dec)
+  const prevThursdays = thursdaysInMonth(toISODate(new Date(prev.getFullYear(), prev.getMonth(), 1)));
+  if (prevThursdays.length >= 5) counted.push(prevThursdays[4]); // carried-in overflow
+  return counted;
+}
+
 export interface PeriodBounds {
   start_date: string;
   end_date: string;

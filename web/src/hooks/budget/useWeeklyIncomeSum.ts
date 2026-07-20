@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { thursdaysInMonth } from '../../types/budget';
+import { payThursdaysForMonth } from '../../types/budget';
 
 /**
  * Sums the income of the active budget's WEEKLY periods that roll up into a
- * month — exactly the weeks whose Thursday falls in that month. Targeting the
- * precise Thursdays (rather than a date range) counts each week once and ignores
- * any legacy non-Thursday week rows. Group AMOUNTS stay isolated per week; only
- * income + amounts sum on the monthly view. Synced via realtime; only runs while
- * `enabled` (the monthly view).
+ * month, normalised to 4 pay periods: a month keeps its first four Thursdays and
+ * a 5th Thursday's income overflows into the next month (see
+ * `payThursdaysForMonth`). Targeting the precise Thursdays counts each week once
+ * and ignores legacy non-Thursday week rows. Synced via realtime; only runs
+ * while `enabled` (the monthly view).
  */
 export function useWeeklyIncomeSum(
   userId: string | null,
@@ -17,7 +17,7 @@ export function useWeeklyIncomeSum(
   enabled: boolean
 ): number {
   const [sum, setSum] = useState(0);
-  const thursdays = useMemo(() => (enabled ? thursdaysInMonth(monthStart) : []), [monthStart, enabled]);
+  const thursdays = useMemo(() => (enabled ? payThursdaysForMonth(monthStart) : []), [monthStart, enabled]);
   const thursdaysKey = thursdays.join(',');
 
   useEffect(() => {
