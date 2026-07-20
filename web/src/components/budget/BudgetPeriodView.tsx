@@ -9,6 +9,7 @@ import { useBudgetPeriod } from '../../hooks/budget/useBudgetPeriod';
 import { useBudgetGroups } from '../../hooks/budget/useBudgetGroups';
 import { useBudgetAllocations } from '../../hooks/budget/useBudgetAllocations';
 import { useSavingsPool } from '../../hooks/budget/useSavingsPool';
+import { useWeeklyIncomeSum } from '../../hooks/budget/useWeeklyIncomeSum';
 import IncomeInput from './IncomeInput';
 import SummaryStrip from './SummaryStrip';
 import GroupCard from './GroupCard';
@@ -30,6 +31,7 @@ export default function BudgetPeriodView({
   budgetId: string;
   type: Timeframe;
 }) {
+  const isMonthly = type === 'monthly';
   const [cursor, setCursor] = useState<Date>(() => new Date());
   const bounds = useMemo(() => periodForCursor(type, cursor), [type, cursor]);
 
@@ -38,7 +40,10 @@ export default function BudgetPeriodView({
   const allocApi = useBudgetAllocations(userId, period?.id ?? null);
   const savings = useSavingsPool(userId, budgetId, period?.id ?? null);
 
-  const income = period?.income ?? 0;
+  // Monthly income rolls up the weeks of that month (read-only); day/week hold
+  // their own editable income. Group AMOUNTS stay isolated per period.
+  const weeklyIncomeSum = useWeeklyIncomeSum(userId, budgetId, bounds.start_date, bounds.end_date, isMonthly);
+  const income = isMonthly ? weeklyIncomeSum : period?.income ?? 0;
 
   /** This period's amount for a group (0 when no allocation exists yet). */
   const amountOf = (g: BudgetGroup) => allocApi.allocations[g.id]?.amount ?? 0;
@@ -238,7 +243,11 @@ export default function BudgetPeriodView({
         </button>
       </div>
 
-      <IncomeInput label="Income" value={income} onSave={setIncome} />
+      {isMonthly ? (
+        <IncomeInput label="Income" value={income} onSave={() => {}} readOnly hint="sum of weekly incomes" />
+      ) : (
+        <IncomeInput label="Income" value={income} onSave={setIncome} />
+      )}
       <SummaryStrip summary={summary} />
 
       {/* Expense groups */}
