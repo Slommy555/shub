@@ -14,6 +14,7 @@ import { useBudgetAllocations } from '../../hooks/budget/useBudgetAllocations';
 import { useSavingsPool } from '../../hooks/budget/useSavingsPool';
 import { useWeeklyIncomeSum } from '../../hooks/budget/useWeeklyIncomeSum';
 import { useMonthlyGroupSums } from '../../hooks/budget/useMonthlyGroupSums';
+import { useMonthPeriodId } from '../../hooks/budget/useMonthPeriodId';
 import IncomeInput from './IncomeInput';
 import SummaryStrip from './SummaryStrip';
 import GroupCard from './GroupCard';
@@ -38,18 +39,29 @@ export default function BudgetPeriodView({
   const isMonthly = type === 'monthly';
   const [cursor, setCursor] = useState<Date>(() => new Date());
   const bounds = useMemo(() => periodForCursor(type, cursor), [type, cursor]);
+  // The month this period belongs to (by its own date / its Thursday). Savings
+  // and the monthly roll-up are anchored here regardless of the current view.
+  const monthBounds = useMemo(
+    () => periodForCursor('monthly', new Date(bounds.start_date + 'T00:00:00')),
+    [bounds.start_date]
+  );
 
   const { period, setIncome } = useBudgetPeriod(userId, budgetId, type, bounds);
   const groupsApi = useBudgetGroups(userId, budgetId);
   const allocApi = useBudgetAllocations(userId, period?.id ?? null);
-  const savings = useSavingsPool(userId, budgetId, period?.id ?? null);
+  // Savings is a MONTHLY pool: anchor it to the month so an earmark set on the
+  // monthly view also offsets the weeks (proportionally, see below).
+  const monthPeriodId = useMonthPeriodId(userId, budgetId, monthBounds);
+  const savings = useSavingsPool(userId, budgetId, monthPeriodId);
 
   // Monthly rolls up its weeks (read-only): income = sum of the month's weekly
   // incomes, and each PER-WEEK group's amount = sum of that group's weekly
   // amounts. PERSISTENT groups instead hold one recurring amount (scaled by the
   // timeframe) and stay editable in every view. Day/week hold their own income.
   const weeklyIncomeSum = useWeeklyIncomeSum(userId, budgetId, bounds.start_date, isMonthly);
-  const monthlyGroupSums = useMonthlyGroupSums(userId, budgetId, bounds.start_date, isMonthly);
+  // Loaded in every view (not just monthly) so savings coverage can be computed
+  // from each group's monthly total.
+  const monthlyGroupSums = useMonthlyGroupSums(userId, budgetId, monthBounds.start_date, true);
   const income = isMonthly ? weeklyIncomeSum : period?.income ?? 0;
 
   /** The amount shown for a group in this view. */
@@ -58,37 +70,47 @@ export default function BudgetPeriodView({
     if (g.persistent) return toView(Number(g.amount) || 0, type);
     return isMonthly ? monthlyGroupSums[g.id] ?? 0 : allocApi.allocations[g.id]?.amount ?? 0;
   };
+  /** A group's total for the whole month (used to size savings coverage). */
+  const monthlyAmountOf = (g: BudgetGroup) => {
+    if (g.kind === 'credit_card') return creditCardAmountForPeriod(g, 'monthly', monthBounds);
+    if (g.persistent) return toView(Number(g.amount) || 0, 'monthly');
+    return monthlyGroupSums[g.id] ?? 0;
+  };
+  /** Fraction of a group's cost covered by savings this month (0–1). The same
+   *  fraction applies in every view, so a fully-covered month = $0 each week. */
+  const coverageFrac = (g: BudgetGroup) => {
+    const monthAmt = monthlyAmountOf(g);
+    if (monthAmt <= 0) return 0;
+    return Math.min(1, (savings.earmarkAmounts[g.id] ?? 0) / monthAmt);
+  };
+  /** The savings-covered portion of a group's cost in the CURRENT view. */
+  const coveredOf = (g: BudgetGroup) => amountOf(g) * coverageFrac(g);
+
   /** Credit-card amounts are computed; per-week items are read-only on monthly. */
   const amountReadOnlyFor = (g: BudgetGroup) => g.kind === 'credit_card' || (!g.persistent && isMonthly);
   const amountLabelFor = (g: BudgetGroup) => {
     if (g.persistent) return 'Amount';
     return isMonthly ? 'Sum of this month’s weeks' : 'Amount (this week)';
   };
-  /** How much of the savings pool is earmarked toward a group this period. */
-  const earmarkOf = (g: BudgetGroup) => savings.earmarkAmounts[g.id] ?? 0;
 
-  // Needs funding = what income must cover after savings offsets each group.
-  const needsFunding = useMemo(() => {
+  // Needs funding = what income must cover after savings offsets each group;
+  // from savings = the covered portion — both in the current view's units.
+  const { needsFunding, fromSavings } = useMemo(() => {
     let needs = 0;
+    let covered = 0;
     for (const g of groupsApi.groups) {
-      const amount =
-        g.kind === 'credit_card'
-          ? creditCardAmountForPeriod(g, type, bounds)
-          : g.persistent
-            ? toView(Number(g.amount) || 0, type)
-            : isMonthly
-              ? monthlyGroupSums[g.id] ?? 0
-              : allocApi.allocations[g.id]?.amount ?? 0;
-      const earmark = savings.earmarkAmounts[g.id] ?? 0;
-      needs += Math.max(0, amount - earmark);
+      const amount = amountOf(g);
+      const cov = amount * coverageFrac(g);
+      covered += cov;
+      needs += Math.max(0, amount - cov);
     }
-    return needs;
-  }, [groupsApi.groups, allocApi.allocations, monthlyGroupSums, savings.earmarkAmounts, isMonthly, type, bounds]);
+    return { needsFunding: needs, fromSavings: covered };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupsApi.groups, allocApi.allocations, monthlyGroupSums, savings.earmarkAmounts, isMonthly, type, bounds, monthBounds]);
 
-  // From savings = total earmarked from the pool across all groups.
   const summary = {
     income,
-    fromSavings: savings.allocated,
+    fromSavings,
     needsFunding,
     remaining: income - needsFunding,
   };
@@ -320,7 +342,7 @@ export default function BudgetPeriodView({
               amount={amountOf(g)}
               amountLabel={amountLabelFor(g)}
               amountReadOnly={amountReadOnlyFor(g)}
-              earmark={earmarkOf(g)}
+              earmark={coveredOf(g)}
               expanded={expandedId === g.id}
               swipeX={swipe && swipe.id === g.id ? swipe.x : 0}
               dragging={dragId === g.id}
@@ -343,15 +365,19 @@ export default function BudgetPeriodView({
 
       <AddGroupForm onAdd={groupsApi.addGroup} />
 
-      <SavingsPoolSection
-        groups={orderedGroups}
-        totalSaved={savings.totalSaved}
-        earmarkAmounts={savings.earmarkAmounts}
-        allocated={savings.allocated}
-        remaining={savings.remaining}
-        onSetTotal={savings.setTotal}
-        onSetEarmark={savings.setEarmark}
-      />
+      {/* Savings is a monthly pool: manage it on the monthly view; the weeks
+          reflect its coverage proportionally. */}
+      {isMonthly && (
+        <SavingsPoolSection
+          groups={orderedGroups}
+          totalSaved={savings.totalSaved}
+          earmarkAmounts={savings.earmarkAmounts}
+          allocated={savings.allocated}
+          remaining={savings.remaining}
+          onSetTotal={savings.setTotal}
+          onSetEarmark={savings.setEarmark}
+        />
+      )}
 
       <SplitCalculator />
     </div>
