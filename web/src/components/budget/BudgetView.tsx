@@ -13,6 +13,8 @@ import { useBudgetGroups } from '../../hooks/budget/useBudgetGroups';
 import { usePayDayIncomes } from '../../hooks/budget/usePayDayIncomes';
 import { useMonthPeriodId } from '../../hooks/budget/useMonthPeriodId';
 import { useSavingsPool } from '../../hooks/budget/useSavingsPool';
+import { useSavingsAccount } from '../../hooks/budget/useSavingsAccount';
+import { useSavingsWithdrawnBefore } from '../../hooks/budget/useSavingsWithdrawnBefore';
 import OverviewTable from './OverviewTable';
 import PaycheckList from './PaycheckList';
 import CreditCardBox, { CARD_COLOR } from './CreditCardBox';
@@ -50,10 +52,18 @@ export default function BudgetView({
   const { payDays, monthlyIncome, setIncome } = usePayDayIncomes(userId, budgetId, monthBounds.start_date);
   const monthPeriodId = useMonthPeriodId(userId, budgetId, monthBounds);
   const savings = useSavingsPool(userId, budgetId, monthPeriodId);
+  const account = useSavingsAccount(userId, budgetId);
+  const withdrawnBefore = useSavingsWithdrawnBefore(userId, budgetId, account.startMonth, monthBounds.start_date);
   const weeklyIncome = monthlyIncome / 4;
 
   const cards = useMemo(
     () => groupsApi.groups.filter((g) => g.kind === 'credit_card'),
+    [groupsApi.groups]
+  );
+  // The "Savings" category (a group named Savings) funds the running balance and
+  // is excluded from the list of things you can earmark savings toward.
+  const savingsGroup = useMemo(
+    () => groupsApi.groups.find((g) => g.name.trim().toLowerCase() === 'savings') ?? null,
     [groupsApi.groups]
   );
 
@@ -102,6 +112,13 @@ export default function BudgetView({
   const monthlyRemaining = monthlyIncome - (allMonthly - monthlyCovered);
   const weeklyRemaining = weeklyIncome - (allWeekly - weeklyCovered);
 
+  // Running savings balance: starting point + monthly Savings-category
+  // contributions through this month − everything allocated in prior months.
+  const monthlyContribution = savingsGroup ? monthlyOf(savingsGroup) : 0;
+  const monthsCounted = monthsInclusive(account.startMonth, monthBounds.start_date);
+  const savingsAvailable = account.startingBalance + monthlyContribution * monthsCounted - withdrawnBefore;
+  const earmarkTargets = groupsApi.groups.filter((g) => g.id !== savingsGroup?.id);
+
   return (
     <>
       <OverviewTable
@@ -132,12 +149,16 @@ export default function BudgetView({
       />
 
       <SavingsPoolSection
-        groups={groupsApi.groups}
-        totalSaved={savings.totalSaved}
-        earmarkAmounts={savings.earmarkAmounts}
+        groups={earmarkTargets}
+        hasSavingsCategory={!!savingsGroup}
+        monthlyContribution={monthlyContribution}
+        monthsCounted={monthsCounted}
+        startMonthLabel={monthLabelOf(account.startMonth)}
+        startingBalance={account.startingBalance}
+        onSetStartingBalance={account.setStartingBalance}
+        available={savingsAvailable}
         allocated={savings.allocated}
-        remaining={savings.remaining}
-        onSetTotal={savings.setTotal}
+        earmarkAmounts={savings.earmarkAmounts}
         onSetEarmark={savings.setEarmark}
       />
 
@@ -180,4 +201,17 @@ function RemainingCell({
       )}
     </div>
   );
+}
+
+/** Months from `startISO` to `selectedISO` inclusive (0 if the view is earlier). */
+function monthsInclusive(startISO: string, selectedISO: string): number {
+  const [sy, sm] = startISO.split('-').map(Number);
+  const [ty, tm] = selectedISO.split('-').map(Number);
+  const diff = (ty - sy) * 12 + (tm - sm);
+  return diff < 0 ? 0 : diff + 1;
+}
+
+/** "July 2026" from a YYYY-MM-DD (first-of-month) string. */
+function monthLabelOf(iso: string): string {
+  return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
