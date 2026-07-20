@@ -113,7 +113,7 @@ interface GroupCardProps {
   group: BudgetGroup;
   amount: number; // this period's allocated amount (or the monthly roll-up)
   amountLabel: string;
-  /** monthly view sums the weeks — the amount is read-only there */
+  /** per-week items are read-only on the monthly view (summed) */
   amountReadOnly?: boolean;
   /** how much of the savings pool is earmarked toward this group */
   earmark: number;
@@ -124,6 +124,7 @@ interface GroupCardProps {
   onChangeAmount: (n: number) => void;
   onChangeName: (name: string) => void;
   onChangeColor: (color: string) => void;
+  onTogglePersistent: (persistent: boolean) => void;
   onDelete: () => void;
   rowRef?: (el: HTMLDivElement | null) => void;
 }
@@ -141,6 +142,7 @@ export default function GroupCard({
   onChangeAmount,
   onChangeName,
   onChangeColor,
+  onTogglePersistent,
   onDelete,
   rowRef,
 }: GroupCardProps) {
@@ -235,6 +237,35 @@ export default function GroupCard({
                 ))}
               </div>
             </div>
+
+            {/* Persistent toggle: recurring fixed amount vs entered per week */}
+            <button
+              data-no-drag
+              type="button"
+              onClick={() => onTogglePersistent(!group.persistent)}
+              className="flex items-center justify-between rounded-xl border px-3 py-2.5 text-left"
+              style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-border)' }}
+            >
+              <span className="min-w-0 pr-3">
+                <span className="block text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                  Repeats every period
+                </span>
+                <span className="block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  {group.persistent
+                    ? 'Fixed recurring amount (e.g. Rent) — set it in any view'
+                    : 'Entered per week; the month adds up its weeks'}
+                </span>
+              </span>
+              <span
+                className="relative h-6 w-10 shrink-0 rounded-full transition-colors"
+                style={{ background: group.persistent ? 'var(--color-accent)' : 'var(--color-border-strong)' }}
+              >
+                <span
+                  className="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform"
+                  style={{ transform: group.persistent ? 'translateX(18px)' : 'translateX(2px)' }}
+                />
+              </span>
+            </button>
 
             {amountReadOnly ? (
               <label className="block">

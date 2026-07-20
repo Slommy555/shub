@@ -31,6 +31,11 @@ export interface BudgetGroup {
   name: string;
   color: string;
   position: number;
+  /** true = one recurring amount that repeats every period + scales across
+   *  timeframes (uses `amount`). false = entered per period (uses allocations). */
+  persistent: boolean;
+  /** the shared weekly-base amount, used only when persistent. */
+  amount: number;
   created_at?: string;
 }
 
@@ -62,18 +67,31 @@ export interface SavingsEarmark {
 }
 
 // --- timeframes -------------------------------------------------------------
-// Daily / Weekly / Monthly are independent period lenses. Each navigable period
-// (a specific day / week / month) holds its OWN income + amounts — nothing is
-// shared or scaled between periods or timeframes.
+// Daily / Weekly / Monthly are navigable period lenses. PER-WEEK items are
+// entered per period and isolated (the month sums its weeks). PERSISTENT items
+// hold one recurring weekly-base amount that repeats every period and scales
+// across timeframes: daily = weekly ÷ 7, monthly = weekly × 4.
 export type Timeframe = 'daily' | 'weekly' | 'monthly';
 
 export const TIMEFRAMES: Timeframe[] = ['daily', 'weekly', 'monthly'];
+
+export const TIMEFRAME_FACTOR: Record<Timeframe, number> = {
+  daily: 1 / 7,
+  weekly: 1,
+  monthly: 4,
+};
 
 export const TIMEFRAME_LABEL: Record<Timeframe, string> = {
   daily: 'Daily',
   weekly: 'Weekly',
   monthly: 'Monthly',
 };
+
+/** A persistent group's weekly-base amount → the amount shown in this timeframe. */
+export const toView = (canonical: number, tf: Timeframe): number => canonical * TIMEFRAME_FACTOR[tf];
+
+/** An amount typed in this timeframe → the weekly-base amount stored on the group. */
+export const fromView = (value: number, tf: Timeframe): number => value / TIMEFRAME_FACTOR[tf];
 
 /** Tap-to-pick swatches for new groups (no full color wheel). */
 export const PRESET_COLORS = [

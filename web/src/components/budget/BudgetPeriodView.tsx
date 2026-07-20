@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  fromView,
   periodForCursor,
   shiftCursor,
+  toView,
   type BudgetGroup,
   type Timeframe,
 } from '../../types/budget';
@@ -42,15 +44,24 @@ export default function BudgetPeriodView({
   const savings = useSavingsPool(userId, budgetId, period?.id ?? null);
 
   // Monthly rolls up its weeks (read-only): income = sum of the month's weekly
-  // incomes, and each group's amount = sum of that group's weekly amounts. Day
-  // and week hold their own editable per-period income + amounts.
+  // incomes, and each PER-WEEK group's amount = sum of that group's weekly
+  // amounts. PERSISTENT groups instead hold one recurring amount (scaled by the
+  // timeframe) and stay editable in every view. Day/week hold their own income.
   const weeklyIncomeSum = useWeeklyIncomeSum(userId, budgetId, bounds.start_date, isMonthly);
   const monthlyGroupSums = useMonthlyGroupSums(userId, budgetId, bounds.start_date, isMonthly);
   const income = isMonthly ? weeklyIncomeSum : period?.income ?? 0;
 
-  /** The amount shown for a group in this view (monthly = summed weeks). */
-  const amountOf = (g: BudgetGroup) =>
-    isMonthly ? monthlyGroupSums[g.id] ?? 0 : allocApi.allocations[g.id]?.amount ?? 0;
+  /** The amount shown for a group in this view. */
+  const amountOf = (g: BudgetGroup) => {
+    if (g.persistent) return toView(Number(g.amount) || 0, type);
+    return isMonthly ? monthlyGroupSums[g.id] ?? 0 : allocApi.allocations[g.id]?.amount ?? 0;
+  };
+  /** Per-week items are read-only on the monthly view; persistent items never are. */
+  const amountReadOnlyFor = (g: BudgetGroup) => !g.persistent && isMonthly;
+  const amountLabelFor = (g: BudgetGroup) => {
+    if (g.persistent) return 'Amount';
+    return isMonthly ? 'Sum of this month’s weeks' : 'Amount (this week)';
+  };
   /** How much of the savings pool is earmarked toward a group this period. */
   const earmarkOf = (g: BudgetGroup) => savings.earmarkAmounts[g.id] ?? 0;
 
@@ -58,12 +69,16 @@ export default function BudgetPeriodView({
   const needsFunding = useMemo(() => {
     let needs = 0;
     for (const g of groupsApi.groups) {
-      const amount = isMonthly ? monthlyGroupSums[g.id] ?? 0 : allocApi.allocations[g.id]?.amount ?? 0;
+      const amount = g.persistent
+        ? toView(Number(g.amount) || 0, type)
+        : isMonthly
+          ? monthlyGroupSums[g.id] ?? 0
+          : allocApi.allocations[g.id]?.amount ?? 0;
       const earmark = savings.earmarkAmounts[g.id] ?? 0;
       needs += Math.max(0, amount - earmark);
     }
     return needs;
-  }, [groupsApi.groups, allocApi.allocations, monthlyGroupSums, savings.earmarkAmounts, isMonthly]);
+  }, [groupsApi.groups, allocApi.allocations, monthlyGroupSums, savings.earmarkAmounts, isMonthly, type]);
 
   // From savings = total earmarked from the pool across all groups.
   const summary = {
@@ -73,11 +88,24 @@ export default function BudgetPeriodView({
     remaining: income - needsFunding,
   };
 
-  // Monthly amounts are the read-only sum of the weeks; only day/week are editable.
+  /** Save an edited amount. Persistent → shared recurring amount (converted back
+   *  from the current view); per-week → this week's allocation (never on monthly). */
   const saveAmount = (g: BudgetGroup, entered: number) => {
-    if (!isMonthly) void allocApi.setAmount(g.id, entered);
+    if (g.persistent) void groupsApi.updateGroup(g.id, { amount: fromView(entered, type) });
+    else if (!isMonthly) void allocApi.setAmount(g.id, entered);
   };
-  const amountLabel = isMonthly ? 'Sum of this month’s weeks' : 'Amount (this period)';
+
+  /** Flip persistence, carrying the currently-shown value across so it doesn't
+   *  jump to 0 when the storage location changes. */
+  const togglePersistent = (g: BudgetGroup, next: boolean) => {
+    const shown = amountOf(g);
+    if (next) {
+      void groupsApi.updateGroup(g.id, { persistent: true, amount: fromView(shown, type) });
+    } else {
+      if (!isMonthly) void allocApi.setAmount(g.id, shown); // seed this week (monthly is read-only)
+      void groupsApi.updateGroup(g.id, { persistent: false });
+    }
+  };
 
   // --- gesture state --------------------------------------------------------
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -102,8 +130,9 @@ export default function BudgetPeriodView({
   const toggleExpand = (id: string) => {
     setExpandedId((cur) => {
       const next = cur === id ? null : id;
-      // Monthly is a read-only roll-up — don't create allocations on it.
-      if (next && !isMonthly) void allocApi.ensureAllocation(id);
+      // Only per-week items on an editable (non-monthly) view use allocations.
+      const g = groupById.get(id);
+      if (next && g && !g.persistent && !isMonthly) void allocApi.ensureAllocation(id);
       return next;
     });
   };
@@ -276,8 +305,8 @@ export default function BudgetPeriodView({
               key={g.id}
               group={g}
               amount={amountOf(g)}
-              amountLabel={amountLabel}
-              amountReadOnly={isMonthly}
+              amountLabel={amountLabelFor(g)}
+              amountReadOnly={amountReadOnlyFor(g)}
               earmark={earmarkOf(g)}
               expanded={expandedId === g.id}
               swipeX={swipe && swipe.id === g.id ? swipe.x : 0}
@@ -286,6 +315,7 @@ export default function BudgetPeriodView({
               onChangeAmount={(n) => saveAmount(g, n)}
               onChangeName={(name) => groupsApi.updateGroup(g.id, { name })}
               onChangeColor={(color) => groupsApi.updateGroup(g.id, { color })}
+              onTogglePersistent={(v) => togglePersistent(g, v)}
               onDelete={() => deleteGroup(g.id, g.name)}
               rowRef={(el) => {
                 if (el) rowEls.current.set(g.id, el);

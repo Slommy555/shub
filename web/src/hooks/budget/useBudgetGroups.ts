@@ -80,6 +80,8 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
       if (!trimmed) return;
       const id = crypto.randomUUID();
       const position = groupsRef.current.length;
+      // New items default to per-week (non-persistent) so nothing auto-persists
+      // across months; the user opts specific items (e.g. Rent) into persistent.
       const row: BudgetGroup = {
         id,
         user_id: userId,
@@ -87,19 +89,21 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
         name: trimmed,
         color,
         position,
+        persistent: false,
+        amount: 0,
         created_at: new Date().toISOString(),
       };
       setGroups((prev) => [...prev, row].sort(byPosition));
       const { error } = await supabase
         .from('budget_groups')
-        .insert({ id, user_id: userId, budget_id: budgetId, name: trimmed, color, position });
+        .insert({ id, user_id: userId, budget_id: budgetId, name: trimmed, color, position, persistent: false, amount: 0 });
       if (error) console.error('addGroup failed:', error.message);
     },
     [userId, budgetId]
   );
 
   const updateGroup = useCallback(
-    async (id: string, patch: { name?: string; color?: string }) => {
+    async (id: string, patch: { name?: string; color?: string; persistent?: boolean; amount?: number }) => {
       const name = patch.name?.trim();
       setGroups((prev) =>
         prev.map((g) =>
@@ -108,13 +112,17 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
                 ...g,
                 ...(name ? { name } : {}),
                 ...(patch.color ? { color: patch.color } : {}),
+                ...(patch.persistent !== undefined ? { persistent: patch.persistent } : {}),
+                ...(patch.amount !== undefined ? { amount: patch.amount } : {}),
               }
             : g
         )
       );
-      const dbPatch: { name?: string; color?: string } = {};
+      const dbPatch: { name?: string; color?: string; persistent?: boolean; amount?: number } = {};
       if (name) dbPatch.name = name;
       if (patch.color) dbPatch.color = patch.color;
+      if (patch.persistent !== undefined) dbPatch.persistent = patch.persistent;
+      if (patch.amount !== undefined) dbPatch.amount = patch.amount;
       if (Object.keys(dbPatch).length === 0) return;
       const { error } = await supabase.from('budget_groups').update(dbPatch).eq('id', id);
       if (error) console.error('updateGroup failed:', error.message);
