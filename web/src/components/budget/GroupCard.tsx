@@ -111,8 +111,10 @@ function PiggyBank() {
 
 interface GroupCardProps {
   group: BudgetGroup;
-  amount: number; // this period's allocated amount
+  amount: number; // this period's allocated amount (or the monthly roll-up)
   amountLabel: string;
+  /** monthly view sums the weeks — the amount is read-only there */
+  amountReadOnly?: boolean;
   /** how much of the savings pool is earmarked toward this group */
   earmark: number;
   expanded: boolean;
@@ -130,6 +132,7 @@ export default function GroupCard({
   group,
   amount,
   amountLabel,
+  amountReadOnly = false,
   earmark,
   expanded,
   swipeX,
@@ -233,7 +236,26 @@ export default function GroupCard({
               </div>
             </div>
 
-            <MoneyField label={amountLabel} value={amount} onSave={onChangeAmount} />
+            {amountReadOnly ? (
+              <label className="block">
+                <span className="mb-1.5 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  {amountLabel}
+                </span>
+                <div
+                  className="flex w-full items-center rounded-xl border px-3 text-base tabular-nums"
+                  style={{
+                    height: '48px',
+                    background: 'var(--color-bg-surface)',
+                    borderColor: 'var(--color-border)',
+                    color: 'var(--color-text-primary)',
+                  }}
+                >
+                  {formatMoney(amount)}
+                </div>
+              </label>
+            ) : (
+              <MoneyField label={amountLabel} value={amount} onSave={onChangeAmount} />
+            )}
           </div>
         )}
       </div>

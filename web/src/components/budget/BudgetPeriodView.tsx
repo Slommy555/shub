@@ -10,6 +10,7 @@ import { useBudgetGroups } from '../../hooks/budget/useBudgetGroups';
 import { useBudgetAllocations } from '../../hooks/budget/useBudgetAllocations';
 import { useSavingsPool } from '../../hooks/budget/useSavingsPool';
 import { useWeeklyIncomeSum } from '../../hooks/budget/useWeeklyIncomeSum';
+import { useMonthlyGroupSums } from '../../hooks/budget/useMonthlyGroupSums';
 import IncomeInput from './IncomeInput';
 import SummaryStrip from './SummaryStrip';
 import GroupCard from './GroupCard';
@@ -40,13 +41,16 @@ export default function BudgetPeriodView({
   const allocApi = useBudgetAllocations(userId, period?.id ?? null);
   const savings = useSavingsPool(userId, budgetId, period?.id ?? null);
 
-  // Monthly income rolls up the weeks of that month (read-only); day/week hold
-  // their own editable income. Group AMOUNTS stay isolated per period.
-  const weeklyIncomeSum = useWeeklyIncomeSum(userId, budgetId, bounds.start_date, bounds.end_date, isMonthly);
+  // Monthly rolls up its weeks (read-only): income = sum of the month's weekly
+  // incomes, and each group's amount = sum of that group's weekly amounts. Day
+  // and week hold their own editable per-period income + amounts.
+  const weeklyIncomeSum = useWeeklyIncomeSum(userId, budgetId, bounds.start_date, isMonthly);
+  const monthlyGroupSums = useMonthlyGroupSums(userId, budgetId, bounds.start_date, isMonthly);
   const income = isMonthly ? weeklyIncomeSum : period?.income ?? 0;
 
-  /** This period's amount for a group (0 when no allocation exists yet). */
-  const amountOf = (g: BudgetGroup) => allocApi.allocations[g.id]?.amount ?? 0;
+  /** The amount shown for a group in this view (monthly = summed weeks). */
+  const amountOf = (g: BudgetGroup) =>
+    isMonthly ? monthlyGroupSums[g.id] ?? 0 : allocApi.allocations[g.id]?.amount ?? 0;
   /** How much of the savings pool is earmarked toward a group this period. */
   const earmarkOf = (g: BudgetGroup) => savings.earmarkAmounts[g.id] ?? 0;
 
@@ -54,12 +58,12 @@ export default function BudgetPeriodView({
   const needsFunding = useMemo(() => {
     let needs = 0;
     for (const g of groupsApi.groups) {
-      const amount = allocApi.allocations[g.id]?.amount ?? 0;
+      const amount = isMonthly ? monthlyGroupSums[g.id] ?? 0 : allocApi.allocations[g.id]?.amount ?? 0;
       const earmark = savings.earmarkAmounts[g.id] ?? 0;
       needs += Math.max(0, amount - earmark);
     }
     return needs;
-  }, [groupsApi.groups, allocApi.allocations, savings.earmarkAmounts]);
+  }, [groupsApi.groups, allocApi.allocations, monthlyGroupSums, savings.earmarkAmounts, isMonthly]);
 
   // From savings = total earmarked from the pool across all groups.
   const summary = {
@@ -69,7 +73,11 @@ export default function BudgetPeriodView({
     remaining: income - needsFunding,
   };
 
-  const saveAmount = (g: BudgetGroup, entered: number) => void allocApi.setAmount(g.id, entered);
+  // Monthly amounts are the read-only sum of the weeks; only day/week are editable.
+  const saveAmount = (g: BudgetGroup, entered: number) => {
+    if (!isMonthly) void allocApi.setAmount(g.id, entered);
+  };
+  const amountLabel = isMonthly ? 'Sum of this month’s weeks' : 'Amount (this period)';
 
   // --- gesture state --------------------------------------------------------
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -94,7 +102,8 @@ export default function BudgetPeriodView({
   const toggleExpand = (id: string) => {
     setExpandedId((cur) => {
       const next = cur === id ? null : id;
-      if (next) void allocApi.ensureAllocation(id);
+      // Monthly is a read-only roll-up — don't create allocations on it.
+      if (next && !isMonthly) void allocApi.ensureAllocation(id);
       return next;
     });
   };
@@ -267,7 +276,8 @@ export default function BudgetPeriodView({
               key={g.id}
               group={g}
               amount={amountOf(g)}
-              amountLabel="Amount (this period)"
+              amountLabel={amountLabel}
+              amountReadOnly={isMonthly}
               earmark={earmarkOf(g)}
               expanded={expandedId === g.id}
               swipeX={swipe && swipe.id === g.id ? swipe.x : 0}

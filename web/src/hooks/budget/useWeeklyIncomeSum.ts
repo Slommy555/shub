@@ -1,24 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { thursdaysInMonth } from '../../types/budget';
 
 /**
- * Sums the income of every WEEKLY period in the active budget whose start date
- * (its Thursday) falls within [monthStart, monthEnd], giving the monthly tab a
- * derived income that rolls up the individual weeks. Group AMOUNTS stay isolated
- * per period — only income rolls up. Kept in sync via realtime; only runs while
- * `enabled` (i.e. on the monthly view).
+ * Sums the income of the active budget's WEEKLY periods that roll up into a
+ * month — exactly the weeks whose Thursday falls in that month. Targeting the
+ * precise Thursdays (rather than a date range) counts each week once and ignores
+ * any legacy non-Thursday week rows. Group AMOUNTS stay isolated per week; only
+ * income + amounts sum on the monthly view. Synced via realtime; only runs while
+ * `enabled` (the monthly view).
  */
 export function useWeeklyIncomeSum(
   userId: string | null,
   budgetId: string | null,
   monthStart: string,
-  monthEnd: string,
   enabled: boolean
 ): number {
   const [sum, setSum] = useState(0);
+  const thursdays = useMemo(() => (enabled ? thursdaysInMonth(monthStart) : []), [monthStart, enabled]);
+  const thursdaysKey = thursdays.join(',');
 
   useEffect(() => {
-    if (!userId || !budgetId || !enabled) {
+    if (!userId || !budgetId || !enabled || thursdays.length === 0) {
       setSum(0);
       return;
     }
@@ -31,8 +34,7 @@ export function useWeeklyIncomeSum(
         .eq('user_id', userId)
         .eq('budget_id', budgetId)
         .eq('type', 'weekly')
-        .gte('start_date', monthStart)
-        .lte('start_date', monthEnd);
+        .in('start_date', thursdays);
       if (cancelled) return;
       if (error) {
         console.error('weekly income sum failed:', error.message);
@@ -51,7 +53,7 @@ export function useWeeklyIncomeSum(
         (payload) => {
           const row = (payload.new ?? payload.old) as { type?: string; start_date?: string; budget_id?: string };
           if (row?.type !== 'weekly' || row.budget_id !== budgetId) return;
-          if (!row.start_date || row.start_date < monthStart || row.start_date > monthEnd) return;
+          if (!row.start_date || !thursdays.includes(row.start_date)) return;
           void load();
         }
       )
@@ -61,7 +63,8 @@ export function useWeeklyIncomeSum(
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [userId, budgetId, monthStart, monthEnd, enabled]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, budgetId, monthStart, enabled, thursdaysKey]);
 
   return sum;
 }

@@ -112,7 +112,26 @@ function thursdayOf(d: Date): Date {
 
 const firstOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
 const lastOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
-const shortDate = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+/**
+ * Every Thursday (as YYYY-MM-DD) whose date falls within the calendar month of
+ * `monthStartISO` (a 'YYYY-MM-01' string). These are exactly the weekly periods
+ * that roll up into that month — a week belongs to the month containing its
+ * Thursday. Used so the monthly roll-up counts each week once and ignores any
+ * legacy non-Thursday week rows.
+ */
+export function thursdaysInMonth(monthStartISO: string): string[] {
+  const [y, m] = monthStartISO.split('-').map(Number);
+  const last = new Date(y, m, 0); // last day of the month
+  const d = new Date(y, m - 1, 1); // first day of the month
+  d.setDate(d.getDate() + ((4 - d.getDay() + 7) % 7)); // advance to first Thursday
+  const out: string[] = [];
+  while (d <= last) {
+    out.push(toISODate(d));
+    d.setDate(d.getDate() + 7);
+  }
+  return out;
+}
 
 export interface PeriodBounds {
   start_date: string;
@@ -135,7 +154,13 @@ export function periodForCursor(type: Timeframe, cursor: Date): PeriodBounds {
   if (type === 'weekly') {
     const s = thursdayOf(cursor);
     const e = addDays(s, 6);
-    return { start_date: toISODate(s), end_date: toISODate(e), label: `${shortDate(s)} – ${shortDate(e)}` };
+    // Label the week by its Thursday — the day that decides which month it rolls
+    // up into (Thursday in July → counts for July; in August → August).
+    return {
+      start_date: toISODate(s),
+      end_date: toISODate(e),
+      label: s.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }),
+    };
   }
   const s = firstOfMonth(cursor);
   const e = lastOfMonth(cursor);
