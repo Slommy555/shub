@@ -10,6 +10,7 @@ interface GroupPatch {
   kind?: GroupKind;
   cc_total?: number;
   cc_weeks?: number;
+  cc_start_date?: string | null;
   cc_due_date?: string | null;
 }
 
@@ -105,6 +106,7 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
         kind,
         cc_total: 0,
         cc_weeks: 0,
+        cc_start_date: null,
         cc_due_date: null,
         created_at: new Date().toISOString(),
       };
@@ -132,6 +134,7 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
                 ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
                 ...(patch.cc_total !== undefined ? { cc_total: patch.cc_total } : {}),
                 ...(patch.cc_weeks !== undefined ? { cc_weeks: patch.cc_weeks } : {}),
+                ...(patch.cc_start_date !== undefined ? { cc_start_date: patch.cc_start_date } : {}),
                 ...(patch.cc_due_date !== undefined ? { cc_due_date: patch.cc_due_date } : {}),
               }
             : g
@@ -145,6 +148,7 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
       if (patch.kind !== undefined) dbPatch.kind = patch.kind;
       if (patch.cc_total !== undefined) dbPatch.cc_total = patch.cc_total;
       if (patch.cc_weeks !== undefined) dbPatch.cc_weeks = patch.cc_weeks;
+      if (patch.cc_start_date !== undefined) dbPatch.cc_start_date = patch.cc_start_date;
       if (patch.cc_due_date !== undefined) dbPatch.cc_due_date = patch.cc_due_date;
       if (Object.keys(dbPatch).length === 0) return;
       const { error } = await supabase.from('budget_groups').update(dbPatch).eq('id', id);

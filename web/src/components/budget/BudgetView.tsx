@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   creditCardAmountForPeriod,
-  creditCardWeekly,
+  creditCardPayment,
   formatMoney,
   fromView,
   periodForCursor,
@@ -74,12 +74,22 @@ export default function BudgetView({
 
   /** A card's payment attributable to the selected month (payoff-window aware). */
   const cardMonthlyOf = (g: BudgetGroup) => creditCardAmountForPeriod(g, 'monthly', monthBounds);
-  /** Weekly obligation: card payment, Savings deposits ÷ 4, else recurring amount. */
+  /** Weekly obligation: card per-pay-date payment while active this month (else
+   *  $0 — so a paid-off card stops), Savings deposits ÷ 4, else recurring amount. */
   const weeklyOf = (g: BudgetGroup) =>
-    isCard(g) ? creditCardWeekly(g.cc_total, g.cc_weeks) : isSavings(g) ? deposits.monthTotal / 4 : Number(g.amount) || 0;
+    isCard(g)
+      ? (cardMonthlyOf(g) > 0 ? creditCardPayment(g) : 0)
+      : isSavings(g)
+        ? deposits.monthTotal / 4
+        : Number(g.amount) || 0;
   /** Monthly cost: card payment, this month's Savings deposits, else amount × 4. */
   const monthlyOf = (g: BudgetGroup) =>
     isCard(g) ? cardMonthlyOf(g) : isSavings(g) ? deposits.monthTotal : toView(Number(g.amount) || 0, 'monthly');
+  /** Set-aside for a group on a specific pay-day Thursday (card window-aware). */
+  const weeklyOnDate = (g: BudgetGroup, thursdayISO: string) =>
+    isCard(g)
+      ? creditCardAmountForPeriod(g, 'weekly', { start_date: thursdayISO, end_date: thursdayISO, label: '' })
+      : Number(g.amount) || 0;
 
   /** Edits to either column resolve to the same canonical weekly-base amount. */
   const saveWeekly = (g: BudgetGroup, entered: number) =>
@@ -94,11 +104,13 @@ export default function BudgetView({
   if (view === 'paycheck') {
     return (
       <PaycheckList
-        groups={groupsApi.groups}
+        groups={groupsApi.groups.filter((g) => !isSavings(g))}
         payDays={payDays}
         onSetPayDayIncome={setIncome}
-        weeklyOf={weeklyOf}
+        weeklyOnDate={weeklyOnDate}
         coveredOf={weeklyCoveredOf}
+        deposits={deposits.deposits}
+        onSetDeposit={deposits.setDeposit}
       />
     );
   }

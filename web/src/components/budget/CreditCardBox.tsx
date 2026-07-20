@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  creditCardWeekly,
+  creditCardPayment,
   formatMoney,
   parseMoney,
   type BudgetGroup,
@@ -11,7 +11,10 @@ interface Props {
   /** This-month payment for a card (payoff-window aware). */
   monthlyOf: (g: BudgetGroup) => number;
   onAdd: (name: string) => void;
-  onUpdate: (id: string, patch: { name?: string; cc_total?: number; cc_weeks?: number; cc_due_date?: string | null }) => void;
+  onUpdate: (
+    id: string,
+    patch: { name?: string; cc_total?: number; cc_start_date?: string | null; cc_due_date?: string | null }
+  ) => void;
   onDelete: (id: string) => void;
 }
 
@@ -57,41 +60,19 @@ function MoneyField({ label, value, onSave }: { label: string; value: number; on
   );
 }
 
-/** Whole-number field (weeks). */
-function IntField({ label, value, onSave }: { label: string; value: number; onSave: (n: number) => void }) {
-  const [focused, setFocused] = useState(false);
-  const [text, setText] = useState('');
-  const display = focused ? text : value ? String(value) : '';
+/** A native date field. */
+function DateField({ label, value, onSave }: { label: string; value: string | null; onSave: (v: string | null) => void }) {
   return (
-    <label className="w-20">
+    <label className="flex-1">
       <span className="mb-1.5 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
         {label}
       </span>
       <input
-        inputMode="numeric"
-        placeholder="0"
-        value={display}
-        onFocus={(e) => {
-          setFocused(true);
-          setText(value ? String(value) : '');
-          requestAnimationFrame(() => e.target.select());
-        }}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={() => {
-          setFocused(false);
-          const n = Math.max(0, Math.floor(Number(text.replace(/[^0-9]/g, '')) || 0));
-          if (n !== value) onSave(n);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-        }}
-        className="w-full rounded-xl border px-3 text-base tabular-nums outline-none"
-        style={{
-          height: '46px',
-          background: 'var(--color-bg-surface)',
-          borderColor: focused ? 'var(--color-accent-muted)' : 'var(--color-border)',
-          color: 'var(--color-text-primary)',
-        }}
+        type="date"
+        value={value ?? ''}
+        onChange={(e) => onSave(e.target.value || null)}
+        className="w-full rounded-xl border px-3 text-base outline-none"
+        style={{ height: '46px', background: 'var(--color-bg-base)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
       />
     </label>
   );
@@ -159,7 +140,7 @@ export default function CreditCardBox({ cards, monthlyOf, onAdd, onUpdate, onDel
 
         <div className="flex flex-col gap-3">
           {cards.map((c) => {
-            const weekly = creditCardWeekly(c.cc_total, c.cc_weeks);
+            const payment = creditCardPayment(c);
             const thisMonth = monthlyOf(c);
             const dueLabel = c.cc_due_date
               ? new Date(c.cc_due_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -186,30 +167,19 @@ export default function CreditCardBox({ cards, monthlyOf, onAdd, onUpdate, onDel
                   </button>
                 </div>
 
-                <div className="flex items-end gap-2.5">
-                  <MoneyField label="Amount owed" value={c.cc_total} onSave={(n) => onUpdate(c.id, { cc_total: n })} />
-                  <IntField label="Weeks" value={c.cc_weeks} onSave={(n) => onUpdate(c.id, { cc_weeks: n })} />
-                </div>
+                <MoneyField label="Amount owed" value={c.cc_total} onSave={(n) => onUpdate(c.id, { cc_total: n })} />
 
-                <label className="mt-2.5 block">
-                  <span className="mb-1.5 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                    Due date
-                  </span>
-                  <input
-                    type="date"
-                    value={c.cc_due_date ?? ''}
-                    onChange={(e) => onUpdate(c.id, { cc_due_date: e.target.value || null })}
-                    className="w-full rounded-xl border px-3 text-base outline-none"
-                    style={{ height: '46px', background: 'var(--color-bg-base)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
-                  />
-                </label>
+                <div className="mt-2.5 flex items-end gap-2.5">
+                  <DateField label="Start paying" value={c.cc_start_date} onSave={(v) => onUpdate(c.id, { cc_start_date: v })} />
+                  <DateField label="Paid off by" value={c.cc_due_date} onSave={(v) => onUpdate(c.id, { cc_due_date: v })} />
+                </div>
 
                 <div
                   className="mt-3 flex items-center justify-between rounded-xl px-3 py-2.5"
                   style={{ background: 'var(--color-accent-subtle)' }}
                 >
                   <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                    {formatMoney(weekly)}/wk{dueLabel ? ` · due ${dueLabel}` : ''}
+                    {payment > 0 ? `${formatMoney(payment)}/pay date` : 'Set dates'}{dueLabel ? ` · due ${dueLabel}` : ''}
                   </span>
                   <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--color-text-primary)' }}>
                     {formatMoney(thisMonth)} this month

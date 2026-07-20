@@ -1,39 +1,54 @@
 import { useState } from 'react';
 import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
 import type { PayDay } from '../../hooks/budget/usePayDayIncomes';
+import type { SavingsDeposit } from '../../hooks/budget/useSavingsDeposits';
 
 interface Props {
+  /** Expense groups (the "Savings" category is handled by the deposit field). */
   groups: BudgetGroup[];
   /** The month's pay-day Thursdays (each with its own weekly income). */
   payDays: PayDay[];
   onSetPayDayIncome: (thursday: string, n: number) => void;
-  /** The amount to set aside for a group from one paycheck (its weekly amount). */
-  weeklyOf: (g: BudgetGroup) => number;
+  /** Set-aside for a group on a specific pay-day Thursday (card window-aware). */
+  weeklyOnDate: (g: BudgetGroup, thursdayISO: string) => number;
   /** How much of a group's weekly amount is already covered by savings. */
   coveredOf: (g: BudgetGroup) => number;
+  /** This month's savings deposits, so the current pay day's can be edited here. */
+  deposits: SavingsDeposit[];
+  onSetDeposit: (weekStart: string, n: number) => void;
 }
 
 /**
  * Paycheck view: a single-paycheck waterfall. Cycle between the month's pay days
- * to see each week's income and how the weekly expenses stack against it. Each
- * group's set-aside is net of any savings earmarked toward it — a fully-covered
- * group drops out of the list.
+ * to see each week's income and how it gets divided. You can put money into
+ * savings for this pay day right here; each expense's set-aside is net of any
+ * savings earmarked toward it (fully-covered → hidden). Credit-card payments only
+ * appear on pay days inside the card's payoff window.
  */
-export default function PaycheckList({ groups, payDays, onSetPayDayIncome, weeklyOf, coveredOf }: Props) {
+export default function PaycheckList({
+  groups,
+  payDays,
+  onSetPayDayIncome,
+  weeklyOnDate,
+  coveredOf,
+  deposits,
+  onSetDeposit,
+}: Props) {
   const [idx, setIdx] = useState(0);
   const clamped = payDays.length === 0 ? 0 : Math.min(idx, payDays.length - 1);
   const current = payDays[clamped];
   const income = current?.income ?? 0;
+  const savingsDeposit = deposits.find((d) => d.date === current?.date)?.amount ?? 0;
 
   // Net set-aside per group after savings; fully-covered groups are hidden.
   const rows = groups
-    .map((g) => ({ g, setAside: Math.max(0, weeklyOf(g) - coveredOf(g)) }))
+    .map((g) => ({ g, setAside: current ? Math.max(0, weeklyOnDate(g, current.date) - coveredOf(g)) : 0 }))
     .filter((r) => r.setAside > 0);
 
-  const totalSetAside = rows.reduce((sum, r) => sum + r.setAside, 0);
+  const totalSetAside = savingsDeposit + rows.reduce((sum, r) => sum + r.setAside, 0);
   const leftOver = income - totalSetAside;
 
-  let running = income;
+  let running = income - savingsDeposit;
 
   return (
     <div>
@@ -74,23 +89,45 @@ export default function PaycheckList({ groups, payDays, onSetPayDayIncome, weekl
       </div>
 
       {/* This paycheck's income */}
-      <PaycheckIncomeField
-        key={current?.date ?? 'none'}
+      <MoneyField
+        key={`inc-${current?.date ?? 'none'}`}
+        label="This paycheck's income"
+        big
         value={income}
         onSave={(n) => current && onSetPayDayIncome(current.date, n)}
       />
 
+      {/* Put money into savings this pay day */}
+      <div
+        className="mb-4 rounded-2xl border p-4"
+        style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
+      >
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
+            Add to savings
+          </span>
+          <span className="text-xs tabular-nums" style={{ color: 'var(--color-text-tertiary)' }}>
+            Remaining {formatMoney(income - savingsDeposit)}
+          </span>
+        </div>
+        <MoneyField
+          key={`sav-${current?.date ?? 'none'}`}
+          value={savingsDeposit}
+          onSave={(n) => current && onSetDeposit(current.date, n)}
+        />
+      </div>
+
       {/* Group waterfall */}
       {rows.length === 0 ? (
         <div
-          className="flex items-center justify-center rounded-2xl border px-4 py-10 text-center text-[15px]"
+          className="flex items-center justify-center rounded-2xl border px-4 py-8 text-center text-[15px]"
           style={{
             background: 'var(--color-bg-elevated)',
             borderColor: 'var(--color-border)',
             color: 'var(--color-text-tertiary)',
           }}
         >
-          Nothing to set aside this week
+          Nothing else to set aside this week
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -105,10 +142,7 @@ export default function PaycheckList({ groups, payDays, onSetPayDayIncome, weekl
               >
                 <div className="mb-3 flex items-center gap-2.5">
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: g.color }} />
-                  <span
-                    className="min-w-0 flex-1 truncate text-[15px] font-medium"
-                    style={{ color: 'var(--color-text-primary)' }}
-                  >
+                  <span className="min-w-0 flex-1 truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
                     {g.name}
                   </span>
                 </div>
@@ -117,10 +151,7 @@ export default function PaycheckList({ groups, payDays, onSetPayDayIncome, weekl
                     <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                       Set aside
                     </span>
-                    <span
-                      className="text-lg font-semibold tabular-nums"
-                      style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}
-                    >
+                    <span className="text-lg font-semibold tabular-nums" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
                       {formatMoney(setAside)}
                     </span>
                   </div>
@@ -130,10 +161,7 @@ export default function PaycheckList({ groups, payDays, onSetPayDayIncome, weekl
                     </span>
                     <span
                       className="text-lg font-semibold tabular-nums"
-                      style={{
-                        color: remainingAfter >= 0 ? 'var(--color-text-primary)' : 'var(--color-danger)',
-                        letterSpacing: '-0.02em',
-                      }}
+                      style={{ color: remainingAfter >= 0 ? 'var(--color-text-primary)' : 'var(--color-danger)', letterSpacing: '-0.02em' }}
                     >
                       {formatMoney(remainingAfter)}
                     </span>
@@ -146,31 +174,22 @@ export default function PaycheckList({ groups, payDays, onSetPayDayIncome, weekl
       )}
 
       {/* Summary */}
-      <div
-        className="mt-4 rounded-2xl border p-4"
-        style={{ background: 'var(--color-bg-overlay)', borderColor: 'var(--color-border)' }}
-      >
+      <div className="mt-4 rounded-2xl border p-4" style={{ background: 'var(--color-bg-overlay)', borderColor: 'var(--color-border)' }}>
         <div className="flex items-center justify-between py-1">
           <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            Total to set aside
+            Total set aside {savingsDeposit > 0 ? '(incl. savings)' : ''}
           </span>
           <span className="text-lg font-semibold tabular-nums" style={{ color: 'var(--color-text-primary)' }}>
             {formatMoney(totalSetAside)}
           </span>
         </div>
-        <div
-          className="mt-2 flex items-center justify-between border-t pt-3"
-          style={{ borderColor: 'var(--color-border)' }}
-        >
+        <div className="mt-2 flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
           <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             Left over
           </span>
           <span
             className="text-xl font-bold tabular-nums"
-            style={{
-              color: leftOver >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
-              letterSpacing: '-0.02em',
-            }}
+            style={{ color: leftOver >= 0 ? 'var(--color-success)' : 'var(--color-danger)', letterSpacing: '-0.02em' }}
           >
             {formatMoney(leftOver)}
           </span>
@@ -180,22 +199,29 @@ export default function PaycheckList({ groups, payDays, onSetPayDayIncome, weekl
   );
 }
 
-/** Large currency input for the selected paycheck (raw while focused). */
-function PaycheckIncomeField({ value, onSave }: { value: number; onSave: (n: number) => void }) {
+/** Currency input (raw while focused). `big` renders the large income style. */
+function MoneyField({
+  value,
+  onSave,
+  label,
+  big = false,
+}: {
+  value: number;
+  onSave: (n: number) => void;
+  label?: string;
+  big?: boolean;
+}) {
   const [focused, setFocused] = useState(false);
   const [text, setText] = useState('');
   const display = focused ? text : value ? formatMoney(value) : '';
   return (
-    <div className="mb-5">
-      <label
-        htmlFor="paycheck-income"
-        className="mb-2 block text-sm font-medium"
-        style={{ color: 'var(--color-text-secondary)' }}
-      >
-        This paycheck's income
-      </label>
+    <div className={big ? 'mb-4' : ''}>
+      {label && (
+        <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+          {label}
+        </label>
+      )}
       <input
-        id="paycheck-income"
         inputMode="decimal"
         placeholder="$0"
         value={display}
@@ -212,9 +238,9 @@ function PaycheckIncomeField({ value, onSave }: { value: number; onSave: (n: num
         onKeyDown={(e) => {
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
         }}
-        className="w-full rounded-xl border px-4 text-2xl font-bold tabular-nums outline-none"
+        className={`w-full rounded-xl border px-4 tabular-nums outline-none ${big ? 'text-2xl font-bold' : 'text-lg font-semibold'}`}
         style={{
-          height: '56px',
+          height: big ? '56px' : '48px',
           background: 'var(--color-bg-surface)',
           borderColor: focused ? 'var(--color-accent-muted)' : 'var(--color-border)',
           color: 'var(--color-text-primary)',
