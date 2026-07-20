@@ -56,20 +56,16 @@ export default function BudgetView({
     () => groupsApi.groups.filter((g) => g.kind === 'credit_card'),
     [groupsApi.groups]
   );
-  const standardGroups = useMemo(
-    () => groupsApi.groups.filter((g) => g.kind !== 'credit_card'),
-    [groupsApi.groups]
-  );
 
+  /** A card's payment attributable to the selected month (payoff-window aware). */
+  const cardMonthlyOf = (g: BudgetGroup) => creditCardAmountForPeriod(g, 'monthly', monthBounds);
   /** Weekly obligation: a card's flat weekly payment, else the recurring amount. */
   const weeklyOf = (g: BudgetGroup) =>
     g.kind === 'credit_card' ? creditCardWeekly(g.cc_total, g.cc_weeks) : Number(g.amount) || 0;
-  const monthlyOf = (g: BudgetGroup) => toView(weeklyOf(g), 'monthly');
-  /** A card's payment attributable to the selected month (payoff-window aware). */
-  const cardMonthlyOf = (g: BudgetGroup) => creditCardAmountForPeriod(g, 'monthly', monthBounds);
-  /** A group's monthly cost, used to size how much savings can cover it. */
-  const monthlyCostOf = (g: BudgetGroup) =>
-    g.kind === 'credit_card' ? cardMonthlyOf(g) : monthlyOf(g);
+  /** Monthly cost: a card's payoff-window payment this month, else amount × 4. */
+  const monthlyOf = (g: BudgetGroup) =>
+    g.kind === 'credit_card' ? cardMonthlyOf(g) : toView(Number(g.amount) || 0, 'monthly');
+  const isCard = (g: BudgetGroup) => g.kind === 'credit_card';
 
   /** Edits to either column resolve to the same canonical weekly-base amount. */
   const saveWeekly = (g: BudgetGroup, entered: number) =>
@@ -77,28 +73,40 @@ export default function BudgetView({
   const saveMonthly = (g: BudgetGroup, entered: number) =>
     void groupsApi.updateGroup(g.id, { amount: Math.max(0, fromView(entered, 'monthly')), persistent: true });
 
+  /** Weekly amount a group's savings earmark covers (fully-covered → drops out). */
+  const weeklyCoveredOf = (g: BudgetGroup) =>
+    Math.min(savings.earmarkAmounts[g.id] ?? 0, monthlyOf(g)) / 4;
+
   if (view === 'paycheck') {
-    return <PaycheckList groups={groupsApi.groups} seedIncome={weeklyIncome} weeklyOf={weeklyOf} />;
+    return (
+      <PaycheckList
+        groups={groupsApi.groups}
+        payDays={payDays}
+        onSetPayDayIncome={setIncome}
+        weeklyOf={weeklyOf}
+        coveredOf={weeklyCoveredOf}
+      />
+    );
   }
 
-  // Budget bottom line: expenses + card payments, offset by earmarked savings.
-  const standardMonthly = standardGroups.reduce((s, g) => s + monthlyOf(g), 0);
-  const standardWeekly = standardGroups.reduce((s, g) => s + weeklyOf(g), 0);
-  const cardsMonthly = cards.reduce((s, g) => s + cardMonthlyOf(g), 0);
-  const cardsWeekly = cardsMonthly / 4;
+  // Budget bottom line: every group (including cards, shown in the table) minus
+  // the savings earmarked toward them.
+  const allMonthly = groupsApi.groups.reduce((s, g) => s + monthlyOf(g), 0);
+  const allWeekly = groupsApi.groups.reduce((s, g) => s + weeklyOf(g), 0);
   const monthlyCovered = groupsApi.groups.reduce(
-    (s, g) => s + Math.min(savings.earmarkAmounts[g.id] ?? 0, monthlyCostOf(g)),
+    (s, g) => s + Math.min(savings.earmarkAmounts[g.id] ?? 0, monthlyOf(g)),
     0
   );
   const weeklyCovered = monthlyCovered / 4;
 
-  const monthlyRemaining = monthlyIncome - (standardMonthly + cardsMonthly - monthlyCovered);
-  const weeklyRemaining = weeklyIncome - (standardWeekly + cardsWeekly - weeklyCovered);
+  const monthlyRemaining = monthlyIncome - (allMonthly - monthlyCovered);
+  const weeklyRemaining = weeklyIncome - (allWeekly - weeklyCovered);
 
   return (
     <>
       <OverviewTable
-        groups={standardGroups}
+        groups={groupsApi.groups}
+        amountReadOnly={isCard}
         monthLabel={monthBounds.label}
         onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
         onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
@@ -135,18 +143,8 @@ export default function BudgetView({
 
       {/* Bottom line */}
       <div className="mt-6 grid grid-cols-2 gap-3">
-        <RemainingCell
-          label="Monthly remaining"
-          value={monthlyRemaining}
-          cards={cardsMonthly}
-          savings={monthlyCovered}
-        />
-        <RemainingCell
-          label="Weekly remaining"
-          value={weeklyRemaining}
-          cards={cardsWeekly}
-          savings={weeklyCovered}
-        />
+        <RemainingCell label="Monthly remaining" value={monthlyRemaining} savings={monthlyCovered} />
+        <RemainingCell label="Weekly remaining" value={weeklyRemaining} savings={weeklyCovered} />
       </div>
     </>
   );
@@ -155,18 +153,15 @@ export default function BudgetView({
 function RemainingCell({
   label,
   value,
-  cards,
   savings,
 }: {
   label: string;
   value: number;
-  cards: number;
   savings: number;
 }) {
   const color = value >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
   const parts: string[] = [];
-  if (cards > 0) parts.push(`− ${formatMoney(cards)} cards`);
-  if (savings > 0) parts.push(`+ ${formatMoney(savings)} savings`);
+  if (savings > 0) parts.push(`+ ${formatMoney(savings)} from savings`);
   return (
     <div
       className="rounded-2xl border p-4"

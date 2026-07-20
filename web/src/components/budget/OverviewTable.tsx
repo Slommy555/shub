@@ -19,6 +19,8 @@ interface EditState {
 
 interface Props {
   groups: BudgetGroup[];
+  /** Rows whose amounts are computed elsewhere (credit cards) — read-only cells. */
+  amountReadOnly?: (g: BudgetGroup) => boolean;
   monthLabel: string;
   onPrevMonth: () => void;
   onNextMonth: () => void;
@@ -154,6 +156,7 @@ function NameInput({
 
 export default function OverviewTable({
   groups,
+  amountReadOnly,
   monthLabel,
   onPrevMonth,
   onNextMonth,
@@ -367,9 +370,11 @@ export default function OverviewTable({
           ) : (
             groups.map((g) => {
               const swipeX = swipe && swipe.id === g.id ? swipe.x : 0;
+              const ro = amountReadOnly?.(g) ?? false;
               const editName = editing?.id === g.id && editing.col === 'name';
-              const editWeekly = editing?.id === g.id && editing.col === 'weekly';
-              const editMonthly = editing?.id === g.id && editing.col === 'monthly';
+              const editWeekly = !ro && editing?.id === g.id && editing.col === 'weekly';
+              const editMonthly = !ro && editing?.id === g.id && editing.col === 'monthly';
+              const amountColor = ro ? 'var(--color-text-secondary)' : 'var(--color-text-primary)';
               return (
                 <div key={g.id} className="relative select-none border-t" style={{ borderColor: 'var(--color-border)' }}>
                   {/* Delete action behind the row */}
@@ -430,7 +435,7 @@ export default function OverviewTable({
                     </div>
 
                     {/* Monthly */}
-                    <div data-col="monthly" className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
+                    <div data-col={ro ? undefined : 'monthly'} className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
                       {editMonthly ? (
                         <CellInput
                           initial={Math.round(monthlyOf(g) * 100) / 100}
@@ -440,14 +445,14 @@ export default function OverviewTable({
                           }}
                         />
                       ) : (
-                        <span className="text-[15px]" style={{ color: 'var(--color-text-primary)' }}>
+                        <span className="text-[15px]" style={{ color: amountColor }}>
                           {formatMoney(monthlyOf(g))}
                         </span>
                       )}
                     </div>
 
                     {/* Weekly */}
-                    <div data-col="weekly" className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
+                    <div data-col={ro ? undefined : 'weekly'} className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
                       {editWeekly ? (
                         <CellInput
                           initial={Math.round(weeklyOf(g) * 100) / 100}
@@ -457,7 +462,7 @@ export default function OverviewTable({
                           }}
                         />
                       ) : (
-                        <span className="text-[15px]" style={{ color: 'var(--color-text-primary)' }}>
+                        <span className="text-[15px]" style={{ color: amountColor }}>
                           {formatMoney(weeklyOf(g))}
                         </span>
                       )}

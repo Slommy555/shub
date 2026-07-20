@@ -1,38 +1,87 @@
 import { useState } from 'react';
 import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
+import type { PayDay } from '../../hooks/budget/usePayDayIncomes';
 
 interface Props {
   groups: BudgetGroup[];
-  /** Weekly income from the Overview — used only to pre-fill the field. */
-  seedIncome: number;
+  /** The month's pay-day Thursdays (each with its own weekly income). */
+  payDays: PayDay[];
+  onSetPayDayIncome: (thursday: string, n: number) => void;
   /** The amount to set aside for a group from one paycheck (its weekly amount). */
   weeklyOf: (g: BudgetGroup) => number;
+  /** How much of a group's weekly amount is already covered by savings. */
+  coveredOf: (g: BudgetGroup) => number;
 }
 
 /**
- * Paycheck view: a single-paycheck waterfall. Each group card shows how much to
- * set aside (its weekly amount) and the running remainder of the paycheck after
- * that group and everything above it. The income field is seeded from the
- * Overview's weekly income but edited locally — changing it here never touches
- * the Overview.
+ * Paycheck view: a single-paycheck waterfall. Cycle between the month's pay days
+ * to see each week's income and how the weekly expenses stack against it. Each
+ * group's set-aside is net of any savings earmarked toward it — a fully-covered
+ * group drops out of the list.
  */
-export default function PaycheckList({ groups, seedIncome, weeklyOf }: Props) {
-  // null → still tracking the seeded weekly income; a number → user overrode it.
-  const [override, setOverride] = useState<number | null>(null);
-  const income = override ?? seedIncome;
+export default function PaycheckList({ groups, payDays, onSetPayDayIncome, weeklyOf, coveredOf }: Props) {
+  const [idx, setIdx] = useState(0);
+  const clamped = payDays.length === 0 ? 0 : Math.min(idx, payDays.length - 1);
+  const current = payDays[clamped];
+  const income = current?.income ?? 0;
 
-  const totalSetAside = groups.reduce((sum, g) => sum + weeklyOf(g), 0);
+  // Net set-aside per group after savings; fully-covered groups are hidden.
+  const rows = groups
+    .map((g) => ({ g, setAside: Math.max(0, weeklyOf(g) - coveredOf(g)) }))
+    .filter((r) => r.setAside > 0);
+
+  const totalSetAside = rows.reduce((sum, r) => sum + r.setAside, 0);
   const leftOver = income - totalSetAside;
 
   let running = income;
 
   return (
     <div>
-      {/* Paycheck income */}
-      <PaycheckIncomeField value={income} onSave={setOverride} />
+      {/* Pay-day navigator */}
+      <div className="mb-4 flex items-center justify-between">
+        <button
+          type="button"
+          aria-label="Previous pay day"
+          onClick={() => setIdx(Math.max(0, clamped - 1))}
+          disabled={clamped <= 0}
+          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80 disabled:opacity-40"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <div className="flex flex-col items-center">
+          <span className="text-[17px] font-semibold" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+            {current?.label ?? 'Pay day'}
+          </span>
+          <span className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+            Paycheck {payDays.length ? clamped + 1 : 0} of {payDays.length}
+          </span>
+        </div>
+        <button
+          type="button"
+          aria-label="Next pay day"
+          onClick={() => setIdx(Math.min(payDays.length - 1, clamped + 1))}
+          disabled={clamped >= payDays.length - 1}
+          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80 disabled:opacity-40"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+      </div>
+
+      {/* This paycheck's income */}
+      <PaycheckIncomeField
+        key={current?.date ?? 'none'}
+        value={income}
+        onSave={(n) => current && onSetPayDayIncome(current.date, n)}
+      />
 
       {/* Group waterfall */}
-      {groups.length === 0 ? (
+      {rows.length === 0 ? (
         <div
           className="flex items-center justify-center rounded-2xl border px-4 py-10 text-center text-[15px]"
           style={{
@@ -41,12 +90,11 @@ export default function PaycheckList({ groups, seedIncome, weeklyOf }: Props) {
             color: 'var(--color-text-tertiary)',
           }}
         >
-          No expense groups yet
+          Nothing to set aside this week
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {groups.map((g) => {
-            const setAside = weeklyOf(g);
+          {rows.map(({ g, setAside }) => {
             running -= setAside;
             const remainingAfter = running;
             return (
@@ -132,7 +180,7 @@ export default function PaycheckList({ groups, seedIncome, weeklyOf }: Props) {
   );
 }
 
-/** Large currency input for the current paycheck (raw while focused). */
+/** Large currency input for the selected paycheck (raw while focused). */
 function PaycheckIncomeField({ value, onSave }: { value: number; onSave: (n: number) => void }) {
   const [focused, setFocused] = useState(false);
   const [text, setText] = useState('');
@@ -144,7 +192,7 @@ function PaycheckIncomeField({ value, onSave }: { value: number; onSave: (n: num
         className="mb-2 block text-sm font-medium"
         style={{ color: 'var(--color-text-secondary)' }}
       >
-        Current paycheck income
+        This paycheck's income
       </label>
       <input
         id="paycheck-income"
