@@ -67,29 +67,30 @@ export function useCreditCards(userId: string | null, budgetId: string | null) {
   }, [userId, budgetId]);
 
   const addCard = useCallback(
-    async (name: string, weekly: number) => {
+    async (name: string, balance: number, dueDate: string | null) => {
       if (!userId || !budgetId) return;
       const trimmed = name.trim();
       if (!trimmed) return;
       const id = crypto.randomUUID();
       const position = ref.current.length;
-      const value = Math.max(0, weekly);
-      const row: CreditCard = { id, user_id: userId, budget_id: budgetId, name: trimmed, weekly_payment: value, position };
+      const value = Math.max(0, balance);
+      const row: CreditCard = { id, user_id: userId, budget_id: budgetId, name: trimmed, balance: value, due_date: dueDate, position };
       setCards((prev) => [...prev, row].sort(byPosition));
       const { error } = await supabase
         .from('budget_credit_cards')
-        .insert({ id, user_id: userId, budget_id: budgetId, name: trimmed, weekly_payment: value, position });
+        .insert({ id, user_id: userId, budget_id: budgetId, name: trimmed, balance: value, due_date: dueDate, position });
       if (error) console.error('addCard failed:', error.message);
     },
     [userId, budgetId]
   );
 
   const updateCard = useCallback(
-    async (id: string, patch: { name?: string; weekly_payment?: number }) => {
+    async (id: string, patch: { name?: string; balance?: number; due_date?: string | null }) => {
       const name = patch.name?.trim();
-      const dbPatch: { name?: string; weekly_payment?: number } = {};
+      const dbPatch: { name?: string; balance?: number; due_date?: string | null } = {};
       if (name) dbPatch.name = name;
-      if (patch.weekly_payment !== undefined) dbPatch.weekly_payment = Math.max(0, patch.weekly_payment);
+      if (patch.balance !== undefined) dbPatch.balance = Math.max(0, patch.balance);
+      if (patch.due_date !== undefined) dbPatch.due_date = patch.due_date;
       if (Object.keys(dbPatch).length === 0) return;
       setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...dbPatch } : c)));
       const { error } = await supabase.from('budget_credit_cards').update(dbPatch).eq('id', id);
@@ -98,13 +99,23 @@ export function useCreditCards(userId: string | null, budgetId: string | null) {
     []
   );
 
+  /** Add `amount` to a card's balance (e.g. a scheduled expense charged to it). */
+  const chargeToCard = useCallback(async (id: string, amount: number) => {
+    const card = ref.current.find((c) => c.id === id);
+    if (!card || !(amount > 0)) return;
+    const next = (Number(card.balance) || 0) + amount;
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, balance: next } : c)));
+    const { error } = await supabase.from('budget_credit_cards').update({ balance: next }).eq('id', id);
+    if (error) console.error('chargeToCard failed:', error.message);
+  }, []);
+
   const deleteCard = useCallback(async (id: string) => {
     setCards((prev) => prev.filter((c) => c.id !== id));
     const { error } = await supabase.from('budget_credit_cards').delete().eq('id', id);
     if (error) console.error('deleteCard failed:', error.message);
   }, []);
 
-  return { cards, addCard, updateCard, deleteCard };
+  return { cards, addCard, updateCard, chargeToCard, deleteCard };
 }
 
 export type UseCreditCards = ReturnType<typeof useCreditCards>;

@@ -18,6 +18,22 @@ interface Props {
   onSetDeposit: (weekStart: string, n: number) => void;
   /** Scheduled (one-off) expenses the user assigned to a given pay date. */
   scheduledForDate?: (thursdayISO: string) => ScheduledExpense[];
+  /** Credit-card payoff state for a given pay date (cards with a balance left). */
+  cardPayoffsForDate?: (thursdayISO: string) => CardPayoff[];
+  /** Record a payment against a card on a pay date. */
+  onPayCard?: (cardId: string, thursdayISO: string, amount: number) => void;
+}
+
+export interface CardPayoff {
+  id: string;
+  name: string;
+  due_date: string | null;
+  /** Balance still owed coming into this pay day (excludes this day's payment). */
+  remaining: number;
+  /** Suggested payment this pay day to clear the balance by the due date. */
+  suggested: number;
+  /** Payment already recorded for this card on this pay day. */
+  paid?: number;
 }
 
 /**
@@ -36,6 +52,8 @@ export default function PaycheckList({
   deposits,
   onSetDeposit,
   scheduledForDate,
+  cardPayoffsForDate,
+  onPayCard,
 }: Props) {
   const [idx, setIdx] = useState(0);
   const clamped = payDays.length === 0 ? 0 : Math.min(idx, payDays.length - 1);
@@ -61,7 +79,10 @@ export default function PaycheckList({
   }));
   const rows = [...groupRows, ...scheduledRows].filter((r) => r.setAside > 0);
 
-  const totalSetAside = savingsDeposit + rows.reduce((sum, r) => sum + r.setAside, 0);
+  const payoffs = current ? cardPayoffsForDate?.(current.date) ?? [] : [];
+  const cardPaidThisDate = payoffs.reduce((s, p) => s + (p.paid ?? 0), 0);
+
+  const totalSetAside = savingsDeposit + rows.reduce((sum, r) => sum + r.setAside, 0) + cardPaidThisDate;
   const leftOver = income - totalSetAside;
 
   let running = income - savingsDeposit;
@@ -197,6 +218,20 @@ export default function PaycheckList({
         </div>
       )}
 
+      {/* Credit cards to pay this payday */}
+      {payoffs.length > 0 && (
+        <div className="mt-4">
+          <h3 className="mb-2 text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.08em', color: 'var(--color-text-secondary)' }}>
+            Credit cards
+          </h3>
+          <div className="flex flex-col gap-2">
+            {payoffs.map((p) => (
+              <CardPayoffRow key={p.id} payoff={p} onPay={(amt) => current && onPayCard?.(p.id, current.date, amt)} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Summary */}
       <div className="mt-4 rounded-2xl border p-4" style={{ background: 'var(--color-bg-overlay)', borderColor: 'var(--color-border)' }}>
         <div className="flex items-center justify-between py-1">
@@ -218,6 +253,79 @@ export default function PaycheckList({
             {formatMoney(leftOver)}
           </span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** One card's payoff row on a pay day: balance left, suggested payment, and an
+ *  editable "paying this payday" field with a one-tap "use suggested" button. */
+function CardPayoffRow({ payoff, onPay }: { payoff: CardPayoff; onPay: (n: number) => void }) {
+  const [focused, setFocused] = useState(false);
+  const [text, setText] = useState('');
+  const paid = payoff.paid;
+  const display = focused ? text : paid != null ? formatMoney(paid) : '';
+  const dueLabel = payoff.due_date
+    ? new Date(payoff.due_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : null;
+  const suggested = Math.round(payoff.suggested * 100) / 100;
+  return (
+    <div className="rounded-2xl border p-4" style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: '#5c9eff' }} />
+          <span className="truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
+            {payoff.name}
+          </span>
+        </span>
+        <span className="shrink-0 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+          {dueLabel ? `due ${dueLabel}` : 'no due date'}
+        </span>
+      </div>
+      <div className="mb-2 flex items-center justify-between text-sm">
+        <span style={{ color: 'var(--color-text-secondary)' }}>Balance left</span>
+        <span className="tabular-nums" style={{ color: 'var(--color-text-primary)' }}>
+          {formatMoney(payoff.remaining)}
+        </span>
+      </div>
+      <div className="flex items-end gap-2">
+        <label className="flex-1">
+          <span className="mb-1 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+            Paying this payday
+          </span>
+          <input
+            inputMode="decimal"
+            placeholder={`$${suggested}`}
+            value={display}
+            onFocus={(e) => {
+              setFocused(true);
+              setText(paid != null ? String(paid) : '');
+              requestAnimationFrame(() => e.target.select());
+            }}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={() => {
+              setFocused(false);
+              if (text.trim() !== '') onPay(parseMoney(text));
+              else if (paid != null) onPay(0);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            }}
+            className="w-full rounded-xl border px-3 text-base tabular-nums outline-none"
+            style={{ height: '46px', background: 'var(--color-bg-surface)', borderColor: focused ? 'var(--color-accent-muted)' : 'var(--color-border)', color: 'var(--color-text-primary)' }}
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            setText(String(suggested));
+            onPay(suggested);
+          }}
+          className="rounded-xl border px-3 text-sm font-semibold"
+          style={{ height: '46px', borderColor: 'var(--color-border-strong)', color: 'var(--color-text-primary)', background: 'var(--color-bg-surface)' }}
+        >
+          Use {formatMoney(suggested)}
+        </button>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatMoney, parseMoney, thursdaysInMonth, type ScheduledExpense } from '../../types/budget';
+import { formatMoney, parseMoney, thursdaysInMonth, type CreditCard, type ScheduledExpense } from '../../types/budget';
 import SwipeRow from './SwipeRow';
 
 const NAME_W = 140;
@@ -54,7 +54,11 @@ interface Props {
   /** First day (YYYY-MM-01) of the currently-viewed month. */
   monthStart: string;
   monthLabel: string;
+  /** Cards available to charge an expense to. */
+  cards: CreditCard[];
   onAdd: (name: string, amount: number, dueDate: string) => void;
+  /** Charge the amount to a card's balance instead of scheduling cash. */
+  onChargeToCard: (cardId: string, amount: number) => void;
   onDelete: (id: string) => void;
 }
 
@@ -64,11 +68,13 @@ interface Props {
  * weekly) and never repeats. New expenses can be scheduled for this month or the
  * next two via the month dropdown.
  */
-export default function ScheduledExpensesSection({ expenses, monthStart, monthLabel, onAdd, onDelete }: Props) {
+export default function ScheduledExpensesSection({ expenses, monthStart, monthLabel, cards, onAdd, onChargeToCard, onDelete }: Props) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [charge, setCharge] = useState(false);
+  const [cardId, setCardId] = useState('');
 
   // Selectable pay dates: every Thursday across this month + the next two.
   const payDateOptions = [0, 1, 2].flatMap((o) => thursdaysInMonth(monthOffset(monthStart, o)));
@@ -76,17 +82,31 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
 
   const openAdd = () => {
     setDueDate(payDateOptions[0] ?? monthStart);
+    setCardId(cards[0]?.id ?? '');
+    setCharge(false);
     setAdding(true);
   };
 
+  const reset = () => {
+    setName('');
+    setAmount('');
+    setCharge(false);
+    setAdding(false);
+  };
+
   const submit = () => {
+    const amt = parseMoney(amount);
+    if (charge) {
+      if (!cardId || !(amt > 0)) return;
+      onChargeToCard(cardId, amt);
+      reset();
+      return;
+    }
     const n = name.trim();
     const when = dueDate || payDateOptions[0];
     if (!n || !when) return;
-    onAdd(n, parseMoney(amount), when);
-    setName('');
-    setAmount('');
-    setAdding(false);
+    onAdd(n, amt, when);
+    reset();
   };
 
   const cellBase = 'flex items-center justify-end px-3 tabular-nums';
@@ -173,26 +193,47 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
               style={{ height: '46px', background: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
             />
           </div>
+          {cards.length > 0 && (
+            <label className="flex items-center gap-2 py-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              <input type="checkbox" checked={charge} onChange={(e) => setCharge(e.target.checked)} className="h-4 w-4" />
+              Charge to a credit card (adds to its balance)
+            </label>
+          )}
           <div className="flex gap-2">
-            <select
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="min-w-0 flex-1 rounded-xl border px-3 text-base outline-none"
-              style={{ height: '46px', background: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
-            >
-              {payDateOptions.map((d) => (
-                <option key={d} value={d}>
-                  {payDateLabel(d)}
-                </option>
-              ))}
-            </select>
+            {charge ? (
+              <select
+                value={cardId}
+                onChange={(e) => setCardId(e.target.value)}
+                className="min-w-0 flex-1 rounded-xl border px-3 text-base outline-none"
+                style={{ height: '46px', background: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+              >
+                {cards.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="min-w-0 flex-1 rounded-xl border px-3 text-base outline-none"
+                style={{ height: '46px', background: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+              >
+                {payDateOptions.map((d) => (
+                  <option key={d} value={d}>
+                    {payDateLabel(d)}
+                  </option>
+                ))}
+              </select>
+            )}
             <button
               type="button"
               onClick={submit}
               className="rounded-xl px-5 text-sm font-semibold"
               style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)', minHeight: '46px' }}
             >
-              Add
+              {charge ? 'Charge' : 'Add'}
             </button>
           </div>
         </div>

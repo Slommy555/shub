@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react';
 import {
   formatMoney,
   fromView,
+  payDatesThrough,
   periodForCursor,
   savingsOffset,
   shiftCursor,
   toView,
   type BudgetGroup,
+  type CreditCard,
 } from '../../types/budget';
 import { useBudgetGroups } from '../../hooks/budget/useBudgetGroups';
 import { useBudgetAllocations } from '../../hooks/budget/useBudgetAllocations';
@@ -17,6 +19,7 @@ import { useSavingsAccount } from '../../hooks/budget/useSavingsAccount';
 import { useSavingsWithdrawnBefore } from '../../hooks/budget/useSavingsWithdrawnBefore';
 import { useSavingsDeposits } from '../../hooks/budget/useSavingsDeposits';
 import { useCreditCards } from '../../hooks/budget/useCreditCards';
+import { useCardPayments } from '../../hooks/budget/useCardPayments';
 import { useScheduledExpenses } from '../../hooks/budget/useScheduledExpenses';
 import OverviewTable from './OverviewTable';
 import PaycheckList from './PaycheckList';
@@ -59,7 +62,17 @@ export default function BudgetView({
   const withdrawnBefore = useSavingsWithdrawnBefore(userId, budgetId, account.startMonth, monthBounds.start_date);
   const deposits = useSavingsDeposits(userId, budgetId, monthBounds.start_date, account.startMonth);
   const creditCards = useCreditCards(userId, budgetId);
+  const cardPayments = useCardPayments(userId);
   const scheduled = useScheduledExpenses(userId, budgetId);
+
+  // A card's balance still owed after every payment recorded against it.
+  const cardRemaining = (c: CreditCard) => Math.max(0, (Number(c.balance) || 0) - cardPayments.paidTotal(c.id));
+  /** Payoff state for a card on a specific pay day (for the Paycheck view). */
+  const cardPayoffFor = (c: CreditCard, payDate: string) => {
+    const remaining = Math.max(0, (Number(c.balance) || 0) - cardPayments.paidBefore(c.id, payDate));
+    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, c.due_date) : 0;
+    return { id: c.id, name: c.name, due_date: c.due_date, remaining, suggested, paid: cardPayments.paymentOn(c.id, payDate) };
+  };
   // Average per-paycheck income: divide by the month's actual pay-day count
   // (4 or 5) so a 5-Thursday month isn't overstated.
   const weeklyIncome = monthlyIncome / (payDays.length || 4);
@@ -101,6 +114,10 @@ export default function BudgetView({
         deposits={deposits.deposits}
         onSetDeposit={deposits.setDeposit}
         scheduledForDate={(d) => scheduled.expenses.filter((e) => e.due_date === d)}
+        cardPayoffsForDate={(d) =>
+          creditCards.cards.map((c) => cardPayoffFor(c, d)).filter((p) => p.remaining > 0 || (p.paid ?? 0) > 0)
+        }
+        onPayCard={(cardId, d, amt) => void cardPayments.setPayment(cardId, d, amt)}
       />
     );
   }
@@ -122,11 +139,19 @@ export default function BudgetView({
   const scheduledThisMonth = scheduled.expenses.filter((e) => e.due_month === monthBounds.start_date);
   const scheduledTotal = scheduledThisMonth.reduce((s, e) => s + (Number(e.amount) || 0), 0);
 
-  const cardsWeekly = creditCards.cards.reduce((s, c) => s + (Number(c.weekly_payment) || 0), 0);
-  const cardsMonthlyRef = cardsWeekly * 4;
+  // Card obligation: for cards with a due date, the suggested weekly pace to
+  // clear the remaining balance from this month's first payday through the due
+  // date. Cards without a due date have no schedule, so contribute 0.
+  const firstPayday = payDays[0]?.date ?? monthBounds.start_date;
+  const cardsRemainingTotal = creditCards.cards.reduce((s, c) => s + cardRemaining(c), 0);
+  const cardsWeeklySuggested = creditCards.cards.reduce((s, c) => {
+    if (!c.due_date) return s;
+    const remaining = cardRemaining(c);
+    return remaining > 0 ? s + remaining / payDatesThrough(firstPayday, c.due_date) : s;
+  }, 0);
 
   const monthlyAllocated = recurringNetMonthly + scheduledTotal;
-  const weeklyAllocated = recurringNetWeekly + cardsWeekly;
+  const weeklyAllocated = recurringNetWeekly + cardsWeeklySuggested;
   const monthlyRemaining = monthlyIncome - monthlyAllocated;
   const weeklyRemaining = weeklyIncome - weeklyAllocated;
 
@@ -158,6 +183,7 @@ export default function BudgetView({
 
       <CreditCardSection
         cards={creditCards.cards}
+        remainingOf={cardRemaining}
         onAdd={creditCards.addCard}
         onUpdate={creditCards.updateCard}
         onDelete={creditCards.deleteCard}
@@ -167,7 +193,9 @@ export default function BudgetView({
         expenses={scheduledThisMonth}
         monthStart={monthBounds.start_date}
         monthLabel={monthBounds.label}
+        cards={creditCards.cards}
         onAdd={scheduled.addExpense}
+        onChargeToCard={creditCards.chargeToCard}
         onDelete={scheduled.deleteExpense}
       />
 
@@ -192,7 +220,7 @@ export default function BudgetView({
         <SummaryRow label="Monthly" income={monthlyIncome} allocated={monthlyAllocated} remaining={monthlyRemaining} />
         <div className="my-3 border-t" style={{ borderColor: 'var(--color-border)' }} />
         <SummaryRow label="Weekly" income={weeklyIncome} allocated={weeklyAllocated} remaining={weeklyRemaining} />
-        {(monthlyCovered > 0 || cardsWeekly > 0) && (
+        {(monthlyCovered > 0 || cardsRemainingTotal > 0) && (
           <div className="mt-3 flex flex-col gap-1 border-t pt-3 text-[12px] tabular-nums" style={{ borderColor: 'var(--color-border)' }}>
             {monthlyCovered > 0 && (
               <div className="flex items-center justify-between">
@@ -200,11 +228,11 @@ export default function BudgetView({
                 <span style={{ color: 'var(--color-success)' }}>{formatMoney(monthlyCovered)}/mo</span>
               </div>
             )}
-            {cardsWeekly > 0 && (
+            {cardsRemainingTotal > 0 && (
               <div className="flex items-center justify-between">
-                <span style={{ color: 'var(--color-text-secondary)' }}>Credit cards (reference)</span>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Credit cards owed</span>
                 <span style={{ color: 'var(--color-text-tertiary)' }}>
-                  {formatMoney(cardsWeekly)}/wk · ~{formatMoney(cardsMonthlyRef)}/mo
+                  {formatMoney(cardsRemainingTotal)} left{cardsWeeklySuggested > 0 ? ` · ~${formatMoney(cardsWeeklySuggested)}/wk` : ''}
                 </span>
               </div>
             )}

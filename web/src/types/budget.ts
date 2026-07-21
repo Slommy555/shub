@@ -149,9 +149,34 @@ export interface CreditCard {
   user_id: string;
   budget_id: string;
   name: string;
-  weekly_payment: number;
+  /** Amount owed; scheduled expenses charged to the card add to this. */
+  balance: number;
+  /** Target payoff date (YYYY-MM-DD), or null. */
+  due_date: string | null;
   position: number;
+  /** Legacy flat weekly payment — no longer used. */
+  weekly_payment?: number;
   created_at?: string;
+}
+
+/**
+ * Number of pay-day Thursdays from `fromThursdayISO` (inclusive) through
+ * `dueISO` (inclusive) — the paydays over which a balance can be paid off. If
+ * there's no due date, or it's already past, returns 1 (suggest paying it all).
+ */
+export function payDatesThrough(fromThursdayISO: string, dueISO: string | null): number {
+  if (!dueISO) return 1;
+  const [fy, fm, fd] = fromThursdayISO.split('-').map(Number);
+  const [dy, dm, dd] = dueISO.split('-').map(Number);
+  const cur = new Date(fy, fm - 1, fd);
+  const due = new Date(dy, dm - 1, dd);
+  if (due < cur) return 1;
+  let count = 0;
+  while (cur <= due) {
+    count++;
+    cur.setDate(cur.getDate() + 7);
+  }
+  return Math.max(1, count);
 }
 
 // --- date helpers -----------------------------------------------------------
