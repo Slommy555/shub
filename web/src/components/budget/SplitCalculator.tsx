@@ -26,7 +26,7 @@ export default function SplitCalculator() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-3 w-full rounded-full border py-3 text-sm font-semibold"
+        className="mt-3 w-full rounded-xl border py-3 text-sm font-semibold"
         style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)', minHeight: '48px' }}
       >
         Split calculator

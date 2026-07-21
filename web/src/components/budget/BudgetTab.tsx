@@ -72,14 +72,14 @@ export default function BudgetTab({ userId }: { userId: string }) {
         />
 
         {/* Overview / Paycheck toggle */}
-        <div className="mb-5 flex gap-1 rounded-full p-1" style={{ background: 'var(--color-bg-surface)' }}>
+        <div className="mb-5 flex gap-1 rounded-xl p-1" style={{ background: 'var(--color-bg-surface)' }}>
           {VIEWS.map((v) => (
             <button
               key={v.id}
               type="button"
               onClick={() => selectView(v.id)}
               aria-pressed={view === v.id}
-              className="flex-1 rounded-full py-2.5 text-sm font-semibold transition-colors"
+              className="flex-1 rounded-xl py-2.5 text-sm font-semibold transition-colors"
               style={
                 view === v.id
                   ? { background: 'var(--color-accent)', color: 'var(--color-accent-text)' }

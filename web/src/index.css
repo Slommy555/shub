@@ -252,6 +252,24 @@ html:not(.dark) .budget-scope {
   --color-danger: #dc2626;
   --color-info: #4f46e5;
 }
+/* When custom colors are enabled, drive the Budget tab from the same --c-*
+   variables the rest of the app uses, so it recolors together with every other
+   tab. Placed after the default/light blocks so it wins in both modes. */
+html[data-theme-custom] .budget-scope {
+  --color-bg-base: var(--c-bg);
+  --color-bg-elevated: var(--c-surface);
+  --color-bg-surface: var(--c-surface);
+  --color-bg-overlay: var(--c-surface);
+  --color-accent: var(--c-accent);
+  --color-accent-text: var(--c-accent-text);
+  --color-accent-muted: var(--c-border);
+  --color-accent-subtle: var(--c-border);
+  --color-text-primary: var(--c-text);
+  --color-text-secondary: var(--c-muted);
+  --color-text-tertiary: var(--c-muted);
+  --color-border: var(--c-border);
+  --color-border-strong: var(--c-border);
+}
 .budget-scope input::placeholder {
   color: var(--color-text-tertiary);
 }

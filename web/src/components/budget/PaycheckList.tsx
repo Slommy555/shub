@@ -59,7 +59,7 @@ export default function PaycheckList({
           aria-label="Previous pay day"
           onClick={() => setIdx(Math.max(0, clamped - 1))}
           disabled={clamped <= 0}
-          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80 disabled:opacity-40"
+          className="grid h-11 w-11 place-items-center rounded-xl border active:opacity-80 disabled:opacity-40"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -79,7 +79,7 @@ export default function PaycheckList({
           aria-label="Next pay day"
           onClick={() => setIdx(Math.min(payDays.length - 1, clamped + 1))}
           disabled={clamped >= payDays.length - 1}
-          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80 disabled:opacity-40"
+          className="grid h-11 w-11 place-items-center rounded-xl border active:opacity-80 disabled:opacity-40"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

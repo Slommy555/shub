@@ -16,6 +16,7 @@ import { useSavingsPool } from '../../hooks/budget/useSavingsPool';
 import { useSavingsAccount } from '../../hooks/budget/useSavingsAccount';
 import { useSavingsWithdrawnBefore } from '../../hooks/budget/useSavingsWithdrawnBefore';
 import { useSavingsDeposits } from '../../hooks/budget/useSavingsDeposits';
+import { useCreditCardPayments } from '../../hooks/budget/useCreditCardPayments';
 import OverviewTable from './OverviewTable';
 import PaycheckList from './PaycheckList';
 import CreditCardBox, { CARD_COLOR } from './CreditCardBox';
@@ -56,6 +57,7 @@ export default function BudgetView({
   const account = useSavingsAccount(userId, budgetId);
   const withdrawnBefore = useSavingsWithdrawnBefore(userId, budgetId, account.startMonth, monthBounds.start_date);
   const deposits = useSavingsDeposits(userId, budgetId, monthBounds.start_date, account.startMonth);
+  const ccPayments = useCreditCardPayments(userId, budgetId, monthPeriodId);
   const weeklyIncome = monthlyIncome / 4;
 
   const cards = useMemo(
@@ -72,28 +74,50 @@ export default function BudgetView({
   const isCard = (g: BudgetGroup) => g.kind === 'credit_card';
   const isSavings = (g: BudgetGroup) => !!savingsGroup && g.id === savingsGroup.id;
 
-  /** A card's payment attributable to the selected month (payoff-window aware). */
-  const cardMonthlyOf = (g: BudgetGroup) => creditCardAmountForPeriod(g, 'monthly', monthBounds);
-  /** Weekly obligation: card per-pay-date payment while active this month (else
-   *  $0 — so a paid-off card stops), Savings deposits ÷ 4, else recurring amount. */
+  /** A card's DERIVED monthly payment (payoff-window), before any override. */
+  const cardDerivedMonthly = (g: BudgetGroup) => creditCardAmountForPeriod(g, 'monthly', monthBounds);
+  /** A card's per-pay-date payment this month: the manual override if one is set
+   *  for this period, else the derived payoff payment ($0 outside its window, so
+   *  a paid-off card stops). */
+  const cardPaymentOf = (g: BudgetGroup) => {
+    const ov = ccPayments.overrideOf(g.id);
+    if (ov !== null) return ov;
+    return cardDerivedMonthly(g) > 0 ? creditCardPayment(g) : 0;
+  };
+  /** A card's monthly cost this month: override × 4 (matching the app's
+   *  monthly = weekly × 4 convention) or the derived payoff total. */
+  const cardMonthlyOf = (g: BudgetGroup) => {
+    const ov = ccPayments.overrideOf(g.id);
+    return ov !== null ? ov * 4 : cardDerivedMonthly(g);
+  };
+  /** Weekly obligation: card per-pay-date payment (override- or payoff-derived),
+   *  Savings deposits ÷ 4, else recurring amount. */
   const weeklyOf = (g: BudgetGroup) =>
     isCard(g)
-      ? (cardMonthlyOf(g) > 0 ? creditCardPayment(g) : 0)
+      ? cardPaymentOf(g)
       : isSavings(g)
         ? deposits.monthTotal / 4
         : Number(g.amount) || 0;
   /** Monthly cost: card payment, this month's Savings deposits, else amount × 4. */
   const monthlyOf = (g: BudgetGroup) =>
     isCard(g) ? cardMonthlyOf(g) : isSavings(g) ? deposits.monthTotal : toView(Number(g.amount) || 0, 'monthly');
-  /** Set-aside for a group on a specific pay-day Thursday (card window-aware). */
-  const weeklyOnDate = (g: BudgetGroup, thursdayISO: string) =>
-    isCard(g)
-      ? creditCardAmountForPeriod(g, 'weekly', { start_date: thursdayISO, end_date: thursdayISO, label: '' })
-      : Number(g.amount) || 0;
+  /** Set-aside for a group on a specific pay-day Thursday. Cards use the month's
+   *  override if set, else the payoff-window amount for that Thursday. */
+  const weeklyOnDate = (g: BudgetGroup, thursdayISO: string) => {
+    if (isCard(g)) {
+      const ov = ccPayments.overrideOf(g.id);
+      if (ov !== null) return ov;
+      return creditCardAmountForPeriod(g, 'weekly', { start_date: thursdayISO, end_date: thursdayISO, label: '' });
+    }
+    return Number(g.amount) || 0;
+  };
 
-  /** Edits to either column resolve to the same canonical weekly-base amount. */
-  const saveWeekly = (g: BudgetGroup, entered: number) =>
+  /** Editing a weekly cell: for a card it sets that month's payment override
+   *  (isolated per period); for a standard group it writes the recurring amount. */
+  const saveWeekly = (g: BudgetGroup, entered: number) => {
+    if (isCard(g)) return void ccPayments.setPayment(g.id, Math.max(0, entered));
     void groupsApi.updateGroup(g.id, { amount: Math.max(0, entered), persistent: true });
+  };
   const saveMonthly = (g: BudgetGroup, entered: number) =>
     void groupsApi.updateGroup(g.id, { amount: Math.max(0, fromView(entered, 'monthly')), persistent: true });
 
@@ -137,7 +161,7 @@ export default function BudgetView({
     <>
       <OverviewTable
         groups={groupsApi.groups}
-        amountReadOnly={(g) => isCard(g) || isSavings(g)}
+        readOnly={(g, col) => isSavings(g) || (isCard(g) && col === 'monthly')}
         monthLabel={monthBounds.label}
         onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
         onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
@@ -157,6 +181,8 @@ export default function BudgetView({
       <CreditCardBox
         cards={cards}
         monthlyOf={cardMonthlyOf}
+        paymentOf={cardPaymentOf}
+        overrideOf={(g) => ccPayments.overrideOf(g.id)}
         onAdd={(name) => void groupsApi.addGroup(name, CARD_COLOR, 'credit_card')}
         onUpdate={(id, patch) => void groupsApi.updateGroup(id, patch)}
         onDelete={groupsApi.deleteGroup}

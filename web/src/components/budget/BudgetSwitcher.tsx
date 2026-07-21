@@ -81,7 +81,7 @@ export default function BudgetSwitcher({ budgets, activeId, onSelect, onCreate, 
           aria-label="Previous budget"
           onClick={() => cycle(-1)}
           disabled={budgets.length < 2}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full border active:opacity-80 disabled:opacity-40"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border active:opacity-80 disabled:opacity-40"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -92,7 +92,7 @@ export default function BudgetSwitcher({ budgets, activeId, onSelect, onCreate, 
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full border py-2.5 text-[15px] font-semibold active:opacity-80"
+          className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl border py-2.5 text-[15px] font-semibold active:opacity-80"
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)', color: 'var(--color-text-primary)' }}
         >
           <span className="truncate">{active?.name ?? 'Budget'}</span>
@@ -106,7 +106,7 @@ export default function BudgetSwitcher({ budgets, activeId, onSelect, onCreate, 
           aria-label="Next budget"
           onClick={() => cycle(1)}
           disabled={budgets.length < 2}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full border active:opacity-80 disabled:opacity-40"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border active:opacity-80 disabled:opacity-40"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -185,7 +185,7 @@ export default function BudgetSwitcher({ budgets, activeId, onSelect, onCreate, 
                 <button
                   type="button"
                   onClick={submitCreate}
-                  className="rounded-full px-5 text-sm font-semibold"
+                  className="rounded-xl px-5 text-sm font-semibold"
                   style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)', minHeight: '48px' }}
                 >
                   Create
@@ -195,7 +195,7 @@ export default function BudgetSwitcher({ budgets, activeId, onSelect, onCreate, 
               <button
                 type="button"
                 onClick={() => setCreating(true)}
-                className="w-full rounded-full py-3.5 text-sm font-semibold active:opacity-85"
+                className="w-full rounded-xl py-3.5 text-sm font-semibold active:opacity-85"
                 style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)', minHeight: '48px' }}
               >
                 + New budget

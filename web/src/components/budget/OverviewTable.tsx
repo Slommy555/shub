@@ -19,8 +19,9 @@ interface EditState {
 
 interface Props {
   groups: BudgetGroup[];
-  /** Rows whose amounts are computed elsewhere (credit cards) — read-only cells. */
-  amountReadOnly?: (g: BudgetGroup) => boolean;
+  /** Per-column read-only predicate. e.g. a credit card's Monthly cell is
+   *  informational (weekly × 4) while its Weekly cell stays editable. */
+  readOnly?: (g: BudgetGroup, col: 'weekly' | 'monthly') => boolean;
   monthLabel: string;
   onPrevMonth: () => void;
   onNextMonth: () => void;
@@ -156,7 +157,7 @@ function NameInput({
 
 export default function OverviewTable({
   groups,
-  amountReadOnly,
+  readOnly,
   monthLabel,
   onPrevMonth,
   onNextMonth,
@@ -256,7 +257,7 @@ export default function OverviewTable({
           type="button"
           aria-label="Previous month"
           onClick={onPrevMonth}
-          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80"
+          className="grid h-11 w-11 place-items-center rounded-xl border active:opacity-80"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -270,7 +271,7 @@ export default function OverviewTable({
           type="button"
           aria-label="Next month"
           onClick={onNextMonth}
-          className="grid h-11 w-11 place-items-center rounded-full border active:opacity-80"
+          className="grid h-11 w-11 place-items-center rounded-xl border active:opacity-80"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -370,11 +371,13 @@ export default function OverviewTable({
           ) : (
             groups.map((g) => {
               const swipeX = swipe && swipe.id === g.id ? swipe.x : 0;
-              const ro = amountReadOnly?.(g) ?? false;
+              const roWeekly = readOnly?.(g, 'weekly') ?? false;
+              const roMonthly = readOnly?.(g, 'monthly') ?? false;
               const editName = editing?.id === g.id && editing.col === 'name';
-              const editWeekly = !ro && editing?.id === g.id && editing.col === 'weekly';
-              const editMonthly = !ro && editing?.id === g.id && editing.col === 'monthly';
-              const amountColor = ro ? 'var(--color-text-secondary)' : 'var(--color-text-primary)';
+              const editWeekly = !roWeekly && editing?.id === g.id && editing.col === 'weekly';
+              const editMonthly = !roMonthly && editing?.id === g.id && editing.col === 'monthly';
+              const weeklyColor = roWeekly ? 'var(--color-text-secondary)' : 'var(--color-text-primary)';
+              const monthlyColor = roMonthly ? 'var(--color-text-secondary)' : 'var(--color-text-primary)';
               return (
                 <div key={g.id} className="relative select-none border-t" style={{ borderColor: 'var(--color-border)' }}>
                   {/* Delete action behind the row */}
@@ -435,7 +438,7 @@ export default function OverviewTable({
                     </div>
 
                     {/* Monthly */}
-                    <div data-col={ro ? undefined : 'monthly'} className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
+                    <div data-col={roMonthly ? undefined : 'monthly'} className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
                       {editMonthly ? (
                         <CellInput
                           initial={Math.round(monthlyOf(g) * 100) / 100}
@@ -445,14 +448,14 @@ export default function OverviewTable({
                           }}
                         />
                       ) : (
-                        <span className="text-[15px]" style={{ color: amountColor }}>
+                        <span className="text-[15px]" style={{ color: monthlyColor }}>
                           {formatMoney(monthlyOf(g))}
                         </span>
                       )}
                     </div>
 
                     {/* Weekly */}
-                    <div data-col={ro ? undefined : 'weekly'} className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
+                    <div data-col={roWeekly ? undefined : 'weekly'} className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
                       {editWeekly ? (
                         <CellInput
                           initial={Math.round(weeklyOf(g) * 100) / 100}
@@ -462,7 +465,7 @@ export default function OverviewTable({
                           }}
                         />
                       ) : (
-                        <span className="text-[15px]" style={{ color: amountColor }}>
+                        <span className="text-[15px]" style={{ color: weeklyColor }}>
                           {formatMoney(weeklyOf(g))}
                         </span>
                       )}

@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
-import {
-  creditCardPayment,
-  formatMoney,
-  parseMoney,
-  type BudgetGroup,
-} from '../../types/budget';
+import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
 
 interface Props {
   cards: BudgetGroup[];
-  /** This-month payment for a card (payoff-window aware). */
+  /** This-month monthly cost for a card (override- or payoff-derived). */
   monthlyOf: (g: BudgetGroup) => number;
+  /** This-month per-pay-date payment (override- or payoff-derived). */
+  paymentOf: (g: BudgetGroup) => number;
+  /** The manual per-month override for a card, or null when it's payoff-derived. */
+  overrideOf: (g: BudgetGroup) => number | null;
   onAdd: (name: string) => void;
   onUpdate: (
     id: string,
@@ -101,7 +100,7 @@ function NameField({ value, onSave }: { value: string; onSave: (s: string) => vo
   );
 }
 
-export default function CreditCardBox({ cards, monthlyOf, onAdd, onUpdate, onDelete }: Props) {
+export default function CreditCardBox({ cards, monthlyOf, paymentOf, overrideOf, onAdd, onUpdate, onDelete }: Props) {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -140,8 +139,9 @@ export default function CreditCardBox({ cards, monthlyOf, onAdd, onUpdate, onDel
 
         <div className="flex flex-col gap-3">
           {cards.map((c) => {
-            const payment = creditCardPayment(c);
+            const payment = paymentOf(c);
             const thisMonth = monthlyOf(c);
+            const overridden = overrideOf(c) !== null;
             const dueLabel = c.cc_due_date
               ? new Date(c.cc_due_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
               : null;
@@ -179,7 +179,8 @@ export default function CreditCardBox({ cards, monthlyOf, onAdd, onUpdate, onDel
                   style={{ background: 'var(--color-accent-subtle)' }}
                 >
                   <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                    {payment > 0 ? `${formatMoney(payment)}/pay date` : 'Set dates'}{dueLabel ? ` · due ${dueLabel}` : ''}
+                    {payment > 0 || overridden ? `${formatMoney(payment)}/pay date` : 'Set dates'}
+                    {overridden ? ' · set this month' : dueLabel ? ` · due ${dueLabel}` : ''}
                   </span>
                   <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--color-text-primary)' }}>
                     {formatMoney(thisMonth)} this month
@@ -206,7 +207,7 @@ export default function CreditCardBox({ cards, monthlyOf, onAdd, onUpdate, onDel
             <button
               type="button"
               onClick={submit}
-              className="rounded-full px-5 text-sm font-semibold"
+              className="rounded-xl px-5 text-sm font-semibold"
               style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)', minHeight: '46px' }}
             >
               Add
@@ -216,7 +217,7 @@ export default function CreditCardBox({ cards, monthlyOf, onAdd, onUpdate, onDel
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="mt-3 w-full rounded-full border py-2.5 text-sm font-semibold"
+            className="mt-3 w-full rounded-xl border py-2.5 text-sm font-semibold"
             style={{ borderColor: 'var(--color-border-strong)', color: 'var(--color-text-primary)', background: 'var(--color-bg-surface)', minHeight: '46px' }}
           >
             + Add card
