@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatMoney, parseMoney, type ScheduledExpense } from '../../types/budget';
+import { formatMoney, parseMoney, thursdaysInMonth, type ScheduledExpense } from '../../types/budget';
 import SwipeRow from './SwipeRow';
 
 const NAME_W = 140;
@@ -19,13 +19,18 @@ function monthLabelOf(iso: string): string {
   return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
 
+/** "Thu, Jul 30" from a YYYY-MM-DD string. */
+function payDateLabel(iso: string): string {
+  return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 interface Props {
   /** Expenses due in the currently-viewed month (already filtered). */
   expenses: ScheduledExpense[];
   /** First day (YYYY-MM-01) of the currently-viewed month. */
   monthStart: string;
   monthLabel: string;
-  onAdd: (name: string, amount: number, dueMonth: string) => void;
+  onAdd: (name: string, amount: number, dueDate: string) => void;
   onDelete: (id: string) => void;
 }
 
@@ -39,18 +44,24 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
-  const [dueMonth, setDueMonth] = useState(monthStart);
+  const [dueDate, setDueDate] = useState('');
 
-  const monthOptions = [0, 1, 2].map((o) => monthOffset(monthStart, o));
+  // Selectable pay dates: every Thursday across this month + the next two.
+  const payDateOptions = [0, 1, 2].flatMap((o) => thursdaysInMonth(monthOffset(monthStart, o)));
   const total = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+  const openAdd = () => {
+    setDueDate(payDateOptions[0] ?? monthStart);
+    setAdding(true);
+  };
 
   const submit = () => {
     const n = name.trim();
-    if (!n) return;
-    onAdd(n, parseMoney(amount), dueMonth);
+    const when = dueDate || payDateOptions[0];
+    if (!n || !when) return;
+    onAdd(n, parseMoney(amount), when);
     setName('');
     setAmount('');
-    setDueMonth(monthStart);
     setAdding(false);
   };
 
@@ -95,7 +106,7 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
                   </div>
                   <div className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
                     <span className="text-[13px]" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {monthLabelOf(e.due_month)}
+                      {e.due_date ? payDateLabel(e.due_date) : monthLabelOf(e.due_month)}
                     </span>
                   </div>
                 </div>
@@ -137,14 +148,14 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
           </div>
           <div className="flex gap-2">
             <select
-              value={dueMonth}
-              onChange={(e) => setDueMonth(e.target.value)}
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
               className="min-w-0 flex-1 rounded-xl border px-3 text-base outline-none"
               style={{ height: '46px', background: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
             >
-              {monthOptions.map((m) => (
-                <option key={m} value={m}>
-                  {monthLabelOf(m)}
+              {payDateOptions.map((d) => (
+                <option key={d} value={d}>
+                  {payDateLabel(d)}
                 </option>
               ))}
             </select>
@@ -161,7 +172,7 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
       ) : (
         <button
           type="button"
-          onClick={() => setAdding(true)}
+          onClick={openAdd}
           className="mt-3 w-full rounded-xl border py-2.5 text-sm font-semibold"
           style={{ borderColor: 'var(--color-border-strong)', color: 'var(--color-text-primary)', background: 'var(--color-bg-surface)', minHeight: '46px' }}
         >

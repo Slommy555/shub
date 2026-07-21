@@ -8,7 +8,8 @@ import AddGroupForm from './AddGroupForm';
 // horizontally inside its wrapper on very narrow screens.
 const NAME_W = 140;
 const COL_MIN = 100;
-const MIN_TABLE_W = NAME_W + COL_MIN * 2;
+const TRASH_W = 44;
+const MIN_TABLE_W = NAME_W + COL_MIN * 2 + TRASH_W;
 const ROW_MIN_H = 52;
 
 type EditCol = 'name' | 'weekly' | 'monthly';
@@ -334,6 +335,7 @@ export default function OverviewTable({
             <div className="flex-1 px-3 text-right text-[11px] font-medium uppercase" style={{ minWidth: COL_MIN, letterSpacing: '0.04em', color: 'var(--color-text-secondary)' }}>
               Weekly
             </div>
+            <div style={{ width: TRASH_W }} />
           </div>
 
           {/* Rows */}
@@ -428,6 +430,25 @@ export default function OverviewTable({
                         <AmountDisplay gross={grossWeeklyOf(g)} earmark={earmarkM / 4} readOnly={roWeekly} />
                       )}
                     </div>
+
+                    {/* Delete */}
+                    <div className="flex items-center justify-center" style={{ width: TRASH_W }}>
+                      <button
+                        data-no-drag
+                        type="button"
+                        aria-label={`Delete ${g.name}`}
+                        onClick={() => {
+                          if (window.confirm(`Delete "${g.name}"? This removes it from every month.`)) onDelete(g.id);
+                        }}
+                        className="grid h-9 w-9 place-items-center rounded-lg active:opacity-70"
+                        style={{ color: 'var(--color-text-tertiary)' }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                          <path d="M10 11v6M14 11v6" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -445,6 +466,7 @@ export default function OverviewTable({
             <div className="flex flex-1 items-center justify-end px-3 text-[15px] font-semibold tabular-nums" style={{ minWidth: COL_MIN, color: 'var(--color-text-primary)' }}>
               {formatMoney(totals.weekly)}
             </div>
+            <div style={{ width: TRASH_W }} />
           </div>
         </div>
       </div>

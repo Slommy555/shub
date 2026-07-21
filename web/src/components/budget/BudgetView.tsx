@@ -100,6 +100,7 @@ export default function BudgetView({
         coveredOf={(g) => Math.min(savingsMonthlyOf(g), grossMonthlyOf(g)) / 4}
         deposits={deposits.deposits}
         onSetDeposit={deposits.setDeposit}
+        scheduledForDate={(d) => scheduled.expenses.filter((e) => e.due_date === d)}
       />
     );
   }

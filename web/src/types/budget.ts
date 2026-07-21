@@ -139,7 +139,8 @@ export interface ScheduledExpense {
   budget_id: string;
   name: string;
   amount: number;
-  due_month: string; // YYYY-MM-01
+  due_month: string; // YYYY-MM-01 (month grouping)
+  due_date?: string | null; // YYYY-MM-DD — the specific pay-day Thursday, if chosen
   created_at?: string;
 }
 

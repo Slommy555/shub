@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
+import { formatMoney, parseMoney, type BudgetGroup, type ScheduledExpense } from '../../types/budget';
 import type { PayDay } from '../../hooks/budget/usePayDayIncomes';
 import type { SavingsDeposit } from '../../hooks/budget/useSavingsDeposits';
 
@@ -16,6 +16,8 @@ interface Props {
   /** This month's savings deposits, so the current pay day's can be edited here. */
   deposits: SavingsDeposit[];
   onSetDeposit: (weekStart: string, n: number) => void;
+  /** Scheduled (one-off) expenses the user assigned to a given pay date. */
+  scheduledForDate?: (thursdayISO: string) => ScheduledExpense[];
 }
 
 /**
@@ -33,6 +35,7 @@ export default function PaycheckList({
   coveredOf,
   deposits,
   onSetDeposit,
+  scheduledForDate,
 }: Props) {
   const [idx, setIdx] = useState(0);
   const clamped = payDays.length === 0 ? 0 : Math.min(idx, payDays.length - 1);
@@ -40,10 +43,23 @@ export default function PaycheckList({
   const income = current?.income ?? 0;
   const savingsDeposit = deposits.find((d) => d.date === current?.date)?.amount ?? 0;
 
-  // Net set-aside per group after savings; fully-covered groups are hidden.
-  const rows = groups
-    .map((g) => ({ g, setAside: current ? Math.max(0, weeklyOnDate(g, current.date) - coveredOf(g)) : 0 }))
-    .filter((r) => r.setAside > 0);
+  // The waterfall: recurring group set-asides (net of savings) plus any one-off
+  // scheduled expenses the user pinned to this pay date. Fully-covered / $0 hidden.
+  const groupRows = groups.map((g) => ({
+    key: g.id,
+    name: g.name,
+    color: g.color,
+    setAside: current ? Math.max(0, weeklyOnDate(g, current.date) - coveredOf(g)) : 0,
+    note: undefined as string | undefined,
+  }));
+  const scheduledRows = (current ? scheduledForDate?.(current.date) ?? [] : []).map((e) => ({
+    key: e.id,
+    name: e.name,
+    color: '#f0a04b',
+    setAside: Number(e.amount) || 0,
+    note: 'one-time' as string | undefined,
+  }));
+  const rows = [...groupRows, ...scheduledRows].filter((r) => r.setAside > 0);
 
   const totalSetAside = savingsDeposit + rows.reduce((sum, r) => sum + r.setAside, 0);
   const leftOver = income - totalSetAside;
@@ -131,20 +147,28 @@ export default function PaycheckList({
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {rows.map(({ g, setAside }) => {
-            running -= setAside;
+          {rows.map((item) => {
+            running -= item.setAside;
             const remainingAfter = running;
             return (
               <div
-                key={g.id}
+                key={item.key}
                 className="rounded-2xl border p-4"
                 style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
               >
                 <div className="mb-3 flex items-center gap-2.5">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: g.color }} />
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.color }} />
                   <span className="min-w-0 flex-1 truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                    {g.name}
+                    {item.name}
                   </span>
+                  {item.note && (
+                    <span
+                      className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase"
+                      style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-text-secondary)', letterSpacing: '0.04em' }}
+                    >
+                      {item.note}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-end justify-between gap-3">
                   <div className="flex flex-col">
@@ -152,7 +176,7 @@ export default function PaycheckList({
                       Set aside
                     </span>
                     <span className="text-lg font-semibold tabular-nums" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
-                      {formatMoney(setAside)}
+                      {formatMoney(item.setAside)}
                     </span>
                   </div>
                   <div className="flex flex-col items-end">

@@ -65,13 +65,15 @@ export function useScheduledExpenses(userId: string | null, budgetId: string | n
     };
   }, [userId, budgetId]);
 
+  /** Add an expense for a specific pay date; its month is derived from that date. */
   const addExpense = useCallback(
-    async (name: string, amount: number, dueMonth: string) => {
+    async (name: string, amount: number, dueDate: string) => {
       if (!userId || !budgetId) return;
       const trimmed = name.trim();
       if (!trimmed) return;
       const id = crypto.randomUUID();
       const value = Math.max(0, amount);
+      const dueMonth = `${dueDate.slice(0, 7)}-01`; // first of the pay date's month
       const row: ScheduledExpense = {
         id,
         user_id: userId,
@@ -79,11 +81,12 @@ export function useScheduledExpenses(userId: string | null, budgetId: string | n
         name: trimmed,
         amount: value,
         due_month: dueMonth,
+        due_date: dueDate,
       };
       setExpenses((prev) => [...prev, row]);
       const { error } = await supabase
         .from('budget_scheduled_expenses')
-        .insert({ id, user_id: userId, budget_id: budgetId, name: trimmed, amount: value, due_month: dueMonth });
+        .insert({ id, user_id: userId, budget_id: budgetId, name: trimmed, amount: value, due_month: dueMonth, due_date: dueDate });
       if (error) console.error('addExpense failed:', error.message);
     },
     [userId, budgetId]
