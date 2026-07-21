@@ -1,58 +1,52 @@
-# Session Spec — Budget Tab: Period Isolation, Multiple Budgets, Savings Pool
+# Budget Fixes Round 2 — Claude Code Prompt
 
-> Supersedes the previous PROMPT.md (Budget tab rebuild — complete).
-> Three fixes/additions to the Budget tab only. Do not touch any other part of
-> the app. Follow UI_SKILL.md for all visual decisions.
+> Supersedes the previous PROMPT.md.
+> Multiple budget fixes. Do not touch anything outside the budget tab.
+> Follow UI_SKILL.md for all visual decisions.
 
-## FIX 1 — PERIOD ISOLATION
-Group amounts set in one period (July) must NOT persist into other periods
-(August). Each period is completely independent. When navigating to a period
-with no allocations yet, show all groups at $0 / empty inputs — never copy or
-inherit amounts from any other period.
+## FIX 1 — STRICT CALENDAR MONTHS, NO 30-DAY BINS
+Periods are strict calendar months only. start_date = first day of month,
+end_date = last day, label "July 2026". A payday on July 30 counts for July.
+Nav arrows move one calendar month. Remove any 30-day bin logic.
+(STATUS: already satisfied by periodForCursor; no bin logic exists.)
 
-Root cause: groups default to `persistent: true`, storing `amount` on the group
-row (shared across all periods + scaled across timeframes). Fix: amounts live
-per-period in `budget_allocations`; each period starts blank.
+## FIX 2 — AMOUNT PERSISTENCE BUG
+Amounts must be isolated per period. Every allocation read/write filters by
+current budget_id AND period_id. Navigating to a month with no records shows
+blank/$0 — never copy/inherit from another period. Records created only when
+the user types a value.
+Verification: (1) Rent=$1,200 in July (2) August shows blank (3) Rent=$900 in
+Aug (4) back to July still $1,200 (5) September blank.
 
-Verify: set $500 Food in July → August shows $0 → back to July still $500.
+## FIX 3 — SAVINGS CANCELLATION LOGIC (ORDER-INDEPENDENT)
+ONE shared util: net_amount = max(0, group.amount − earmark.amount). Applied
+everywhere amounts are displayed/summed. Fully covered → "$0/Covered" in
+--color-success, not counted in "needs funding". Partial → remainder shown +
+secondary "($XXX from savings)" line in --color-success; only remainder counts.
 
-## FIX 2 — MULTIPLE BUDGETS
-Independent budgets ("Personal", "Business", "Trip"). Each has its own income,
-groups, amounts, and savings pool. Nothing shared.
+## FIX 4 — EXPENSE GROUPS vs INDIVIDUAL EXPENSES
+Section 1 "Recurring Fixed Costs": existing groups (group | monthly | weekly);
+savings earmarks apply here. Section 2 "Scheduled Expenses": one-off/irregular,
+table Name | Amount | Due Month (dropdown: this / +1 / +2 months). Only appears
+& counts in the month due; monthly lump only (not weekly). Add + swipe-delete.
+Table budget_scheduled_expenses(user_id, budget_id, name, amount, due_month).
 
-Schema (new migration): `budgets` table (id, user_id, name, position,
-created_at). Add `budget_id` to `budget_periods` + `budget_groups` (cascade).
-RLS filters by budget ownership. Data migration: create "My Budget" default and
-assign existing rows to it.
+## FIX 5 — CREDIT CARD WEEKLY PAYMENT
+"Credit Card Payments" section between Recurring and Scheduled. Card | Weekly |
+~Monthly(weekly×4, tertiary, informational, not counted monthly). Weekly counts
+toward weekly remaining. Add + swipe-delete.
+Table budget_credit_cards(user_id, budget_id, name, weekly_payment, position).
 
-UI: budget switcher at top of Budget tab above sub-tabs — `[←] [ Name ▾ ] [→]`.
-Picker sheet: list to switch, "New budget", long-press to rename/delete, cannot
-delete last, delete warns + cascades. Active budget_id in localStorage; all
-queries filter by it.
+## SUMMARY CALCULATIONS
+Monthly remaining = monthly income − recurring net monthly − scheduled this
+month. (CC ×4 shown separately, not folded in.)
+Weekly remaining = weekly income − recurring net weekly − CC weekly.
+Scheduled NOT subtracted from weekly.
 
-## FIX 3 — SAVINGS POOL
-A pool of set-aside money; earmark dollar amounts toward specific groups. An
-earmark offsets that group's cost from income.
+## LAYOUT (top→bottom)
+Switcher / Overview|Paycheck toggle / Income / Recurring Fixed Costs /
+Credit Card Payments / Scheduled Expenses (this month) / Savings pool / Summary.
 
-Schema: `budget_savings_pools` (id, user_id, budget_id, period_id, total_saved,
-UNIQUE(budget_id, period_id)). `budget_savings_earmarks` (id, user_id, pool_id,
-group_id, amount, UNIQUE(pool_id, group_id)). RLS on both.
-
-UI: collapsible "Savings Pool" section below groups. Total-set-aside input + one
-earmark input per group. Cannot earmark more than total (cap + warning).
-Allocated = Σ earmarks; Remaining = total − allocated. Save on blur.
-
-Summary strip (4 values, 2×2 on mobile): Income | From Savings | Needs Funding |
-Remaining. Needs Funding = Σ max(0, group.amount − earmark). Remaining = income −
-needs funding (green ≥0 / red <0). From Savings = Σ earmarks.
-
-Group card: if earmark > 0 show "🏦 $X from savings" (piggy-bank/vault icon,
---color-success, 12px) + "$Y from income".
-
-## MIGRATIONS
-After creating file: `npx supabase db push` (duplicate key → `migration list`,
-skip applied).
-
-## AUTO DEPLOY
-When complete + `npm run build` passes: git add . && commit "Budget: period
-isolation, multiple budgets, savings pool" && push. Never push a failing build.
+## MIGRATIONS: npx supabase db push (skip already-applied on duplicate).
+## AUTO DEPLOY: build must pass, then git add/commit/push.
+## OUTPUT: report each fix ✓/✗; Fix 2 include all 5 verification steps.
