@@ -4,8 +4,32 @@ import SwipeRow from './SwipeRow';
 
 const NAME_W = 140;
 const COL_MIN = 100;
-const MIN_TABLE_W = NAME_W + COL_MIN * 2;
+const TRASH_W = 44;
+const MIN_TABLE_W = NAME_W + COL_MIN * 2 + TRASH_W;
 const ROW_MIN_H = 52;
+
+/** A small trash button (confirms before firing). */
+function TrashButton({ label, onDelete }: { label: string; onDelete: () => void }) {
+  return (
+    <div className="flex items-center justify-center" style={{ width: TRASH_W }}>
+      <button
+        data-no-drag
+        type="button"
+        aria-label={`Delete ${label}`}
+        onClick={() => {
+          if (window.confirm(`Delete "${label}"?`)) onDelete();
+        }}
+        className="grid h-9 w-9 place-items-center rounded-lg active:opacity-70"
+        style={{ color: 'var(--color-text-tertiary)' }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M10 11v6M14 11v6" />
+        </svg>
+      </button>
+    </div>
+  );
+}
 
 /** "YYYY-MM-01" for the month `offset` months after monthStart. */
 function monthOffset(monthStartISO: string, offset: number): string {
@@ -84,6 +108,7 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
             <div className="flex-1 px-3 text-right text-[11px] font-medium uppercase" style={{ minWidth: COL_MIN, letterSpacing: '0.04em', color: 'var(--color-text-secondary)' }}>
               Due
             </div>
+            <div style={{ width: TRASH_W }} />
           </div>
 
           {expenses.length === 0 ? (
@@ -109,6 +134,7 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
                       {e.due_date ? payDateLabel(e.due_date) : monthLabelOf(e.due_month)}
                     </span>
                   </div>
+                  <TrashButton label={e.name} onDelete={() => onDelete(e.id)} />
                 </div>
               </SwipeRow>
             ))
@@ -122,6 +148,7 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
               {formatMoney(total)}
             </div>
             <div className="flex-1" style={{ minWidth: COL_MIN }} />
+            <div style={{ width: TRASH_W }} />
           </div>
         </div>
       </div>
