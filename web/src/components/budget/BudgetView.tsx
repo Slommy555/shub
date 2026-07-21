@@ -162,6 +162,7 @@ export default function BudgetView({
       <OverviewTable
         groups={groupsApi.groups}
         readOnly={(g, col) => isSavings(g) || (isCard(g) && col === 'monthly')}
+        accentEditable={(g, col) => isCard(g) && col === 'weekly'}
         monthLabel={monthBounds.label}
         onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
         onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}

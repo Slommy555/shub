@@ -22,6 +22,9 @@ interface Props {
   /** Per-column read-only predicate. e.g. a credit card's Monthly cell is
    *  informational (weekly × 4) while its Weekly cell stays editable. */
   readOnly?: (g: BudgetGroup, col: 'weekly' | 'monthly') => boolean;
+  /** Cells to flag as specially editable (accent + dashed underline) so a new
+   *  affordance — e.g. a credit card's per-month Weekly payment — is discoverable. */
+  accentEditable?: (g: BudgetGroup, col: 'weekly' | 'monthly') => boolean;
   monthLabel: string;
   onPrevMonth: () => void;
   onNextMonth: () => void;
@@ -158,6 +161,7 @@ function NameInput({
 export default function OverviewTable({
   groups,
   readOnly,
+  accentEditable,
   monthLabel,
   onPrevMonth,
   onNextMonth,
@@ -378,6 +382,13 @@ export default function OverviewTable({
               const editMonthly = !roMonthly && editing?.id === g.id && editing.col === 'monthly';
               const weeklyColor = roWeekly ? 'var(--color-text-secondary)' : 'var(--color-text-primary)';
               const monthlyColor = roMonthly ? 'var(--color-text-secondary)' : 'var(--color-text-primary)';
+              const hintWeekly = accentEditable?.(g, 'weekly') ?? false;
+              const hintMonthly = accentEditable?.(g, 'monthly') ?? false;
+              const accentStyle = {
+                color: 'var(--color-accent)',
+                borderBottom: '1px dashed var(--color-accent-muted)',
+                paddingBottom: '1px',
+              } as const;
               return (
                 <div key={g.id} className="relative select-none border-t" style={{ borderColor: 'var(--color-border)' }}>
                   {/* Delete action behind the row */}
@@ -448,7 +459,7 @@ export default function OverviewTable({
                           }}
                         />
                       ) : (
-                        <span className="text-[15px]" style={{ color: monthlyColor }}>
+                        <span className="text-[15px]" style={hintMonthly ? accentStyle : { color: monthlyColor }}>
                           {formatMoney(monthlyOf(g))}
                         </span>
                       )}
@@ -465,7 +476,7 @@ export default function OverviewTable({
                           }}
                         />
                       ) : (
-                        <span className="text-[15px]" style={{ color: weeklyColor }}>
+                        <span className="text-[15px]" style={hintWeekly ? accentStyle : { color: weeklyColor }}>
                           {formatMoney(weeklyOf(g))}
                         </span>
                       )}
