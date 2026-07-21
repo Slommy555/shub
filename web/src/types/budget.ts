@@ -159,6 +159,16 @@ export interface CreditCard {
   created_at?: string;
 }
 
+/** A single charge posted to a credit card (the transaction log). */
+export interface CardCharge {
+  id: string;
+  user_id: string;
+  card_id: string;
+  name: string;
+  amount: number;
+  created_at?: string;
+}
+
 /**
  * Number of pay-day Thursdays from `fromThursdayISO` (inclusive) through
  * `dueISO` (inclusive) — the paydays over which a balance can be paid off. If

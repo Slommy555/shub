@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'react';
-import { formatMoney, parseMoney, type CreditCard } from '../../types/budget';
+import { Fragment, useEffect, useState } from 'react';
+import { formatMoney, parseMoney, type CardCharge, type CreditCard } from '../../types/budget';
 import SwipeRow from './SwipeRow';
+
+/** "Jul 21" from an ISO timestamp. */
+function chargeDate(iso?: string): string {
+  return iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+}
 
 const NAME_W = 140;
 const COL_MIN = 110;
@@ -101,9 +106,12 @@ interface Props {
   cards: CreditCard[];
   /** Remaining balance after recorded payments (for the sub-line). */
   remainingOf: (card: CreditCard) => number;
+  /** The charge log for a card. */
+  chargesOf: (cardId: string) => CardCharge[];
   onAdd: (name: string, balance: number, dueDate: string | null) => void;
   onUpdate: (id: string, patch: { name?: string; balance?: number; due_date?: string | null }) => void;
   onDelete: (id: string) => void;
+  onDeleteCharge: (charge: CardCharge) => void;
 }
 
 /**
@@ -112,11 +120,12 @@ interface Props {
  * Paycheck view) shows as a sub-line. You pay cards down per pay day in the
  * Paycheck view.
  */
-export default function CreditCardSection({ cards, remainingOf, onAdd, onUpdate, onDelete }: Props) {
+export default function CreditCardSection({ cards, remainingOf, chargesOf, onAdd, onUpdate, onDelete, onDeleteCharge }: Props) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [balance, setBalance] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const totalRemaining = cards.reduce((s, c) => s + remainingOf(c), 0);
 
@@ -160,10 +169,25 @@ export default function CreditCardSection({ cards, remainingOf, onAdd, onUpdate,
             cards.map((c) => {
               const remaining = remainingOf(c);
               const paidDown = remaining < (Number(c.balance) || 0);
+              const expanded = expandedId === c.id;
+              const charges = expanded ? chargesOf(c.id) : [];
               return (
-                <SwipeRow key={c.id} onDelete={() => onDelete(c.id)}>
+                <Fragment key={c.id}>
+                <SwipeRow onDelete={() => onDelete(c.id)}>
                   <div className="flex items-stretch" style={{ minHeight: ROW_MIN_H }}>
-                    <div className="flex items-center gap-2.5 px-4 py-2" style={{ width: NAME_W }}>
+                    <div className="flex items-center gap-1 px-2 py-2" style={{ width: NAME_W }}>
+                      <button
+                        data-no-drag
+                        type="button"
+                        aria-label={expanded ? 'Hide charges' : 'Show charges'}
+                        onClick={() => setExpandedId((id) => (id === c.id ? null : c.id))}
+                        className="grid h-7 w-5 shrink-0 place-items-center"
+                        style={{ color: 'var(--color-text-tertiary)' }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 150ms ease' }}>
+                          <path d="M9 18l6-6-6-6" />
+                        </svg>
+                      </button>
                       <NameField value={c.name} onSave={(name) => onUpdate(c.id, { name })} />
                     </div>
                     <div className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
@@ -182,6 +206,50 @@ export default function CreditCardSection({ cards, remainingOf, onAdd, onUpdate,
                     <TrashButton label={c.name} onDelete={() => onDelete(c.id)} />
                   </div>
                 </SwipeRow>
+                {expanded && (
+                  <div className="border-t px-4 py-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-surface)' }}>
+                    <span className="mb-2 block text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.06em', color: 'var(--color-text-secondary)' }}>
+                      Charges
+                    </span>
+                    {charges.length === 0 ? (
+                      <p className="text-[13px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                        Nothing charged yet. Add one from Scheduled Expenses → “Charge to a credit card”.
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {charges.map((ch) => (
+                          <div key={ch.id} className="flex items-center justify-between gap-3">
+                            <span className="min-w-0 truncate text-[14px]" style={{ color: 'var(--color-text-primary)' }}>
+                              {ch.name}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-3">
+                              <span className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                                {chargeDate(ch.created_at)}
+                              </span>
+                              <span className="text-[14px] tabular-nums" style={{ color: 'var(--color-text-primary)' }}>
+                                {formatMoney(Number(ch.amount) || 0)}
+                              </span>
+                              <button
+                                type="button"
+                                aria-label={`Delete charge ${ch.name}`}
+                                onClick={() => {
+                                  if (window.confirm(`Remove "${ch.name}" (${formatMoney(Number(ch.amount) || 0)})? This also lowers the card balance.`)) onDeleteCharge(ch);
+                                }}
+                                className="grid h-7 w-7 place-items-center rounded-lg active:opacity-70"
+                                style={{ color: 'var(--color-text-tertiary)' }}
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M18 6 6 18M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                </Fragment>
               );
             })
           )}

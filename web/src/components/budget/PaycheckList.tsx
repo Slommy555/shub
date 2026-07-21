@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatMoney, parseMoney, type BudgetGroup, type ScheduledExpense } from '../../types/budget';
 import type { PayDay } from '../../hooks/budget/usePayDayIncomes';
 import type { SavingsDeposit } from '../../hooks/budget/useSavingsDeposits';
@@ -8,6 +8,10 @@ interface Props {
   groups: BudgetGroup[];
   /** The month's pay-day Thursdays (each with its own weekly income). */
   payDays: PayDay[];
+  /** Current month label + navigation, mirrored from the Overview. */
+  monthLabel: string;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
   onSetPayDayIncome: (thursday: string, n: number) => void;
   /** Set-aside for a group on a specific pay-day Thursday (card window-aware). */
   weeklyOnDate: (g: BudgetGroup, thursdayISO: string) => number;
@@ -46,6 +50,9 @@ export interface CardPayoff {
 export default function PaycheckList({
   groups,
   payDays,
+  monthLabel,
+  onPrevMonth,
+  onNextMonth,
   onSetPayDayIncome,
   weeklyOnDate,
   coveredOf,
@@ -56,6 +63,8 @@ export default function PaycheckList({
   onPayCard,
 }: Props) {
   const [idx, setIdx] = useState(0);
+  // Start at the first pay day whenever the month changes.
+  useEffect(() => setIdx(0), [monthLabel]);
   const clamped = payDays.length === 0 ? 0 : Math.min(idx, payDays.length - 1);
   const current = payDays[clamped];
   const income = current?.income ?? 0;
@@ -89,6 +98,35 @@ export default function PaycheckList({
 
   return (
     <div>
+      {/* Month navigator */}
+      <div className="mb-4 flex items-center justify-between">
+        <button
+          type="button"
+          aria-label="Previous month"
+          onClick={onPrevMonth}
+          className="grid h-11 w-11 place-items-center rounded-xl border active:opacity-80"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <span className="text-[17px] font-semibold" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+          {monthLabel}
+        </span>
+        <button
+          type="button"
+          aria-label="Next month"
+          onClick={onNextMonth}
+          className="grid h-11 w-11 place-items-center rounded-xl border active:opacity-80"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+      </div>
+
       {/* Pay-day navigator */}
       <div className="mb-4 flex items-center justify-between">
         <button

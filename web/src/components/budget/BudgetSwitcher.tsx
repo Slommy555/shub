@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import type { Budget } from '../../types/budget';
 
 interface Props {
@@ -18,8 +18,6 @@ export default function BudgetSwitcher({ budgets, activeId, onSelect, onCreate, 
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const longPressRef = useRef<number | null>(null);
-  const firedRef = useRef(false);
 
   const active = budgets.find((b) => b.id === activeId) ?? budgets[0] ?? null;
   const idx = active ? budgets.findIndex((b) => b.id === active.id) : -1;
@@ -39,38 +37,16 @@ export default function BudgetSwitcher({ budgets, activeId, onSelect, onCreate, 
     setOpen(false);
   };
 
-  // Long-press a row → rename/delete action prompt; a plain tap switches.
-  const startLongPress = (b: Budget) => {
-    firedRef.current = false;
-    if (longPressRef.current) window.clearTimeout(longPressRef.current);
-    longPressRef.current = window.setTimeout(() => {
-      longPressRef.current = null;
-      firedRef.current = true;
-      const action = window.prompt(
-        `Manage "${b.name}"\n\nType R to rename, D to delete, or Cancel.`,
-        'R'
-      );
-      if (!action) return;
-      const a = action.trim().toLowerCase();
-      if (a === 'r') {
-        const name = window.prompt('Rename budget', b.name);
-        if (name && name.trim()) onRename(b.id, name.trim());
-      } else if (a === 'd') {
-        if (budgets.length <= 1) {
-          window.alert('You can’t delete your only budget.');
-          return;
-        }
-        if (window.confirm(`This will permanently delete all data in "${b.name}". Continue?`)) {
-          onDelete(b.id);
-        }
-      }
-    }, 500);
+  const renameBudget = (b: Budget) => {
+    const name = window.prompt('Rename budget', b.name);
+    if (name && name.trim() && name.trim() !== b.name) onRename(b.id, name.trim());
   };
-  const cancelLongPress = () => {
-    if (longPressRef.current) {
-      window.clearTimeout(longPressRef.current);
-      longPressRef.current = null;
+  const deleteBudget = (b: Budget) => {
+    if (budgets.length <= 1) {
+      window.alert('You can’t delete your only budget.');
+      return;
     }
+    if (window.confirm(`This will permanently delete all data in "${b.name}". Continue?`)) onDelete(b.id);
   };
 
   return (
@@ -134,39 +110,56 @@ export default function BudgetSwitcher({ budgets, activeId, onSelect, onCreate, 
             </h2>
             <div className="mb-3 flex max-h-[50vh] flex-col gap-1 overflow-y-auto">
               {budgets.map((b) => (
-                <button
+                <div
                   key={b.id}
-                  type="button"
-                  onClick={() => {
-                    cancelLongPress();
-                    if (firedRef.current) {
-                      firedRef.current = false;
-                      return; // long-press already handled this row
-                    }
-                    onSelect(b.id);
-                    setOpen(false);
-                  }}
-                  onPointerDown={() => startLongPress(b)}
-                  onPointerUp={cancelLongPress}
-                  onPointerLeave={cancelLongPress}
-                  className="flex items-center justify-between rounded-xl px-3 py-3 text-left text-[15px] font-medium active:opacity-80"
-                  style={{
-                    background: b.id === active?.id ? 'var(--color-accent-subtle)' : 'var(--color-bg-surface)',
-                    color: 'var(--color-text-primary)',
-                  }}
+                  className="flex items-center gap-1 rounded-xl pr-1"
+                  style={{ background: b.id === active?.id ? 'var(--color-accent-subtle)' : 'var(--color-bg-surface)' }}
                 >
-                  <span className="truncate">{b.name}</span>
-                  {b.id === active?.id && (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 6L9 17l-5-5" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelect(b.id);
+                      setOpen(false);
+                    }}
+                    className="flex min-w-0 flex-1 items-center justify-between px-3 py-3 text-left text-[15px] font-medium active:opacity-80"
+                    style={{ color: 'var(--color-text-primary)' }}
+                  >
+                    <span className="truncate">{b.name}</span>
+                    {b.id === active?.id && (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Rename ${b.name}`}
+                    onClick={() => renameBudget(b)}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg active:opacity-70"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                     </svg>
-                  )}
-                </button>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${b.name}`}
+                    onClick={() => deleteBudget(b)}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg active:opacity-70"
+                    style={{ color: 'var(--color-text-tertiary)' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                      <path d="M10 11v6M14 11v6" />
+                    </svg>
+                  </button>
+                </div>
               ))}
             </div>
 
             <p className="mb-3 px-1 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-              Long-press a budget to rename or delete it.
+              Use the pencil to rename a budget, or the trash to delete it.
             </p>
 
             {creating ? (

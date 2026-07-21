@@ -20,6 +20,7 @@ import { useSavingsWithdrawnBefore } from '../../hooks/budget/useSavingsWithdraw
 import { useSavingsDeposits } from '../../hooks/budget/useSavingsDeposits';
 import { useCreditCards } from '../../hooks/budget/useCreditCards';
 import { useCardPayments } from '../../hooks/budget/useCardPayments';
+import { useCardCharges } from '../../hooks/budget/useCardCharges';
 import { useScheduledExpenses } from '../../hooks/budget/useScheduledExpenses';
 import OverviewTable from './OverviewTable';
 import PaycheckList from './PaycheckList';
@@ -63,7 +64,20 @@ export default function BudgetView({
   const deposits = useSavingsDeposits(userId, budgetId, monthBounds.start_date, account.startMonth);
   const creditCards = useCreditCards(userId, budgetId);
   const cardPayments = useCardPayments(userId);
+  const cardCharges = useCardCharges(userId);
   const scheduled = useScheduledExpenses(userId, budgetId);
+
+  // Charging a scheduled expense to a card: bump its balance AND log the charge.
+  const chargeToCard = (cardId: string, name: string, amount: number) => {
+    void creditCards.chargeToCard(cardId, amount);
+    void cardCharges.addCharge(cardId, name, amount);
+  };
+  // Deleting a charge backs its amount out of the card balance.
+  const deleteCharge = (charge: { id: string; card_id: string; amount: number }) => {
+    void cardCharges.deleteCharge(charge.id);
+    const card = creditCards.cards.find((c) => c.id === charge.card_id);
+    if (card) void creditCards.updateCard(card.id, { balance: Math.max(0, (Number(card.balance) || 0) - (Number(charge.amount) || 0)) });
+  };
 
   // A card's balance still owed after every payment recorded against it.
   const cardRemaining = (c: CreditCard) => Math.max(0, (Number(c.balance) || 0) - cardPayments.paidTotal(c.id));
@@ -108,6 +122,9 @@ export default function BudgetView({
       <PaycheckList
         groups={recurringGroups.filter((g) => !isSavings(g))}
         payDays={payDays}
+        monthLabel={monthBounds.label}
+        onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
+        onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
         onSetPayDayIncome={setIncome}
         weeklyOnDate={(g) => grossWeeklyOf(g)}
         coveredOf={(g) => Math.min(savingsMonthlyOf(g), grossMonthlyOf(g)) / 4}
@@ -184,9 +201,11 @@ export default function BudgetView({
       <CreditCardSection
         cards={creditCards.cards}
         remainingOf={cardRemaining}
+        chargesOf={cardCharges.chargesFor}
         onAdd={creditCards.addCard}
         onUpdate={creditCards.updateCard}
         onDelete={creditCards.deleteCard}
+        onDeleteCharge={deleteCharge}
       />
 
       <ScheduledExpensesSection
@@ -195,7 +214,7 @@ export default function BudgetView({
         monthLabel={monthBounds.label}
         cards={creditCards.cards}
         onAdd={scheduled.addExpense}
-        onChargeToCard={creditCards.chargeToCard}
+        onChargeToCard={chargeToCard}
         onDelete={scheduled.deleteExpense}
       />
 

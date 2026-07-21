@@ -57,8 +57,8 @@ interface Props {
   /** Cards available to charge an expense to. */
   cards: CreditCard[];
   onAdd: (name: string, amount: number, dueDate: string) => void;
-  /** Charge the amount to a card's balance instead of scheduling cash. */
-  onChargeToCard: (cardId: string, amount: number) => void;
+  /** Charge the (named) amount to a card's balance instead of scheduling cash. */
+  onChargeToCard: (cardId: string, name: string, amount: number) => void;
   onDelete: (id: string) => void;
 }
 
@@ -96,13 +96,13 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
 
   const submit = () => {
     const amt = parseMoney(amount);
+    const n = name.trim();
     if (charge) {
-      if (!cardId || !(amt > 0)) return;
-      onChargeToCard(cardId, amt);
+      if (!cardId || !n || !(amt > 0)) return;
+      onChargeToCard(cardId, n, amt);
       reset();
       return;
     }
-    const n = name.trim();
     const when = dueDate || payDateOptions[0];
     if (!n || !when) return;
     onAdd(n, amt, when);
