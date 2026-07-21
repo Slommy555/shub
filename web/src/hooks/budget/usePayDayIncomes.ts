@@ -13,9 +13,9 @@ export interface PayDay {
 type RowMap = Record<string, BudgetPeriod>; // keyed by start_date (the Thursday)
 
 /**
- * The (up to four) pay-day Thursdays of a month, each backed by its own WEEKLY
- * budget_periods row. Every month has at least four Thursdays, so we take the
- * first four — the app treats a month as four pay periods (monthly = weekly × 4).
+ * EVERY pay-day Thursday whose date falls in the calendar month (4 or 5), each
+ * backed by its own WEEKLY budget_periods row. A 5th Thursday (e.g. Jul 30)
+ * counts for its own month — it is never dropped or pushed into the next month.
  * Each pay day's income is editable and upserts on the
  * (user_id, budget_id, type, start_date) unique key. Kept in sync via realtime.
  */
@@ -24,7 +24,7 @@ export function usePayDayIncomes(
   budgetId: string | null,
   monthStart: string
 ) {
-  const thursdays = useMemo(() => thursdaysInMonth(monthStart).slice(0, 4), [monthStart]);
+  const thursdays = useMemo(() => thursdaysInMonth(monthStart), [monthStart]);
   const thursdaysKey = thursdays.join(',');
 
   const [rows, setRows] = useState<RowMap>({});

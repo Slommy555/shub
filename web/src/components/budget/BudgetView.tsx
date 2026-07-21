@@ -60,7 +60,9 @@ export default function BudgetView({
   const deposits = useSavingsDeposits(userId, budgetId, monthBounds.start_date, account.startMonth);
   const creditCards = useCreditCards(userId, budgetId);
   const scheduled = useScheduledExpenses(userId, budgetId);
-  const weeklyIncome = monthlyIncome / 4;
+  // Average per-paycheck income: divide by the month's actual pay-day count
+  // (4 or 5) so a 5-Thursday month isn't overstated.
+  const weeklyIncome = monthlyIncome / (payDays.length || 4);
 
   // Recurring groups = everything except legacy credit-card groups (now in their
   // own table). The "Savings" category (a group named Savings) is a recurring row

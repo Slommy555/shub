@@ -27,7 +27,7 @@ export function useSavingsDeposits(
   monthStart: string,
   startMonth: string
 ) {
-  const thursdays = useMemo(() => thursdaysInMonth(monthStart).slice(0, 4), [monthStart]);
+  const thursdays = useMemo(() => thursdaysInMonth(monthStart), [monthStart]);
   const thursdaysKey = thursdays.join(',');
   const throughEnd = firstOfNextMonth(monthStart);
 
