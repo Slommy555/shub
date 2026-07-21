@@ -116,6 +116,43 @@ export const PRESET_COLORS = [
   '#8b8aa8',
 ] as const;
 
+// --- savings offset (order-independent) -------------------------------------
+/**
+ * The single source of truth for how a savings earmark offsets a group's cost.
+ * Purely a function of the current stored values, so it gives the same result
+ * regardless of whether the group amount or the earmark was entered first.
+ * `net` = what income must still cover; `covered` = fully paid by savings.
+ */
+export function savingsOffset(gross: number, earmark: number): { net: number; covered: boolean } {
+  const g = Number(gross) || 0;
+  const e = Math.max(0, Number(earmark) || 0);
+  return { net: Math.max(0, g - e), covered: g > 0 && e >= g };
+}
+
+/** Convenience: just the net amount income must cover. */
+export const netAmount = (gross: number, earmark: number): number => savingsOffset(gross, earmark).net;
+
+// --- scheduled expenses + credit cards (Round 2) ----------------------------
+export interface ScheduledExpense {
+  id: string;
+  user_id: string;
+  budget_id: string;
+  name: string;
+  amount: number;
+  due_month: string; // YYYY-MM-01
+  created_at?: string;
+}
+
+export interface CreditCard {
+  id: string;
+  user_id: string;
+  budget_id: string;
+  name: string;
+  weekly_payment: number;
+  position: number;
+  created_at?: string;
+}
+
 // --- date helpers -----------------------------------------------------------
 const pad = (n: number) => String(n).padStart(2, '0');
 

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
+import { formatMoney, parseMoney, savingsOffset, type BudgetGroup } from '../../types/budget';
 import type { PayDay } from '../../hooks/budget/usePayDayIncomes';
 import AddGroupForm from './AddGroupForm';
 
@@ -19,12 +19,10 @@ interface EditState {
 
 interface Props {
   groups: BudgetGroup[];
-  /** Per-column read-only predicate. e.g. a credit card's Monthly cell is
-   *  informational (weekly × 4) while its Weekly cell stays editable. */
+  /** Section title (e.g. "Recurring Fixed Costs"). */
+  title: string;
+  /** Per-column read-only predicate (e.g. the auto-driven "Savings" category). */
   readOnly?: (g: BudgetGroup, col: 'weekly' | 'monthly') => boolean;
-  /** Cells to flag as specially editable (accent + dashed underline) so a new
-   *  affordance — e.g. a credit card's per-month Weekly payment — is discoverable. */
-  accentEditable?: (g: BudgetGroup, col: 'weekly' | 'monthly') => boolean;
   monthLabel: string;
   onPrevMonth: () => void;
   onNextMonth: () => void;
@@ -32,8 +30,11 @@ interface Props {
   weeklyIncome: number;
   monthlyIncome: number;
   onSetPayDayIncome: (thursday: string, n: number) => void;
-  weeklyOf: (g: BudgetGroup) => number;
-  monthlyOf: (g: BudgetGroup) => number;
+  /** Gross (pre-savings) amounts — what the editable cell edits. */
+  grossMonthlyOf: (g: BudgetGroup) => number;
+  grossWeeklyOf: (g: BudgetGroup) => number;
+  /** Monthly savings earmarked toward a group (0 when none). */
+  savingsMonthlyOf: (g: BudgetGroup) => number;
   onSaveWeekly: (g: BudgetGroup, n: number) => void;
   onSaveMonthly: (g: BudgetGroup, n: number) => void;
   onAddGroup: (name: string, color: string) => void;
@@ -42,24 +43,13 @@ interface Props {
 }
 
 /** A labelled currency input (raw number while focused, formatted on blur). */
-function IncomeField({
-  label,
-  value,
-  onSave,
-}: {
-  label: string;
-  value: number;
-  onSave: (n: number) => void;
-}) {
+function IncomeField({ label, value, onSave }: { label: string; value: number; onSave: (n: number) => void }) {
   const [focused, setFocused] = useState(false);
   const [text, setText] = useState('');
   const display = focused ? text : value ? formatMoney(value) : '';
   return (
     <label className="flex-1">
-      <span
-        className="mb-1.5 block text-xs font-medium"
-        style={{ color: 'var(--color-text-secondary)' }}
-      >
+      <span className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
         {label}
       </span>
       <input
@@ -93,13 +83,7 @@ function IncomeField({
 }
 
 /** The inline input that replaces a money cell while it is being edited. */
-function CellInput({
-  initial,
-  onCommit,
-}: {
-  initial: number;
-  onCommit: (n: number | null) => void;
-}) {
+function CellInput({ initial, onCommit }: { initial: number; onCommit: (n: number | null) => void }) {
   const [text, setText] = useState(initial ? String(initial) : '');
   return (
     <input
@@ -116,24 +100,13 @@ function CellInput({
         if (e.key === 'Escape') onCommit(null);
       }}
       className="w-full rounded-lg border px-2 text-right text-[15px] tabular-nums outline-none"
-      style={{
-        height: '38px',
-        background: 'var(--color-bg-surface)',
-        borderColor: 'var(--color-accent-muted)',
-        color: 'var(--color-text-primary)',
-      }}
+      style={{ height: '38px', background: 'var(--color-bg-surface)', borderColor: 'var(--color-accent-muted)', color: 'var(--color-text-primary)' }}
     />
   );
 }
 
 /** The inline input that replaces the group name while it is being edited. */
-function NameInput({
-  initial,
-  onCommit,
-}: {
-  initial: string;
-  onCommit: (v: string | null) => void;
-}) {
+function NameInput({ initial, onCommit }: { initial: string; onCommit: (v: string | null) => void }) {
   const [text, setText] = useState(initial);
   return (
     <input
@@ -148,20 +121,46 @@ function NameInput({
         if (e.key === 'Escape') onCommit(null);
       }}
       className="w-full rounded-lg border px-2 text-[15px] outline-none"
-      style={{
-        height: '38px',
-        background: 'var(--color-bg-surface)',
-        borderColor: 'var(--color-accent-muted)',
-        color: 'var(--color-text-primary)',
-      }}
+      style={{ height: '38px', background: 'var(--color-bg-surface)', borderColor: 'var(--color-accent-muted)', color: 'var(--color-text-primary)' }}
     />
+  );
+}
+
+/** Non-editing money cell content: shows net after savings + a Covered / "from
+ *  savings" annotation, per Fix 3. */
+function AmountDisplay({ gross, earmark, readOnly }: { gross: number; earmark: number; readOnly: boolean }) {
+  const { net, covered } = savingsOffset(gross, earmark);
+  if (covered) {
+    return (
+      <span className="text-[15px] font-medium" style={{ color: 'var(--color-success)' }}>
+        Covered
+      </span>
+    );
+  }
+  if (earmark > 0) {
+    const fromSavings = gross - net;
+    return (
+      <span className="flex flex-col items-end leading-tight">
+        <span className="text-[15px]" style={{ color: 'var(--color-text-primary)' }}>
+          {formatMoney(net)}
+        </span>
+        <span className="text-[11px]" style={{ color: 'var(--color-success)' }}>
+          −{formatMoney(fromSavings)} from savings
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className="text-[15px]" style={{ color: readOnly ? 'var(--color-text-secondary)' : 'var(--color-text-primary)' }}>
+      {formatMoney(gross)}
+    </span>
   );
 }
 
 export default function OverviewTable({
   groups,
+  title,
   readOnly,
-  accentEditable,
   monthLabel,
   onPrevMonth,
   onNextMonth,
@@ -169,8 +168,9 @@ export default function OverviewTable({
   weeklyIncome,
   monthlyIncome,
   onSetPayDayIncome,
-  weeklyOf,
-  monthlyOf,
+  grossMonthlyOf,
+  grossWeeklyOf,
+  savingsMonthlyOf,
   onSaveWeekly,
   onSaveMonthly,
   onAddGroup,
@@ -182,27 +182,24 @@ export default function OverviewTable({
   const swipeRef = useRef<typeof swipe>(null);
   swipeRef.current = swipe;
 
+  // Totals count only the NET (post-savings) amount each group needs funded.
   const totals = useMemo(() => {
     let m = 0;
     let w = 0;
     for (const g of groups) {
-      m += monthlyOf(g);
-      w += weeklyOf(g);
+      const em = savingsMonthlyOf(g);
+      m += savingsOffset(grossMonthlyOf(g), em).net;
+      w += savingsOffset(grossWeeklyOf(g), em / 4).net;
     }
     return { monthly: m, weekly: w };
-  }, [groups, monthlyOf, weeklyOf]);
+  }, [groups, grossMonthlyOf, grossWeeklyOf, savingsMonthlyOf]);
 
-  // Single pointer arbiter per row: a horizontal drag swipes to reveal delete; a
-  // tap either closes an open swipe or opens the tapped cell's inline editor; a
-  // vertical drag is abandoned so the page scrolls normally.
   const onRowPointerDown = (id: string, e: React.PointerEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('input,button,[data-no-drag]')) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
-    const col = (target.closest('[data-col]') as HTMLElement | null)?.getAttribute('data-col') as
-      | EditCol
-      | null;
+    const col = (target.closest('[data-col]') as HTMLElement | null)?.getAttribute('data-col') as EditCol | null;
     const startX = e.clientX;
     const startY = e.clientY;
     const startT = Date.now();
@@ -233,7 +230,6 @@ export default function OverviewTable({
         const x = swipeRef.current && swipeRef.current.id === id ? swipeRef.current.x : 0;
         setSwipe(x < -48 ? { id, x: -88 } : null);
       } else if (Date.now() - startT < 400) {
-        // tap
         if (swipeRef.current && swipeRef.current.id === id) setSwipe(null);
         else if (col) setEditing({ id, col });
       }
@@ -286,10 +282,7 @@ export default function OverviewTable({
 
       {/* Pay-day incomes for the month */}
       <div className="mb-2 flex items-center justify-between">
-        <span
-          className="text-[11px] font-medium uppercase"
-          style={{ letterSpacing: '0.08em', color: 'var(--color-text-secondary)' }}
-        >
+        <span className="text-[11px] font-medium uppercase" style={{ letterSpacing: '0.08em', color: 'var(--color-text-secondary)' }}>
           Pay days
         </span>
         <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -298,21 +291,13 @@ export default function OverviewTable({
       </div>
       <div className="mb-4 grid grid-cols-2 gap-3">
         {payDays.map((p) => (
-          <IncomeField
-            key={p.date}
-            label={p.label}
-            value={p.income}
-            onSave={(n) => onSetPayDayIncome(p.date, n)}
-          />
+          <IncomeField key={p.date} label={p.label} value={p.income} onSave={(n) => onSetPayDayIncome(p.date, n)} />
         ))}
       </div>
 
       {/* Income totals */}
       <div className="mb-5 grid grid-cols-2 gap-3">
-        <div
-          className="rounded-2xl border p-4"
-          style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
-        >
+        <div className="rounded-2xl border p-4" style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}>
           <span className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
             Monthly income
           </span>
@@ -320,10 +305,7 @@ export default function OverviewTable({
             {formatMoney(monthlyIncome)}
           </span>
         </div>
-        <div
-          className="rounded-2xl border p-4"
-          style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
-        >
+        <div className="rounded-2xl border p-4" style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}>
           <span className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
             Weekly (avg)
           </span>
@@ -333,43 +315,30 @@ export default function OverviewTable({
         </div>
       </div>
 
+      {/* Section title */}
+      <h2 className="mb-2 text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.08em', color: 'var(--color-text-secondary)' }}>
+        {title}
+      </h2>
+
       {/* Table */}
-      <div
-        className="overflow-x-auto rounded-2xl border"
-        style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
-      >
+      <div className="overflow-x-auto rounded-2xl border" style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}>
         <div style={{ minWidth: MIN_TABLE_W }}>
           {/* Header */}
-          <div
-            className="flex items-center border-b"
-            style={{ borderColor: 'var(--color-border)', height: '40px' }}
-          >
-            <div
-              className="px-4 text-[11px] font-medium uppercase"
-              style={{ width: NAME_W, letterSpacing: '0.04em', color: 'var(--color-text-secondary)' }}
-            >
+          <div className="flex items-center border-b" style={{ borderColor: 'var(--color-border)', height: '40px' }}>
+            <div className="px-4 text-[11px] font-medium uppercase" style={{ width: NAME_W, letterSpacing: '0.04em', color: 'var(--color-text-secondary)' }}>
               Group
             </div>
-            <div
-              className="flex-1 px-3 text-right text-[11px] font-medium uppercase"
-              style={{ minWidth: COL_MIN, letterSpacing: '0.04em', color: 'var(--color-text-secondary)' }}
-            >
+            <div className="flex-1 px-3 text-right text-[11px] font-medium uppercase" style={{ minWidth: COL_MIN, letterSpacing: '0.04em', color: 'var(--color-text-secondary)' }}>
               Monthly
             </div>
-            <div
-              className="flex-1 px-3 text-right text-[11px] font-medium uppercase"
-              style={{ minWidth: COL_MIN, letterSpacing: '0.04em', color: 'var(--color-text-secondary)' }}
-            >
+            <div className="flex-1 px-3 text-right text-[11px] font-medium uppercase" style={{ minWidth: COL_MIN, letterSpacing: '0.04em', color: 'var(--color-text-secondary)' }}>
               Weekly
             </div>
           </div>
 
           {/* Rows */}
           {groups.length === 0 ? (
-            <div
-              className="flex items-center justify-center px-4 py-10 text-center text-[15px]"
-              style={{ color: 'var(--color-text-tertiary)' }}
-            >
+            <div className="flex items-center justify-center px-4 py-10 text-center text-[15px]" style={{ color: 'var(--color-text-tertiary)' }}>
               No expense groups yet
             </div>
           ) : (
@@ -380,15 +349,7 @@ export default function OverviewTable({
               const editName = editing?.id === g.id && editing.col === 'name';
               const editWeekly = !roWeekly && editing?.id === g.id && editing.col === 'weekly';
               const editMonthly = !roMonthly && editing?.id === g.id && editing.col === 'monthly';
-              const weeklyColor = roWeekly ? 'var(--color-text-secondary)' : 'var(--color-text-primary)';
-              const monthlyColor = roMonthly ? 'var(--color-text-secondary)' : 'var(--color-text-primary)';
-              const hintWeekly = accentEditable?.(g, 'weekly') ?? false;
-              const hintMonthly = accentEditable?.(g, 'monthly') ?? false;
-              const accentStyle = {
-                color: 'var(--color-accent)',
-                borderBottom: '1px dashed var(--color-accent-muted)',
-                paddingBottom: '1px',
-              } as const;
+              const earmarkM = savingsMonthlyOf(g);
               return (
                 <div key={g.id} className="relative select-none border-t" style={{ borderColor: 'var(--color-border)' }}>
                   {/* Delete action behind the row */}
@@ -421,15 +382,8 @@ export default function OverviewTable({
                     }}
                   >
                     {/* Name + color dot */}
-                    <div
-                      data-col="name"
-                      className="flex items-center gap-2.5 px-4 py-2"
-                      style={{ width: NAME_W }}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ background: g.color }}
-                      />
+                    <div data-col="name" className="flex items-center gap-2.5 px-4 py-2" style={{ width: NAME_W }}>
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: g.color }} />
                       {editName ? (
                         <NameInput
                           initial={g.name}
@@ -439,10 +393,7 @@ export default function OverviewTable({
                           }}
                         />
                       ) : (
-                        <span
-                          className="min-w-0 flex-1 truncate text-[15px] font-medium"
-                          style={{ color: 'var(--color-text-primary)' }}
-                        >
+                        <span className="min-w-0 flex-1 truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
                           {g.name}
                         </span>
                       )}
@@ -452,16 +403,14 @@ export default function OverviewTable({
                     <div data-col={roMonthly ? undefined : 'monthly'} className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
                       {editMonthly ? (
                         <CellInput
-                          initial={Math.round(monthlyOf(g) * 100) / 100}
+                          initial={Math.round(grossMonthlyOf(g) * 100) / 100}
                           onCommit={(n) => {
                             if (n !== null) onSaveMonthly(g, n);
                             setEditing(null);
                           }}
                         />
                       ) : (
-                        <span className="text-[15px]" style={hintMonthly ? accentStyle : { color: monthlyColor }}>
-                          {formatMoney(monthlyOf(g))}
-                        </span>
+                        <AmountDisplay gross={grossMonthlyOf(g)} earmark={earmarkM} readOnly={roMonthly} />
                       )}
                     </div>
 
@@ -469,16 +418,14 @@ export default function OverviewTable({
                     <div data-col={roWeekly ? undefined : 'weekly'} className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
                       {editWeekly ? (
                         <CellInput
-                          initial={Math.round(weeklyOf(g) * 100) / 100}
+                          initial={Math.round(grossWeeklyOf(g) * 100) / 100}
                           onCommit={(n) => {
                             if (n !== null) onSaveWeekly(g, n);
                             setEditing(null);
                           }}
                         />
                       ) : (
-                        <span className="text-[15px]" style={hintWeekly ? accentStyle : { color: weeklyColor }}>
-                          {formatMoney(weeklyOf(g))}
-                        </span>
+                        <AmountDisplay gross={grossWeeklyOf(g)} earmark={earmarkM / 4} readOnly={roWeekly} />
                       )}
                     </div>
                   </div>
@@ -488,26 +435,14 @@ export default function OverviewTable({
           )}
 
           {/* Footer total */}
-          <div
-            className="flex items-center border-t"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-overlay)', minHeight: ROW_MIN_H }}
-          >
-            <div
-              className="px-4 text-[15px] font-semibold"
-              style={{ width: NAME_W, color: 'var(--color-text-primary)' }}
-            >
+          <div className="flex items-center border-t" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-overlay)', minHeight: ROW_MIN_H }}>
+            <div className="px-4 text-[15px] font-semibold" style={{ width: NAME_W, color: 'var(--color-text-primary)' }}>
               Total
             </div>
-            <div
-              className="flex flex-1 items-center justify-end px-3 text-[15px] font-semibold tabular-nums"
-              style={{ minWidth: COL_MIN, color: 'var(--color-text-primary)' }}
-            >
+            <div className="flex flex-1 items-center justify-end px-3 text-[15px] font-semibold tabular-nums" style={{ minWidth: COL_MIN, color: 'var(--color-text-primary)' }}>
               {formatMoney(totals.monthly)}
             </div>
-            <div
-              className="flex flex-1 items-center justify-end px-3 text-[15px] font-semibold tabular-nums"
-              style={{ minWidth: COL_MIN, color: 'var(--color-text-primary)' }}
-            >
+            <div className="flex flex-1 items-center justify-end px-3 text-[15px] font-semibold tabular-nums" style={{ minWidth: COL_MIN, color: 'var(--color-text-primary)' }}>
               {formatMoney(totals.weekly)}
             </div>
           </div>
