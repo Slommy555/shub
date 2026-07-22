@@ -29,8 +29,9 @@ import PaycheckList from './PaycheckList';
 import CreditCardSection from './CreditCardSection';
 import ScheduledExpensesSection from './ScheduledExpensesSection';
 import SavingsPoolSection from './SavingsPoolSection';
+import BudgetCalendar, { type CalEvent } from './BudgetCalendar';
 
-export type BudgetViewMode = 'overview' | 'paycheck';
+export type BudgetViewMode = 'overview' | 'paycheck' | 'calendar';
 
 /**
  * Shared data layer for the two budget views (Round 2 model).
@@ -196,6 +197,47 @@ export default function BudgetView({
             .filter((p) => p.remaining > 0 || (p.paid ?? 0) > 0)
         }
         onPayGroup={(groupId, d, amt) => void groupPayments.setPayment(groupId, d, amt)}
+      />
+    );
+  }
+
+  if (view === 'calendar') {
+    const ym = monthBounds.start_date.slice(0, 7);
+    const [cy, cm] = monthBounds.start_date.split('-').map(Number);
+    const events: CalEvent[] = [];
+
+    // Pay days (income) in this calendar month.
+    for (const p of payDays) {
+      if (p.date.slice(0, 7) !== ym || !(p.income > 0)) continue;
+      events.push({ date: p.date, kind: 'pay', label: 'Paycheck', amount: p.income, color: 'var(--color-success)' });
+    }
+    // Fixed costs with a charge day (net of savings).
+    for (const g of recurringGroups) {
+      if (isSavings(g) || g.due_day == null) continue;
+      const net = savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net;
+      if (!(net > 0)) continue;
+      events.push({ date: toISODate(chargeDateOn(g.due_day, cy, cm - 1)), kind: 'fixed', label: g.name, amount: net, color: g.color });
+    }
+    // Scheduled one-off expenses dated to this month.
+    for (const e of scheduled.expenses) {
+      if (!e.due_date || e.due_date.slice(0, 7) !== ym) continue;
+      events.push({ date: e.due_date, kind: 'scheduled', label: e.name, amount: Number(e.amount) || 0, color: '#f0a04b' });
+    }
+    // Credit-card due dates in this month (remaining owed).
+    for (const c of creditCards.cards) {
+      if (!c.due_date || c.due_date.slice(0, 7) !== ym) continue;
+      const remaining = cardRemaining(c);
+      if (!(remaining > 0)) continue;
+      events.push({ date: c.due_date, kind: 'card', label: c.name, amount: remaining, color: '#5c9eff' });
+    }
+
+    return (
+      <BudgetCalendar
+        monthStart={monthBounds.start_date}
+        monthLabel={monthBounds.label}
+        onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
+        onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
+        events={events}
       />
     );
   }
