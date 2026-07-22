@@ -82,6 +82,7 @@ export function useScheduledExpenses(userId: string | null, budgetId: string | n
         amount: value,
         due_month: dueMonth,
         due_date: dueDate,
+        created_at: new Date().toISOString(),
       };
       setExpenses((prev) => [...prev, row]);
       const { error } = await supabase

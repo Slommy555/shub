@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
+import { formatMoney, parseMoney, toISODate, type BudgetGroup } from '../../types/budget';
 import type { PayDay } from '../../hooks/budget/usePayDayIncomes';
 import type { SavingsDeposit } from '../../hooks/budget/useSavingsDeposits';
 
@@ -72,9 +72,20 @@ export default function PaycheckList({
   cardPayoffsForDate,
   onPayCard,
 }: Props) {
-  const [idx, setIdx] = useState(0);
-  // Start at the first pay day whenever the month changes.
-  useEffect(() => setIdx(0), [monthLabel]);
+  // The pay day for the week containing today (the most recent Thursday ≤ today);
+  // if today is before the month's first pay day → the first, if after all → last.
+  const todayISO = toISODate(new Date());
+  const currentIdx = (() => {
+    if (payDays.length === 0) return 0;
+    const firstFuture = payDays.findIndex((p) => p.date > todayISO);
+    if (firstFuture === -1) return payDays.length - 1;
+    return Math.max(0, firstFuture - 1);
+  })();
+
+  const [idx, setIdx] = useState(currentIdx);
+  // Jump to the current paycheck whenever the month (or its pay days) changes, so
+  // opening the view lands on the paycheck you're living in right now.
+  useEffect(() => setIdx(currentIdx), [monthLabel, payDays.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const clamped = payDays.length === 0 ? 0 : Math.min(idx, payDays.length - 1);
   const current = payDays[clamped];
   const income = current?.income ?? 0;
@@ -154,8 +165,16 @@ export default function PaycheckList({
           <span className="text-[17px] font-semibold" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
             {current?.label ?? 'Pay day'}
           </span>
-          <span className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+          <span className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
             Paycheck {payDays.length ? clamped + 1 : 0} of {payDays.length}
+            {payDays.length > 0 && clamped === currentIdx && (
+              <span
+                className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase"
+                style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)', letterSpacing: '0.04em' }}
+              >
+                This week
+              </span>
+            )}
           </span>
         </div>
         <button

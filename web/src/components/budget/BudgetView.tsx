@@ -92,10 +92,17 @@ export default function BudgetView({
   const savedForExpense = (e: { id: string; amount: number }) =>
     Math.min(savings.expenseEarmarkAmounts[e.id] ?? 0, Number(e.amount) || 0);
   /** Payoff note for a scheduled expense on a pay day: net still owed after
-   *  savings, and the suggested set-aside to reach its due date. */
-  const scheduledPayoffFor = (e: { id: string; name: string; amount: number; due_date?: string | null }, payDate: string) => {
+   *  savings, and a FLAT weekly set-aside. The net is spread evenly across the pay
+   *  weeks from when the expense was set up (its created date) through its charge
+   *  date, so the "put away each week" amount stays constant week to week rather
+   *  than climbing as the date nears. */
+  const scheduledPayoffFor = (
+    e: { id: string; name: string; amount: number; due_date?: string | null; created_at?: string },
+    payDate: string
+  ) => {
     const remaining = Math.max(0, (Number(e.amount) || 0) - savedForExpense(e));
-    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, e.due_date ?? null) : 0;
+    const start = e.created_at ? e.created_at.slice(0, 10) : payDate;
+    const suggested = remaining > 0 ? remaining / payDatesThrough(start, e.due_date ?? null) : 0;
     return { id: e.id, name: e.name, due_date: e.due_date ?? null, remaining, suggested };
   };
   // Average per-paycheck income: divide by the month's actual pay-day count

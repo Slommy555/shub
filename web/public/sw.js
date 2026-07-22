@@ -16,7 +16,7 @@
  *     controller to replace, so it activates immediately.
  */
 
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const CACHE_NAME = `slommy-hq-${CACHE_VERSION}`;
 
 // The minimal shell needed to boot offline. Content-hashed JS/CSS are added to
