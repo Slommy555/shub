@@ -72,19 +72,18 @@ export default function PaycheckList({
   cardPayoffsForDate,
   onPayCard,
 }: Props) {
-  // The pay day for the week containing today (the most recent Thursday ≤ today);
-  // if today is before the month's first pay day → the first, if after all → last.
+  // The next upcoming pay day (first Thursday on/after today); if today is past
+  // the month's last pay day → the last one.
   const todayISO = toISODate(new Date());
   const currentIdx = (() => {
     if (payDays.length === 0) return 0;
-    const firstFuture = payDays.findIndex((p) => p.date > todayISO);
-    if (firstFuture === -1) return payDays.length - 1;
-    return Math.max(0, firstFuture - 1);
+    const next = payDays.findIndex((p) => p.date >= todayISO);
+    return next === -1 ? payDays.length - 1 : next;
   })();
 
   const [idx, setIdx] = useState(currentIdx);
-  // Jump to the current paycheck whenever the month (or its pay days) changes, so
-  // opening the view lands on the paycheck you're living in right now.
+  // Jump to the next paycheck whenever the month (or its pay days) changes, so
+  // opening the view lands on the paycheck that's coming up.
   useEffect(() => setIdx(currentIdx), [monthLabel, payDays.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const clamped = payDays.length === 0 ? 0 : Math.min(idx, payDays.length - 1);
   const current = payDays[clamped];
@@ -172,7 +171,7 @@ export default function PaycheckList({
                 className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase"
                 style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)', letterSpacing: '0.04em' }}
               >
-                This week
+                Next up
               </span>
             )}
           </span>
