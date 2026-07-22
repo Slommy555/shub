@@ -20,6 +20,7 @@ import { useSavingsWithdrawnBefore } from '../../hooks/budget/useSavingsWithdraw
 import { useSavingsDeposits } from '../../hooks/budget/useSavingsDeposits';
 import { useCreditCards } from '../../hooks/budget/useCreditCards';
 import { useCardPayments } from '../../hooks/budget/useCardPayments';
+import { useGroupPayments } from '../../hooks/budget/useGroupPayments';
 import { useCardCharges } from '../../hooks/budget/useCardCharges';
 import { useScheduledExpenses } from '../../hooks/budget/useScheduledExpenses';
 import OverviewTable from './OverviewTable';
@@ -64,6 +65,7 @@ export default function BudgetView({
   const deposits = useSavingsDeposits(userId, budgetId, monthBounds.start_date, account.startMonth);
   const creditCards = useCreditCards(userId, budgetId);
   const cardPayments = useCardPayments(userId);
+  const groupPayments = useGroupPayments(userId);
   const cardCharges = useCardCharges(userId);
   const scheduled = useScheduledExpenses(userId, budgetId);
 
@@ -135,10 +137,29 @@ export default function BudgetView({
   const saveMonthly = (g: BudgetGroup, entered: number) =>
     void allocations.setAmount(g.id, Math.max(0, fromView(entered, 'monthly')));
 
+  // A dated fixed cost (due_day set) is a per-month payoff tracker like a card:
+  // target = its net monthly amount, due on the charge day of the viewed month,
+  // paid down across that month's pay days via budget_group_payments.
+  const dueDateInMonth = (day: number, monthStartISO: string): string => {
+    const [y, m] = monthStartISO.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const dd = Math.min(Math.max(1, day), lastDay);
+    return `${monthStartISO.slice(0, 7)}-${String(dd).padStart(2, '0')}`;
+  };
+  const groupPayoffFor = (g: BudgetGroup, payDate: string) => {
+    const net = savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net;
+    const dueDate = dueDateInMonth(g.due_day ?? 1, monthBounds.start_date);
+    const paidBefore = groupPayments.paidInRange(g.id, monthBounds.start_date, payDate);
+    const remaining = Math.max(0, net - paidBefore);
+    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, dueDate) : 0;
+    return { id: g.id, name: g.name, color: g.color, due_date: dueDate, remaining, suggested, paid: groupPayments.paymentOn(g.id, payDate) };
+  };
+  const isDated = (g: BudgetGroup) => g.due_day != null;
+
   if (view === 'paycheck') {
     return (
       <PaycheckList
-        groups={recurringGroups.filter((g) => !isSavings(g))}
+        groups={recurringGroups.filter((g) => !isSavings(g) && !isDated(g))}
         payDays={payDays}
         monthLabel={monthBounds.label}
         onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
@@ -158,6 +179,13 @@ export default function BudgetView({
           creditCards.cards.map((c) => cardPayoffFor(c, d)).filter((p) => p.remaining > 0 || (p.paid ?? 0) > 0)
         }
         onPayCard={(cardId, d, amt) => void cardPayments.setPayment(cardId, d, amt)}
+        groupPayoffsForDate={(d) =>
+          recurringGroups
+            .filter((g) => !isSavings(g) && isDated(g))
+            .map((g) => groupPayoffFor(g, d))
+            .filter((p) => p.remaining > 0 || (p.paid ?? 0) > 0)
+        }
+        onPayGroup={(groupId, d, amt) => void groupPayments.setPayment(groupId, d, amt)}
       />
     );
   }
@@ -219,6 +247,7 @@ export default function BudgetView({
         onAddGroup={groupsApi.addGroup}
         onRename={(id, name) => void groupsApi.updateGroup(id, { name })}
         onDelete={groupsApi.deleteGroup}
+        onSetDueDay={(id, day) => void groupsApi.updateGroup(id, { due_day: day })}
       />
 
       <CreditCardSection

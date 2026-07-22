@@ -26,6 +26,10 @@ interface Props {
   cardPayoffsForDate?: (thursdayISO: string) => CardPayoff[];
   /** Record a payment against a card on a pay date. */
   onPayCard?: (cardId: string, thursdayISO: string, amount: number) => void;
+  /** Dated fixed-cost groups as per-month payoff trackers for a given pay date. */
+  groupPayoffsForDate?: (thursdayISO: string) => CardPayoff[];
+  /** Record what was set aside toward a dated fixed cost on a pay date. */
+  onPayGroup?: (groupId: string, thursdayISO: string, amount: number) => void;
 }
 
 export interface CardPayoff {
@@ -38,6 +42,8 @@ export interface CardPayoff {
   suggested: number;
   /** Payment already recorded for this card on this pay day. */
   paid?: number;
+  /** Accent dot color (defaults to the card blue). */
+  color?: string;
 }
 
 export interface ScheduledPayoff {
@@ -71,6 +77,8 @@ export default function PaycheckList({
   scheduledPayoffsForDate,
   cardPayoffsForDate,
   onPayCard,
+  groupPayoffsForDate,
+  onPayGroup,
 }: Props) {
   // The next upcoming pay day (first Thursday on/after today); if today is past
   // the month's last pay day → the last one.
@@ -104,13 +112,22 @@ export default function PaycheckList({
   const payoffs = current ? cardPayoffsForDate?.(current.date) ?? [] : [];
   const cardPaidThisDate = payoffs.reduce((s, p) => s + (p.paid ?? 0), 0);
 
+  // Dated fixed-cost groups: a per-month payoff tracker (like a card). What's
+  // recorded on this pay day counts toward the total set aside.
+  const groupPayoffs = current ? groupPayoffsForDate?.(current.date) ?? [] : [];
+  const groupPaidThisDate = groupPayoffs.reduce((s, p) => s + (p.paid ?? 0), 0);
+
   // Scheduled one-off expenses: spread each toward its due date, showing the
   // suggested set-aside this pay day (net of any savings earmarked to it).
   const scheduledPayoffs = current ? scheduledPayoffsForDate?.(current.date) ?? [] : [];
   const scheduledSetAside = scheduledPayoffs.reduce((s, p) => s + p.suggested, 0);
 
   const totalSetAside =
-    savingsDeposit + rows.reduce((sum, r) => sum + r.setAside, 0) + cardPaidThisDate + scheduledSetAside;
+    savingsDeposit +
+    rows.reduce((sum, r) => sum + r.setAside, 0) +
+    cardPaidThisDate +
+    groupPaidThisDate +
+    scheduledSetAside;
   const leftOver = income - totalSetAside;
 
   let running = income - savingsDeposit;
@@ -283,6 +300,27 @@ export default function PaycheckList({
         </div>
       )}
 
+      {/* Dated fixed expenses to set aside for this payday */}
+      {groupPayoffs.length > 0 && (
+        <div className="mt-4">
+          <h3 className="mb-2 text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.08em', color: 'var(--color-text-secondary)' }}>
+            Fixed expenses
+          </h3>
+          <div className="flex flex-col gap-2">
+            {groupPayoffs.map((p) => (
+              <CardPayoffRow
+                key={p.id}
+                payoff={p}
+                color={p.color ?? '#8b8aa8'}
+                remainingLabel="Left to set aside"
+                inputLabel="Setting aside this payday"
+                onPay={(amt) => current && onPayGroup?.(p.id, current.date, amt)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Scheduled expenses to set aside for this payday */}
       {scheduledPayoffs.length > 0 && (
         <div className="mt-4">
@@ -337,9 +375,22 @@ export default function PaycheckList({
   );
 }
 
-/** One card's payoff row on a pay day: balance left, suggested payment, and an
- *  editable "paying this payday" field with a one-tap "use suggested" button. */
-function CardPayoffRow({ payoff, onPay }: { payoff: CardPayoff; onPay: (n: number) => void }) {
+/** One payoff row on a pay day: amount left, suggested set-aside, and an editable
+ *  field with a one-tap "use suggested" button. Shared by credit cards and dated
+ *  fixed-cost groups (labels/color are parametrized). */
+function CardPayoffRow({
+  payoff,
+  onPay,
+  color = '#5c9eff',
+  remainingLabel = 'Balance left',
+  inputLabel = 'Paying this payday',
+}: {
+  payoff: CardPayoff;
+  onPay: (n: number) => void;
+  color?: string;
+  remainingLabel?: string;
+  inputLabel?: string;
+}) {
   const [focused, setFocused] = useState(false);
   const [text, setText] = useState('');
   const paid = payoff.paid;
@@ -352,7 +403,7 @@ function CardPayoffRow({ payoff, onPay }: { payoff: CardPayoff; onPay: (n: numbe
     <div className="rounded-2xl border p-4" style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2.5">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: '#5c9eff' }} />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
           <span className="truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
             {payoff.name}
           </span>
@@ -362,7 +413,7 @@ function CardPayoffRow({ payoff, onPay }: { payoff: CardPayoff; onPay: (n: numbe
         </span>
       </div>
       <div className="mb-2 flex items-center justify-between text-sm">
-        <span style={{ color: 'var(--color-text-secondary)' }}>Balance left</span>
+        <span style={{ color: 'var(--color-text-secondary)' }}>{remainingLabel}</span>
         <span className="tabular-nums" style={{ color: 'var(--color-text-primary)' }}>
           {formatMoney(payoff.remaining)}
         </span>
@@ -370,7 +421,7 @@ function CardPayoffRow({ payoff, onPay }: { payoff: CardPayoff; onPay: (n: numbe
       <div className="flex items-end gap-2">
         <label className="flex-1">
           <span className="mb-1 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            Paying this payday
+            {inputLabel}
           </span>
           <input
             inputMode="decimal"

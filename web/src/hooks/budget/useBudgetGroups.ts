@@ -12,6 +12,7 @@ interface GroupPatch {
   cc_weeks?: number;
   cc_start_date?: string | null;
   cc_due_date?: string | null;
+  due_day?: number | null;
 }
 
 const byPosition = (a: BudgetGroup, b: BudgetGroup) => a.position - b.position;
@@ -136,6 +137,7 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
                 ...(patch.cc_weeks !== undefined ? { cc_weeks: patch.cc_weeks } : {}),
                 ...(patch.cc_start_date !== undefined ? { cc_start_date: patch.cc_start_date } : {}),
                 ...(patch.cc_due_date !== undefined ? { cc_due_date: patch.cc_due_date } : {}),
+                ...(patch.due_day !== undefined ? { due_day: patch.due_day } : {}),
               }
             : g
         )
@@ -150,6 +152,7 @@ export function useBudgetGroups(userId: string | null, budgetId: string | null) 
       if (patch.cc_weeks !== undefined) dbPatch.cc_weeks = patch.cc_weeks;
       if (patch.cc_start_date !== undefined) dbPatch.cc_start_date = patch.cc_start_date;
       if (patch.cc_due_date !== undefined) dbPatch.cc_due_date = patch.cc_due_date;
+      if (patch.due_day !== undefined) dbPatch.due_day = patch.due_day;
       if (Object.keys(dbPatch).length === 0) return;
       const { error } = await supabase.from('budget_groups').update(dbPatch).eq('id', id);
       if (error) console.error('updateGroup failed:', error.message);

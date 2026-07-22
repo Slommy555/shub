@@ -47,6 +47,9 @@ export interface BudgetGroup {
   cc_weeks: number;
   cc_start_date: string | null; // YYYY-MM-DD (first pay date)
   cc_due_date: string | null; // YYYY-MM-DD (paid off by)
+  /** Day of month (1–31) this fixed cost is charged. null → flat even split; set
+   *  → per-month payoff tracker (like a card) via budget_group_payments. */
+  due_day?: number | null;
   created_at?: string;
 }
 

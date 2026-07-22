@@ -41,6 +41,56 @@ interface Props {
   onAddGroup: (name: string, color: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
+  /** Set/clear the day of month a fixed cost is charged (enables the payoff
+   *  tracker in the Paycheck view). Omit to hide the charge-day control. */
+  onSetDueDay?: (id: string, day: number | null) => void;
+}
+
+/** "1st", "2nd", "25th" … */
+function ordinal(d: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = d % 100;
+  return d + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
+}
+
+/** A tiny inline control under a group name to set the day of month it's charged. */
+function DueDayControl({ day, onSave }: { day: number | null; onSave: (d: number | null) => void }) {
+  const [open, setOpen] = useState(false);
+  if (open) {
+    return (
+      <select
+        data-no-drag
+        autoFocus
+        value={day ?? ''}
+        onChange={(e) => {
+          const v = e.target.value;
+          onSave(v === '' ? null : Number(v));
+          setOpen(false);
+        }}
+        onBlur={() => setOpen(false)}
+        className="mt-0.5 self-start rounded-md border px-1 py-0.5 text-[11px] outline-none"
+        style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-accent-muted)', color: 'var(--color-text-primary)' }}
+      >
+        <option value="">No charge day</option>
+        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+          <option key={d} value={d}>
+            {ordinal(d)}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <button
+      data-no-drag
+      type="button"
+      onClick={() => setOpen(true)}
+      className="mt-0.5 self-start text-[11px] active:opacity-70"
+      style={{ color: day ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
+    >
+      {day ? `Charged ${ordinal(day)}` : '+ charge day'}
+    </button>
+  );
 }
 
 /** A labelled currency input (raw number while focused, formatted on blur). */
@@ -177,6 +227,7 @@ export default function OverviewTable({
   onAddGroup,
   onRename,
   onDelete,
+  onSetDueDay,
 }: Props) {
   const [swipe, setSwipe] = useState<{ id: string; x: number } | null>(null);
   const [editing, setEditing] = useState<EditState | null>(null);
@@ -383,22 +434,27 @@ export default function OverviewTable({
                       cursor: 'pointer',
                     }}
                   >
-                    {/* Name + color dot */}
+                    {/* Name + color dot + optional charge day */}
                     <div data-col="name" className="flex items-center gap-2.5 px-4 py-2" style={{ width: NAME_W }}>
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: g.color }} />
-                      {editName ? (
-                        <NameInput
-                          initial={g.name}
-                          onCommit={(v) => {
-                            if (v && v !== g.name) onRename(g.id, v);
-                            setEditing(null);
-                          }}
-                        />
-                      ) : (
-                        <span className="min-w-0 flex-1 truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                          {g.name}
-                        </span>
-                      )}
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        {editName ? (
+                          <NameInput
+                            initial={g.name}
+                            onCommit={(v) => {
+                              if (v && v !== g.name) onRename(g.id, v);
+                              setEditing(null);
+                            }}
+                          />
+                        ) : (
+                          <span className="min-w-0 truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                            {g.name}
+                          </span>
+                        )}
+                        {onSetDueDay && !(roWeekly && roMonthly) && (
+                          <DueDayControl day={g.due_day ?? null} onSave={(d) => onSetDueDay(g.id, d)} />
+                        )}
+                      </div>
                     </div>
 
                     {/* Monthly */}
