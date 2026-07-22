@@ -18,6 +18,7 @@ import VoiceTab from './components/VoiceTab';
 import VoiceController from './components/voice/VoiceController';
 import WorkoutTab from './components/workout/WorkoutTab';
 import BudgetTab from './components/budget/BudgetTab';
+import SavingsTab from './components/savings/SavingsTab';
 import ProductivityView from './components/ProductivityView';
 import NotesTab from './components/notes/NotesTab';
 import SettingsView from './components/SettingsView';
@@ -129,6 +130,7 @@ function Shell({ userId }: { userId: string }) {
             {tab === 'voice' && <VoiceTab />}
             {tab === 'workout' && <WorkoutTab userId={userId} showRpe={workoutPrefs.showRpe} />}
             {tab === 'budget' && <BudgetTab userId={userId} />}
+            {tab === 'savings' && <SavingsTab userId={userId} />}
             {tab === 'productivity' && <ProductivityView userId={userId} />}
             {tab === 'notes' && <NotesTab userId={userId} />}
             {tab === 'settings' && (
