@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatMoney, parseMoney, thursdaysInMonth, type CreditCard, type ScheduledExpense } from '../../types/budget';
+import { formatMoney, parseMoney, toISODate, type CreditCard, type ScheduledExpense } from '../../types/budget';
 import SwipeRow from './SwipeRow';
 
 const NAME_W = 140;
@@ -29,13 +29,6 @@ function TrashButton({ label, onDelete }: { label: string; onDelete: () => void 
       </button>
     </div>
   );
-}
-
-/** "YYYY-MM-01" for the month `offset` months after monthStart. */
-function monthOffset(monthStartISO: string, offset: number): string {
-  const [y, m] = monthStartISO.split('-').map(Number);
-  const d = new Date(y, m - 1 + offset, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
 /** "July 2026" from a YYYY-MM-01 string. */
@@ -76,12 +69,12 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
   const [charge, setCharge] = useState(false);
   const [cardId, setCardId] = useState('');
 
-  // Selectable pay dates: every Thursday across this month + the next two.
-  const payDateOptions = [0, 1, 2].flatMap((o) => thursdaysInMonth(monthOffset(monthStart, o)));
   const total = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
 
   const openAdd = () => {
-    setDueDate(payDateOptions[0] ?? monthStart);
+    // Default the due date to today (or this month if viewing another month).
+    const today = toISODate(new Date());
+    setDueDate(today.slice(0, 7) === monthStart.slice(0, 7) ? today : monthStart);
     setCardId(cards[0]?.id ?? '');
     setCharge(false);
     setAdding(true);
@@ -103,9 +96,8 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
       reset();
       return;
     }
-    const when = dueDate || payDateOptions[0];
-    if (!n || !when) return;
-    onAdd(n, amt, when);
+    if (!n || !dueDate) return;
+    onAdd(n, amt, dueDate);
     reset();
   };
 
@@ -214,18 +206,13 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
                 ))}
               </select>
             ) : (
-              <select
+              <input
+                type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 className="min-w-0 flex-1 rounded-xl border px-3 text-base outline-none"
                 style={{ height: '46px', background: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
-              >
-                {payDateOptions.map((d) => (
-                  <option key={d} value={d}>
-                    {payDateLabel(d)}
-                  </option>
-                ))}
-              </select>
+              />
             )}
             <button
               type="button"

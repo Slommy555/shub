@@ -68,6 +68,10 @@ interface Props {
   allocated: number;
   earmarkAmounts: Record<string, number>;
   onSetEarmark: (groupId: string, n: number) => void;
+  /** One-off scheduled expenses due this month you can earmark savings toward. */
+  scheduledExpenses: { id: string; name: string; amount: number }[];
+  expenseEarmarkAmounts: Record<string, number>;
+  onSetExpenseEarmark: (expenseId: string, n: number) => void;
 }
 
 /**
@@ -89,6 +93,9 @@ export default function SavingsPoolSection({
   allocated,
   earmarkAmounts,
   onSetEarmark,
+  scheduledExpenses,
+  expenseEarmarkAmounts,
+  onSetExpenseEarmark,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [warnId, setWarnId] = useState<string | null>(null);
@@ -96,17 +103,29 @@ export default function SavingsPoolSection({
   const contributions = contributionsThrough;
   const balance = available - allocated;
 
-  const commitEarmark = (groupId: string, entered: number) => {
-    const others = allocated - (earmarkAmounts[groupId] ?? 0);
+  // Both group and scheduled-expense earmarks draw from the same `available`
+  // balance; `allocated` already sums both, so the cap for one row = available
+  // minus everything else currently earmarked.
+  const commitToward = (
+    id: string,
+    entered: number,
+    current: number,
+    setter: (id: string, n: number) => void
+  ) => {
+    const others = allocated - current;
     const maxForThis = Math.max(0, available - others);
     if (entered > maxForThis) {
-      setWarnId(groupId);
-      onSetEarmark(groupId, maxForThis);
+      setWarnId(id);
+      setter(id, maxForThis);
     } else {
       setWarnId(null);
-      onSetEarmark(groupId, entered);
+      setter(id, entered);
     }
   };
+  const commitEarmark = (groupId: string, entered: number) =>
+    commitToward(groupId, entered, earmarkAmounts[groupId] ?? 0, onSetEarmark);
+  const commitExpenseEarmark = (expenseId: string, entered: number) =>
+    commitToward(expenseId, entered, expenseEarmarkAmounts[expenseId] ?? 0, onSetExpenseEarmark);
 
   const Line = ({ label, value, strong }: { label: string; value: string; strong?: boolean }) => (
     <div className="flex items-center justify-between text-sm tabular-nums">
@@ -214,6 +233,37 @@ export default function SavingsPoolSection({
                       <MoneyInput value={earmarkAmounts[g.id] ?? 0} onSave={(n) => commitEarmark(g.id, n)} />
                     </div>
                     {warnId === g.id && (
+                      <p className="mt-1 text-right text-[12px]" style={{ color: 'var(--color-danger)' }}>
+                        Exceeds available savings balance
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {scheduledExpenses.length > 0 && (
+            <>
+              <span className="mb-2 mt-4 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                Toward scheduled expenses
+              </span>
+              <div className="flex flex-col gap-2">
+                {scheduledExpenses.map((e) => (
+                  <div key={e.id}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: '#f0a04b' }} />
+                        <span className="min-w-0 truncate text-[15px]" style={{ color: 'var(--color-text-primary)' }}>
+                          {e.name}
+                          <span className="ml-1.5 text-[13px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                            {formatMoney(e.amount)}
+                          </span>
+                        </span>
+                      </span>
+                      <MoneyInput value={expenseEarmarkAmounts[e.id] ?? 0} onSave={(n) => commitExpenseEarmark(e.id, n)} />
+                    </div>
+                    {warnId === e.id && (
                       <p className="mt-1 text-right text-[12px]" style={{ color: 'var(--color-danger)' }}>
                         Exceeds available savings balance
                       </p>

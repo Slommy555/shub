@@ -77,6 +77,15 @@ export interface SavingsEarmark {
   amount: number;
 }
 
+/** How much of a savings pool is earmarked toward a scheduled (one-off) expense. */
+export interface SavingsExpenseEarmark {
+  id: string;
+  user_id: string;
+  pool_id: string;
+  scheduled_expense_id: string;
+  amount: number;
+}
+
 // --- timeframes -------------------------------------------------------------
 // Daily / Weekly / Monthly are navigable period lenses. PER-WEEK items are
 // entered per period and isolated (the month sums its weeks). PERSISTENT items

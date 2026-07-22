@@ -48,12 +48,14 @@ export function useSavingsWithdrawnBefore(
         setWithdrawn(0);
         return;
       }
-      const { data: marks } = await supabase
-        .from('budget_savings_earmarks')
-        .select('amount')
-        .in('pool_id', poolIds);
+      const [{ data: marks }, { data: exMarks }] = await Promise.all([
+        supabase.from('budget_savings_earmarks').select('amount').in('pool_id', poolIds),
+        supabase.from('budget_savings_expense_earmarks').select('amount').in('pool_id', poolIds),
+      ]);
       if (cancelled) return;
-      setWithdrawn((marks ?? []).reduce((a, r) => a + (Number((r as { amount: number }).amount) || 0), 0));
+      const sum = (rows: { amount: number }[] | null) =>
+        (rows ?? []).reduce((a, r) => a + (Number(r.amount) || 0), 0);
+      setWithdrawn(sum(marks as { amount: number }[]) + sum(exMarks as { amount: number }[]));
     };
 
     void load();
@@ -61,6 +63,7 @@ export function useSavingsWithdrawnBefore(
     const channel = supabase
       .channel(`savings-withdrawn-${userId}-${budgetId}-${selectedMonthStart}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_savings_earmarks', filter: `user_id=eq.${userId}` }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_savings_expense_earmarks', filter: `user_id=eq.${userId}` }, () => void load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_savings_pools', filter: `user_id=eq.${userId}` }, () => void load())
       .subscribe();
 

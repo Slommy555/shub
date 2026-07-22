@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { formatMoney, parseMoney, type BudgetGroup, type ScheduledExpense } from '../../types/budget';
+import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
 import type { PayDay } from '../../hooks/budget/usePayDayIncomes';
 import type { SavingsDeposit } from '../../hooks/budget/useSavingsDeposits';
 
@@ -20,8 +20,8 @@ interface Props {
   /** This month's savings deposits, so the current pay day's can be edited here. */
   deposits: SavingsDeposit[];
   onSetDeposit: (weekStart: string, n: number) => void;
-  /** Scheduled (one-off) expenses the user assigned to a given pay date. */
-  scheduledForDate?: (thursdayISO: string) => ScheduledExpense[];
+  /** Scheduled (one-off) expense payoff notes for a given pay date. */
+  scheduledPayoffsForDate?: (thursdayISO: string) => ScheduledPayoff[];
   /** Credit-card payoff state for a given pay date (cards with a balance left). */
   cardPayoffsForDate?: (thursdayISO: string) => CardPayoff[];
   /** Record a payment against a card on a pay date. */
@@ -38,6 +38,16 @@ export interface CardPayoff {
   suggested: number;
   /** Payment already recorded for this card on this pay day. */
   paid?: number;
+}
+
+export interface ScheduledPayoff {
+  id: string;
+  name: string;
+  due_date: string | null;
+  /** Amount still to cover after savings earmarks. */
+  remaining: number;
+  /** Suggested set-aside this pay day to reach it by the due date. */
+  suggested: number;
 }
 
 /**
@@ -58,7 +68,7 @@ export default function PaycheckList({
   coveredOf,
   deposits,
   onSetDeposit,
-  scheduledForDate,
+  scheduledPayoffsForDate,
   cardPayoffsForDate,
   onPayCard,
 }: Props) {
@@ -70,8 +80,8 @@ export default function PaycheckList({
   const income = current?.income ?? 0;
   const savingsDeposit = deposits.find((d) => d.date === current?.date)?.amount ?? 0;
 
-  // The waterfall: recurring group set-asides (net of savings) plus any one-off
-  // scheduled expenses the user pinned to this pay date. Fully-covered / $0 hidden.
+  // The waterfall: recurring group set-asides (net of savings). Fully-covered /
+  // $0 rows are hidden.
   const groupRows = groups.map((g) => ({
     key: g.id,
     name: g.name,
@@ -79,19 +89,18 @@ export default function PaycheckList({
     setAside: current ? Math.max(0, weeklyOnDate(g, current.date) - coveredOf(g)) : 0,
     note: undefined as string | undefined,
   }));
-  const scheduledRows = (current ? scheduledForDate?.(current.date) ?? [] : []).map((e) => ({
-    key: e.id,
-    name: e.name,
-    color: '#f0a04b',
-    setAside: Number(e.amount) || 0,
-    note: 'one-time' as string | undefined,
-  }));
-  const rows = [...groupRows, ...scheduledRows].filter((r) => r.setAside > 0);
+  const rows = groupRows.filter((r) => r.setAside > 0);
 
   const payoffs = current ? cardPayoffsForDate?.(current.date) ?? [] : [];
   const cardPaidThisDate = payoffs.reduce((s, p) => s + (p.paid ?? 0), 0);
 
-  const totalSetAside = savingsDeposit + rows.reduce((sum, r) => sum + r.setAside, 0) + cardPaidThisDate;
+  // Scheduled one-off expenses: spread each toward its due date, showing the
+  // suggested set-aside this pay day (net of any savings earmarked to it).
+  const scheduledPayoffs = current ? scheduledPayoffsForDate?.(current.date) ?? [] : [];
+  const scheduledSetAside = scheduledPayoffs.reduce((s, p) => s + p.suggested, 0);
+
+  const totalSetAside =
+    savingsDeposit + rows.reduce((sum, r) => sum + r.setAside, 0) + cardPaidThisDate + scheduledSetAside;
   const leftOver = income - totalSetAside;
 
   let running = income - savingsDeposit;
@@ -256,6 +265,20 @@ export default function PaycheckList({
         </div>
       )}
 
+      {/* Scheduled expenses to set aside for this payday */}
+      {scheduledPayoffs.length > 0 && (
+        <div className="mt-4">
+          <h3 className="mb-2 text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.08em', color: 'var(--color-text-secondary)' }}>
+            Scheduled expenses
+          </h3>
+          <div className="flex flex-col gap-2">
+            {scheduledPayoffs.map((p) => (
+              <ScheduledPayoffRow key={p.id} payoff={p} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Credit cards to pay this payday */}
       {payoffs.length > 0 && (
         <div className="mt-4">
@@ -364,6 +387,48 @@ function CardPayoffRow({ payoff, onPay }: { payoff: CardPayoff; onPay: (n: numbe
         >
           Use {formatMoney(suggested)}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** One scheduled expense's note on a pay day: amount still to cover and the
+ *  suggested set-aside this pay day to reach it by the due date. Read-only. */
+function ScheduledPayoffRow({ payoff }: { payoff: ScheduledPayoff }) {
+  const dueLabel = payoff.due_date
+    ? new Date(payoff.due_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : null;
+  const suggested = Math.round(payoff.suggested * 100) / 100;
+  return (
+    <div className="rounded-2xl border p-4" style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: '#f0a04b' }} />
+          <span className="truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
+            {payoff.name}
+          </span>
+        </span>
+        <span className="shrink-0 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+          {dueLabel ? `due ${dueLabel}` : 'no due date'}
+        </span>
+      </div>
+      <div className="flex items-end justify-between gap-3">
+        <div className="flex flex-col">
+          <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+            Amount due
+          </span>
+          <span className="text-lg font-semibold tabular-nums" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+            {formatMoney(payoff.remaining)}
+          </span>
+        </div>
+        <div className="flex flex-col items-end">
+          <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+            Set aside this week
+          </span>
+          <span className="text-lg font-semibold tabular-nums" style={{ color: 'var(--color-accent)', letterSpacing: '-0.02em' }}>
+            {formatMoney(suggested)}
+          </span>
+        </div>
       </div>
     </div>
   );

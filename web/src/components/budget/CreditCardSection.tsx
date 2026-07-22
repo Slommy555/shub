@@ -193,7 +193,7 @@ export default function CreditCardSection({ cards, remainingOf, chargesOf, onAdd
                     <div className={`${cellBase} flex-1`} style={{ minWidth: COL_MIN }}>
                       <span className="flex flex-col items-end leading-tight">
                         <MoneyCell value={Number(c.balance) || 0} onSave={(n) => onUpdate(c.id, { balance: n })} />
-                        {paidDown && (
+                        {paidDown && remaining > 0 && (
                           <span className="mt-0.5 text-[11px]" style={{ color: 'var(--color-success)' }}>
                             {formatMoney(remaining)} left
                           </span>

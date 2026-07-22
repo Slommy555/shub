@@ -87,6 +87,17 @@ export default function BudgetView({
     const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, c.due_date) : 0;
     return { id: c.id, name: c.name, due_date: c.due_date, remaining, suggested, paid: cardPayments.paymentOn(c.id, payDate) };
   };
+
+  // Savings earmarked toward a scheduled expense (capped at its amount).
+  const savedForExpense = (e: { id: string; amount: number }) =>
+    Math.min(savings.expenseEarmarkAmounts[e.id] ?? 0, Number(e.amount) || 0);
+  /** Payoff note for a scheduled expense on a pay day: net still owed after
+   *  savings, and the suggested set-aside to reach its due date. */
+  const scheduledPayoffFor = (e: { id: string; name: string; amount: number; due_date?: string | null }, payDate: string) => {
+    const remaining = Math.max(0, (Number(e.amount) || 0) - savedForExpense(e));
+    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, e.due_date ?? null) : 0;
+    return { id: e.id, name: e.name, due_date: e.due_date ?? null, remaining, suggested };
+  };
   // Average per-paycheck income: divide by the month's actual pay-day count
   // (4 or 5) so a 5-Thursday month isn't overstated.
   const weeklyIncome = monthlyIncome / (payDays.length || 4);
@@ -130,7 +141,12 @@ export default function BudgetView({
         coveredOf={(g) => Math.min(savingsMonthlyOf(g), grossMonthlyOf(g)) / 4}
         deposits={deposits.deposits}
         onSetDeposit={deposits.setDeposit}
-        scheduledForDate={(d) => scheduled.expenses.filter((e) => e.due_date === d)}
+        scheduledPayoffsForDate={(d) =>
+          scheduled.expenses
+            .filter((e) => e.due_date && e.due_date >= d)
+            .map((e) => scheduledPayoffFor(e, d))
+            .filter((p) => p.remaining > 0)
+        }
         cardPayoffsForDate={(d) =>
           creditCards.cards.map((c) => cardPayoffFor(c, d)).filter((p) => p.remaining > 0 || (p.paid ?? 0) > 0)
         }
@@ -148,13 +164,13 @@ export default function BudgetView({
     (s, g) => s + savingsOffset(grossWeeklyOf(g), savingsMonthlyOf(g) / 4).net,
     0
   );
-  const monthlyCovered = recurringGroups.reduce(
-    (s, g) => s + Math.min(savingsMonthlyOf(g), grossMonthlyOf(g)),
-    0
-  );
-
   const scheduledThisMonth = scheduled.expenses.filter((e) => e.due_month === monthBounds.start_date);
-  const scheduledTotal = scheduledThisMonth.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const scheduledGross = scheduledThisMonth.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const scheduledCovered = scheduledThisMonth.reduce((s, e) => s + savedForExpense(e), 0);
+  const scheduledTotal = Math.max(0, scheduledGross - scheduledCovered); // net income must cover
+
+  const monthlyCovered =
+    recurringGroups.reduce((s, g) => s + Math.min(savingsMonthlyOf(g), grossMonthlyOf(g)), 0) + scheduledCovered;
 
   // Card obligation: for cards with a due date, the suggested weekly pace to
   // clear the remaining balance from this month's first payday through the due
@@ -232,6 +248,9 @@ export default function BudgetView({
         allocated={savings.allocated}
         earmarkAmounts={savings.earmarkAmounts}
         onSetEarmark={savings.setEarmark}
+        scheduledExpenses={scheduledThisMonth.map((e) => ({ id: e.id, name: e.name, amount: Number(e.amount) || 0 }))}
+        expenseEarmarkAmounts={savings.expenseEarmarkAmounts}
+        onSetExpenseEarmark={savings.setExpenseEarmark}
       />
 
       {/* Summary */}
