@@ -6,6 +6,7 @@ import {
   periodForCursor,
   savingsOffset,
   shiftCursor,
+  toISODate,
   toView,
   type BudgetGroup,
   type CreditCard,
@@ -137,22 +138,31 @@ export default function BudgetView({
   const saveMonthly = (g: BudgetGroup, entered: number) =>
     void allocations.setAmount(g.id, Math.max(0, fromView(entered, 'monthly')));
 
-  // A dated fixed cost (due_day set) is a per-month payoff tracker like a card:
-  // target = its net monthly amount, due on the charge day of the viewed month,
-  // paid down across that month's pay days via budget_group_payments.
-  const dueDateInMonth = (day: number, monthStartISO: string): string => {
-    const [y, m] = monthStartISO.split('-').map(Number);
-    const lastDay = new Date(y, m, 0).getDate();
-    const dd = Math.min(Math.max(1, day), lastDay);
-    return `${monthStartISO.slice(0, 7)}-${String(dd).padStart(2, '0')}`;
+  // A dated fixed cost (due_day set) is a payoff tracker like a card, but its
+  // funding cycle is anchored on the charge DAY, not the calendar month: a bill
+  // on the 25th funds from the last 25th to the next 25th. For a given pay day we
+  // find the next charge day on/after it, count set-asides back to the previous
+  // charge day, and spread what's left across the pay days until the next charge.
+  const chargeDateOn = (day: number, year: number, monthIndex0: number): Date => {
+    const lastDay = new Date(year, monthIndex0 + 1, 0).getDate();
+    return new Date(year, monthIndex0, Math.min(Math.max(1, day), lastDay));
+  };
+  const nextChargeOnOrAfter = (day: number, fromISO: string): Date => {
+    const [y, m, d] = fromISO.split('-').map(Number);
+    const from = new Date(y, m - 1, d);
+    const thisMonth = chargeDateOn(day, y, m - 1);
+    return thisMonth < from ? chargeDateOn(day, y, m) : thisMonth; // roll to next month if past
   };
   const groupPayoffFor = (g: BudgetGroup, payDate: string) => {
     const net = savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net;
-    const dueDate = dueDateInMonth(g.due_day ?? 1, monthBounds.start_date);
-    const paidBefore = groupPayments.paidInRange(g.id, monthBounds.start_date, payDate);
+    const day = g.due_day ?? 1;
+    const next = nextChargeOnOrAfter(day, payDate);
+    const prev = chargeDateOn(day, next.getFullYear(), next.getMonth() - 1); // one cycle back
+    const nextISO = toISODate(next);
+    const paidBefore = groupPayments.paidInRange(g.id, toISODate(prev), payDate); // this cycle, before today
     const remaining = Math.max(0, net - paidBefore);
-    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, dueDate) : 0;
-    return { id: g.id, name: g.name, color: g.color, due_date: dueDate, remaining, suggested, paid: groupPayments.paymentOn(g.id, payDate) };
+    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, nextISO) : 0;
+    return { id: g.id, name: g.name, color: g.color, due_date: nextISO, remaining, suggested, paid: groupPayments.paymentOn(g.id, payDate) };
   };
   const isDated = (g: BudgetGroup) => g.due_day != null;
 
