@@ -30,8 +30,10 @@ import CreditCardSection from './CreditCardSection';
 import ScheduledExpensesSection from './ScheduledExpensesSection';
 import SavingsPoolSection from './SavingsPoolSection';
 import BudgetCalendar, { type CalEvent } from './BudgetCalendar';
+import BudgetSnapshot from './BudgetSnapshot';
+import { useBudgetHistory } from '../../hooks/budget/useBudgetHistory';
 
-export type BudgetViewMode = 'overview' | 'paycheck' | 'calendar';
+export type BudgetViewMode = 'snapshot' | 'overview' | 'paycheck' | 'calendar';
 
 /**
  * Shared data layer for the two budget views (Round 2 model).
@@ -70,6 +72,7 @@ export default function BudgetView({
   const groupPayments = useGroupPayments(userId);
   const cardCharges = useCardCharges(userId);
   const scheduled = useScheduledExpenses(userId, budgetId);
+  const history = useBudgetHistory(userId, budgetId, monthBounds.start_date);
 
   // Charging a scheduled expense to a card: bump its balance AND log the charge.
   const chargeToCard = (cardId: string, name: string, amount: number) => {
@@ -168,6 +171,47 @@ export default function BudgetView({
   };
   const isDated = (g: BudgetGroup) => g.due_day != null;
 
+  /**
+   * Every dated money event in a calendar month — pay days in, fixed-cost charge
+   * days, one-off scheduled expenses and card due dates out. Shared by the
+   * Calendar view and the Snapshot's "coming up" list. Pay-day income is only
+   * known for the month currently loaded, so other months contribute outflows.
+   */
+  const buildEvents = (monthStartISO: string): CalEvent[] => {
+    const ym = monthStartISO.slice(0, 7);
+    const [cy, cm] = monthStartISO.split('-').map(Number);
+    const events: CalEvent[] = [];
+
+    for (const p of payDays) {
+      if (p.date.slice(0, 7) !== ym || !(p.income > 0)) continue;
+      events.push({ date: p.date, kind: 'pay', label: 'Paycheck', amount: p.income, color: 'var(--color-success)' });
+    }
+    // Fixed costs with a charge day (net of savings).
+    for (const g of recurringGroups) {
+      if (isSavings(g) || g.due_day == null) continue;
+      const net = savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net;
+      if (!(net > 0)) continue;
+      events.push({ date: toISODate(chargeDateOn(g.due_day, cy, cm - 1)), kind: 'fixed', label: g.name, amount: net, color: g.color });
+    }
+    // Scheduled one-off expenses dated to this month.
+    for (const e of scheduled.expenses) {
+      if (!e.due_date || e.due_date.slice(0, 7) !== ym) continue;
+      events.push({ date: e.due_date, kind: 'scheduled', label: e.name, amount: Number(e.amount) || 0, color: '#f0a04b' });
+    }
+    // Credit-card due dates. A card's due_date is a single date, but a card bill
+    // comes due the same day EVERY month — so plot its day-of-month in whatever
+    // month is in view (clamped to the last day for short months). Cards whose
+    // balance is cleared drop off.
+    for (const c of creditCards.cards) {
+      if (!c.due_date) continue;
+      const remaining = cardRemaining(c);
+      if (!(remaining > 0)) continue;
+      const day = Number(c.due_date.slice(8, 10));
+      events.push({ date: toISODate(chargeDateOn(day, cy, cm - 1)), kind: 'card', label: c.name, amount: remaining, color: '#5c9eff' });
+    }
+    return events;
+  };
+
   if (view === 'paycheck') {
     return (
       <PaycheckList
@@ -204,42 +248,13 @@ export default function BudgetView({
   }
 
   if (view === 'calendar') {
-    const ym = monthBounds.start_date.slice(0, 7);
-    const [cy, cm] = monthBounds.start_date.split('-').map(Number);
-    const events: CalEvent[] = [];
-
-    // Pay days (income) in this calendar month.
-    for (const p of payDays) {
-      if (p.date.slice(0, 7) !== ym || !(p.income > 0)) continue;
-      events.push({ date: p.date, kind: 'pay', label: 'Paycheck', amount: p.income, color: 'var(--color-success)' });
-    }
-    // Fixed costs with a charge day (net of savings).
-    for (const g of recurringGroups) {
-      if (isSavings(g) || g.due_day == null) continue;
-      const net = savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net;
-      if (!(net > 0)) continue;
-      events.push({ date: toISODate(chargeDateOn(g.due_day, cy, cm - 1)), kind: 'fixed', label: g.name, amount: net, color: g.color });
-    }
-    // Scheduled one-off expenses dated to this month.
-    for (const e of scheduled.expenses) {
-      if (!e.due_date || e.due_date.slice(0, 7) !== ym) continue;
-      events.push({ date: e.due_date, kind: 'scheduled', label: e.name, amount: Number(e.amount) || 0, color: '#f0a04b' });
-    }
-    // Credit-card due dates in this month (remaining owed).
-    for (const c of creditCards.cards) {
-      if (!c.due_date || c.due_date.slice(0, 7) !== ym) continue;
-      const remaining = cardRemaining(c);
-      if (!(remaining > 0)) continue;
-      events.push({ date: c.due_date, kind: 'card', label: c.name, amount: remaining, color: '#5c9eff' });
-    }
-
     return (
       <BudgetCalendar
         monthStart={monthBounds.start_date}
         monthLabel={monthBounds.label}
         onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
         onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
-        events={events}
+        events={buildEvents(monthBounds.start_date)}
       />
     );
   }
@@ -279,6 +294,43 @@ export default function BudgetView({
 
   const savingsAvailable = account.startingBalance + deposits.contributionsThrough - withdrawnBefore;
   const earmarkTargets = recurringGroups.filter((g) => g.id !== savingsGroup?.id);
+
+  if (view === 'snapshot') {
+    // Unlike the Overview's summary strip, the snapshot counts the card payoff
+    // pace as committed money too, so "where it goes" actually adds up.
+    const committed = monthlyAllocated + cardsWeeklySuggested * 4;
+    const todayISO = toISODate(new Date());
+    const nextMonthStart = shiftCursor('monthly', monthCursor, 1);
+    const upcoming = [...buildEvents(monthBounds.start_date), ...buildEvents(periodForCursor('monthly', nextMonthStart).start_date)]
+      .filter((e) => e.date >= todayISO)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(0, 5);
+
+    return (
+      <BudgetSnapshot
+        monthLabel={monthBounds.label}
+        onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
+        onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
+        monthlyIncome={monthlyIncome}
+        weeklyIncome={weeklyIncome}
+        payDayCount={payDays.length}
+        recurringNetMonthly={recurringNetMonthly}
+        scheduledTotal={scheduledTotal}
+        cardsWeeklySuggested={cardsWeeklySuggested}
+        cardsRemainingTotal={cardsRemainingTotal}
+        monthlyAllocated={committed}
+        monthlyRemaining={monthlyIncome - committed}
+        savingsCovering={monthlyCovered}
+        savingsBalance={savingsAvailable - savings.allocated}
+        startingBalance={account.startingBalance}
+        startMonthLabel={monthLabelOf(account.startMonth)}
+        savedThisMonth={deposits.monthTotal}
+        earmarkedThisMonth={savings.allocated}
+        history={history}
+        upcoming={upcoming}
+      />
+    );
+  }
 
   return (
     <>

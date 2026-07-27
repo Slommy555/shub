@@ -7,6 +7,7 @@ const VIEW_KEY = 'budget.view';
 const BUDGET_KEY = 'budget.activeBudgetId';
 
 const VIEWS: { id: BudgetViewMode; label: string }[] = [
+  { id: 'snapshot', label: 'Snapshot' },
   { id: 'overview', label: 'Overview' },
   { id: 'paycheck', label: 'Paycheck' },
   { id: 'calendar', label: 'Calendar' },
