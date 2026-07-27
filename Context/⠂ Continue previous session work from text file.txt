@@ -1,0 +1,2484 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
+
+PS C:\Users\brand\Desktop\ToDo_Productivity> claude
+ ▐▛███▜▌   Claude Code v2.1.216
+▝▜█████▛▘  Opus 4.8 · Claude Pro
+  ▘▘ ▝▝    ~\Desktop\ToDo_Productivity
+
+ ▎ Keep working from anywhere
+ ▎ Check progress or reply to any session from the mobile app, desktop app, or claude.ai. To keep a session in this
+ ▎ terminal only, run /remote-control
+
+❯ use the most recently saved text file containing the last chat to continue the work you were doing during our last
+  session
+
+  Listed 1 directory (ctrl+o to expand)
+
+● The most recent chat file is ✳ Fix budget persistence and add scheduled expenses.txt (Jul 21). It's large (245KB), so
+  let me read the end to find where we left off.
+
+  Read 2 files (ctrl+o to expand)
+
+● The session ended at the usage limit mid-work. Here's where we left off:
+
+  Done & pushed (commit 11f6b9e): card charge log, paycheck month nav, budget rename.
+
+  Outstanding requests when the session cut off:
+  1. Let scheduled expenses draw from savings money too (was investigating — found scheduled-expense earmarks need their
+  own table since group_id is NOT NULL).
+  2. Remove the green "$0 left" on the credit-card balance — this edit was applied but is uncommitted (the M
+  CreditCardSection.tsx in git status).
+  3. Allow scheduled payments on any date, and show a note in the Paycheck section (like the credit-card payoff note)
+  showing the amount due + amount to set aside per week.
+
+  Let me look at the current code to pick up cleanly.
+
+● Bash(git diff web/src/components/budget/CreditCardSection.tsx && echo "=== migrations ===" && ls supabase/migrations/
+      | tail -15)
+  ⎿  warning: in the working copy of 'web/src/components/budget/CreditCardSection.tsx', LF will be replaced by CRLF
+      the next time Git touches it
+     diff --git a/web/src/components/budget/CreditCardSection.tsx b/web/src/components/budget/CreditCardSection.tsx
+     … +27 lines (ctrl+o to expand)
+
+● Good, the "$0 left" fix is intact. Let me understand the scheduled-expense schema, savings earmarks, and the
+  paycheck/overview structure.
+
+  Read 8 files, listed 1 directory (ctrl+o to expand)
+
+● Let me read the remaining accounting hooks so savings math stays correct across months.
+
+  Read 1 file (ctrl+o to expand)
+
+● I now have the full picture. Here's my plan for the three outstanding items:
+
+  1. Savings → scheduled expenses: new table budget_savings_expense_earmarks (migration 044), threaded through
+  useSavingsPool, useSavingsWithdrawnBefore, and the SavingsPoolSection "Allocate savings toward" list.
+  2. "$0 left": already fixed (uncommitted).
+  3. Any-date scheduled payments + paycheck note: switch the due-date picker to a free date input, and show each
+  scheduled expense in the Paycheck view as a card-style note (amount due + set-aside per week, spread across pay days
+  to the due date, net of savings).
+
+  Let me start with the migration.
+
+● Write(supabase\migrations\044_scheduled_expense_savings.sql)
+  ⎿  Wrote 36 lines to supabase\migrations\044_scheduled_expense_savings.sql
+       1 -- ============================================================================
+       2 -- 044_scheduled_expense_savings.sql — let a savings pool earmark money toward a
+       3 -- scheduled (one-off) expense, the same way it already does toward a group.
+       4 --
+       5 -- budget_savings_earmarks.group_id is a NOT-NULL FK to budget_groups, so
+       6 -- scheduled-expense earmarks can't live there. This table mirrors it, keyed by
+       7 -- (pool_id, scheduled_expense_id): how much of a month's savings pool is set
+       8 -- aside toward that one-off expense. The net the expense still needs from income
+       9 -- = amount − earmark. Idempotent — safe to re-run.
+      10 -- ============================================================================
+     … +26 lines (ctrl+o to expand)
+
+● Per the project rules, apply the migration immediately:
+
+● Bash(./web/node_modules/.bin/supabase db push 2>&1 | tail -25)
+  ⎿  Initialising login role...
+     Connecting to remote database...
+     Do you want to push these migrations to the remote database?
+     … +10 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Migration applied. Now the types and the savings-pool hook.
+
+● Update(web\src\types\budget.ts)
+  ⎿  Added 9 lines
+      77    amount: number;
+      78  }
+      79
+      80 +/** How much of a savings pool is earmarked toward a scheduled (one-off) expense. */
+      81 +export interface SavingsExpenseEarmark {
+      82 +  id: string;
+      83 +  user_id: string;
+      84 +  pool_id: string;
+      85 +  scheduled_expense_id: string;
+      86 +  amount: number;
+      87 +}
+      88 +
+      89  // --- timeframes -------------------------------------------------------------
+      90  // Daily / Weekly / Monthly are navigable period lenses. PER-WEEK items are
+      91  // entered per period and isolated (the month sums its weeks). PERSISTENT items
+
+● Now extend useSavingsPool to handle expense earmarks:
+
+● Update(web\src\hooks\budget\useSavingsPool.ts)
+  ⎿  Added 2 lines, removed 1 line
+      1  import { useCallback, useEffect, useRef, useState } from 'react';
+      2  import { supabase } from '../../lib/supabase';
+      3 -import type { SavingsEarmark, SavingsPool } from '../../types/budget';
+      3 +import type { SavingsEarmark, SavingsExpenseEarmark, SavingsPool } from '../../types/budget';
+      4
+      5  type EarmarkMap = Record<string, SavingsEarmark>; // keyed by group_id
+      6 +type ExpenseEarmarkMap = Record<string, SavingsExpenseEarmark>; // keyed by scheduled_expense_id
+      7
+      8  /**
+      9   * The savings pool for one (budget, period): a `total_saved` amount plus a set
+
+● Update(web\src\hooks\budget\useSavingsPool.ts)
+  ⎿  Added 1 line
+      18  ) {
+      19    const [pool, setPool] = useState<SavingsPool | null>(null);
+      20    const [earmarks, setEarmarks] = useState<EarmarkMap>({});
+      21 +  const [expenseEarmarks, setExpenseEarmarks] = useState<ExpenseEarmarkMap>({});
+      22    const poolRef = useRef<SavingsPool | null>(null);
+      23    poolRef.current = pool;
+      24    const earmarksRef = useRef<EarmarkMap>({});
+
+● Update(web\src\hooks\budget\useSavingsPool.ts)
+  ⎿  Added 17 lines, removed 1 line
+      29      if (!userId || !budgetId || !periodId) {
+      30        setPool(null);
+      31        setEarmarks({});
+      32 +      setExpenseEarmarks({});
+      33        return;
+      34      }
+      35      let cancelled = false;
+     ...
+      48        if (!poolRow) {
+      49          setPool(null);
+      50          setEarmarks({});
+      51 +        setExpenseEarmarks({});
+      52          return;
+      53        }
+      54        setPool(poolRow as SavingsPool);
+      55 +      const poolId = (poolRow as SavingsPool).id;
+      56        const { data: marks, error: mErr } = await supabase
+      57          .from('budget_savings_earmarks')
+      58          .select('*')
+      56 -        .eq('pool_id', (poolRow as SavingsPool).id);
+      59 +        .eq('pool_id', poolId);
+      60        if (cancelled) return;
+      61        if (mErr) {
+      62          console.error('load earmarks failed:', mErr.message);
+     ...
+      65        const map: EarmarkMap = {};
+      66        for (const row of (marks as SavingsEarmark[]) ?? []) map[row.group_id] = row;
+      67        setEarmarks(map);
+      68 +
+      69 +      const { data: exMarks, error: exErr } = await supabase
+      70 +        .from('budget_savings_expense_earmarks')
+      71 +        .select('*')
+      72 +        .eq('pool_id', poolId);
+      73 +      if (cancelled) return;
+      74 +      if (exErr) {
+      75 +        console.error('load expense earmarks failed:', exErr.message);
+      76 +        return;
+      77 +      }
+      78 +      const exMap: ExpenseEarmarkMap = {};
+      79 +      for (const row of (exMarks as SavingsExpenseEarmark[]) ?? []) exMap[row.scheduled_expense_id] = r
+         +ow;
+      80 +      setExpenseEarmarks(exMap);
+      81      })();
+      82      return () => {
+      83        cancelled = true;
+
+● Now the realtime subscription for expense earmarks:
+
+● Update(web\src\hooks\budget\useSavingsPool.ts)
+  ⎿  Added 19 lines
+      117            setEarmarks((prev) => ({ ...prev, [row.group_id]: row }));
+      118          }
+      119        )
+      120 +      .on(
+      121 +        'postgres_changes',
+      122 +        { event: '*', schema: 'public', table: 'budget_savings_expense_earmarks', filter: `user_id=eq.
+          +${userId}` },
+      123 +        (payload) => {
+      124 +          const current = poolRef.current;
+      125 +          if (payload.eventType === 'DELETE') {
+      126 +            const old = payload.old as SavingsExpenseEarmark;
+      127 +            setExpenseEarmarks((prev) => {
+      128 +              const next = { ...prev };
+      129 +              if (next[old.scheduled_expense_id]?.id === old.id) delete next[old.scheduled_expense_id]
+          +;
+      130 +              return next;
+      131 +            });
+      132 +            return;
+      133 +          }
+      134 +          const row = payload.new as SavingsExpenseEarmark;
+      135 +          if (!current || row.pool_id !== current.id) return;
+      136 +          setExpenseEarmarks((prev) => ({ ...prev, [row.scheduled_expense_id]: row }));
+      137 +        }
+      138 +      )
+      139        .subscribe();
+      140      return () => {
+      141        supabase.removeChannel(channel);
+
+● Now the setExpenseEarmark setter and the exposed values:
+
+● Update(web\src\hooks\budget\useSavingsPool.ts)
+  ⎿  Added 42 lines, removed 1 line
+      210      [userId, ensurePool]
+      211    );
+      212
+      213 +  const setExpenseEarmark = useCallback(
+      214 +    async (expenseId: string, amount: number) => {
+      215 +      if (!userId) return;
+      216 +      const p = poolRef.current ?? (await ensurePool());
+      217 +      if (!p) return;
+      218 +      const value = Math.max(0, amount);
+      219 +      setExpenseEarmarks((prev) => {
+      220 +        const base =
+      221 +          prev[expenseId] ??
+      222 +          ({
+      223 +            id: crypto.randomUUID(),
+      224 +            user_id: userId,
+      225 +            pool_id: p.id,
+      226 +            scheduled_expense_id: expenseId,
+      227 +            amount: 0,
+      228 +          } as SavingsExpenseEarmark);
+      229 +        return { ...prev, [expenseId]: { ...base, amount: value } };
+      230 +      });
+      231 +      const { data, error } = await supabase
+      232 +        .from('budget_savings_expense_earmarks')
+      233 +        .upsert(
+      234 +          { user_id: userId, pool_id: p.id, scheduled_expense_id: expenseId, amount: value },
+      235 +          { onConflict: 'pool_id,scheduled_expense_id' }
+      236 +        )
+      237 +        .select()
+      238 +        .single();
+      239 +      if (error) {
+      240 +        console.error('setExpenseEarmark failed:', error.message);
+      241 +        return;
+      242 +      }
+      243 +      if (data) setExpenseEarmarks((prev) => ({ ...prev, [expenseId]: data as SavingsExpenseEarmark })
+          +);
+      244 +    },
+      245 +    [userId, ensurePool]
+      246 +  );
+      247 +
+      248    const totalSaved = pool?.total_saved ?? 0;
+      249    const earmarkAmounts: Record<string, number> = {};
+      250    for (const [groupId, row] of Object.entries(earmarks)) earmarkAmounts[groupId] = Number(row.amount)
+           || 0;
+      216 -  const allocated = Object.values(earmarkAmounts).reduce((a, n) => a + n, 0);
+      251 +  const expenseEarmarkAmounts: Record<string, number> = {};
+      252 +  for (const [expenseId, row] of Object.entries(expenseEarmarks)) expenseEarmarkAmounts[expenseId] = N
+          +umber(row.amount) || 0;
+      253 +  const allocated =
+      254 +    Object.values(earmarkAmounts).reduce((a, n) => a + n, 0) +
+      255 +    Object.values(expenseEarmarkAmounts).reduce((a, n) => a + n, 0);
+      256
+      257    return {
+      258      totalSaved,
+      259      earmarkAmounts,
+      260 +    expenseEarmarkAmounts,
+      261      allocated,
+      262      remaining: totalSaved - allocated,
+      263      setTotal,
+      264      setEarmark,
+      265 +    setExpenseEarmark,
+      266    };
+      267  }
+      268
+
+● Now useSavingsWithdrawnBefore must also count prior-month expense earmarks:
+
+● Update(web\src\hooks\budget\useSavingsWithdrawnBefore.ts)
+  ⎿  Added 7 lines, removed 5 lines
+      48          setWithdrawn(0);
+      49          return;
+      50        }
+      51 -      const { data: marks } = await supabase
+      52 -        .from('budget_savings_earmarks')
+      53 -        .select('amount')
+      54 -        .in('pool_id', poolIds);
+      51 +      const [{ data: marks }, { data: exMarks }] = await Promise.all([
+      52 +        supabase.from('budget_savings_earmarks').select('amount').in('pool_id', poolIds),
+      53 +        supabase.from('budget_savings_expense_earmarks').select('amount').in('pool_id', poolIds),
+      54 +      ]);
+      55        if (cancelled) return;
+      56 -      setWithdrawn((marks ?? []).reduce((a, r) => a + (Number((r as { amount: number }).amount) || 0),
+         -0));
+      56 +      const sum = (rows: { amount: number }[] | null) =>
+      57 +        (rows ?? []).reduce((a, r) => a + (Number(r.amount) || 0), 0);
+      58 +      setWithdrawn(sum(marks as { amount: number }[]) + sum(exMarks as { amount: number }[]));
+      59      };
+      60
+      61      void load();
+
+● Update(web\src\hooks\budget\useSavingsWithdrawnBefore.ts)
+  ⎿  Added 1 line
+      63      const channel = supabase
+      64        .channel(`savings-withdrawn-${userId}-${budgetId}-${selectedMonthStart}`)
+      65        .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_savings_earmarks', filter:
+           `user_id=eq.${userId}` }, () => void load())
+      66 +      .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_savings_expense_earmarks',
+         + filter: `user_id=eq.${userId}` }, () => void load())
+      67        .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_savings_pools', filter: `u
+          ser_id=eq.${userId}` }, () => void load())
+      68        .subscribe();
+      69
+
+● Now the ScheduledExpensesSection — free date picker instead of the Thursday dropdown:
+
+● Update(web\src\components\budget\ScheduledExpensesSection.tsx)
+  ⎿  Added 1 line, removed 1 line
+      1  import { useState } from 'react';
+      2 -import { formatMoney, parseMoney, thursdaysInMonth, type CreditCard, type ScheduledExpense } from '../..
+        -/types/budget';
+      2 +import { formatMoney, parseMoney, toISODate, type CreditCard, type ScheduledExpense } from '../../types/
+        +budget';
+      3  import SwipeRow from './SwipeRow';
+      4
+      5  const NAME_W = 140;
+
+● Update(web\src\components\budget\ScheduledExpensesSection.tsx)
+  ⎿  Removed 7 lines
+      31    );
+      32  }
+      33
+      34 -/** "YYYY-MM-01" for the month `offset` months after monthStart. */
+      35 -function monthOffset(monthStartISO: string, offset: number): string {
+      36 -  const [y, m] = monthStartISO.split('-').map(Number);
+      37 -  const d = new Date(y, m - 1 + offset, 1);
+      38 -  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+      39 -}
+      40 -
+      34  /** "July 2026" from a YYYY-MM-01 string. */
+      35  function monthLabelOf(iso: string): string {
+      36    return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+● Update(web\src\components\budget\ScheduledExpensesSection.tsx)
+  ⎿  Added 3 lines, removed 3 lines
+      69    const [charge, setCharge] = useState(false);
+      70    const [cardId, setCardId] = useState('');
+      71
+      72 -  // Selectable pay dates: every Thursday across this month + the next two.
+      73 -  const payDateOptions = [0, 1, 2].flatMap((o) => thursdaysInMonth(monthOffset(monthStart, o)));
+      72    const total = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      73
+      74    const openAdd = () => {
+      77 -    setDueDate(payDateOptions[0] ?? monthStart);
+      75 +    // Default the due date to today (or this month if viewing another month).
+      76 +    const today = toISODate(new Date());
+      77 +    setDueDate(today.slice(0, 7) === monthStart.slice(0, 7) ? today : monthStart);
+      78      setCardId(cards[0]?.id ?? '');
+      79      setCharge(false);
+      80      setAdding(true);
+
+● Update(web\src\components\budget\ScheduledExpensesSection.tsx)
+  ⎿  Added 2 lines, removed 3 lines
+       96        reset();
+       97        return;
+       98      }
+       99 -    const when = dueDate || payDateOptions[0];
+      100 -    if (!n || !when) return;
+      101 -    onAdd(n, amt, when);
+       99 +    if (!n || !dueDate) return;
+      100 +    onAdd(n, amt, dueDate);
+      101      reset();
+      102    };
+      103
+
+● Now replace the Thursday <select> with a date input:
+
+● Update(web\src\components\budget\ScheduledExpensesSection.tsx)
+  ⎿  Added 3 lines, removed 8 lines
+      206                  ))}
+      207                </select>
+      208              ) : (
+      209 -              <select
+      209 +              <input
+      210 +                type="date"
+      211                  value={dueDate}
+      212                  onChange={(e) => setDueDate(e.target.value)}
+      213                  className="min-w-0 flex-1 rounded-xl border px-3 text-base outline-none"
+      214                  style={{ height: '46px', background: 'var(--color-bg-surface)', borderColor: 'var(--co
+           lor-border)', color: 'var(--color-text-primary)' }}
+      214 -              >
+      215 -                {payDateOptions.map((d) => (
+      216 -                  <option key={d} value={d}>
+      217 -                    {payDateLabel(d)}
+      218 -                  </option>
+      219 -                ))}
+      220 -              </select>
+      215 +              />
+      216              )}
+      217              <button
+      218                type="button"
+
+● Now the PaycheckList — replace the one-time scheduled rows with a card-style payoff note. First the imports and props:
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 1 line, removed 1 line
+      1  import { useEffect, useState } from 'react';
+      2 -import { formatMoney, parseMoney, type BudgetGroup, type ScheduledExpense } from '../../types/budget';
+      2 +import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
+      3  import type { PayDay } from '../../hooks/budget/usePayDayIncomes';
+      4  import type { SavingsDeposit } from '../../hooks/budget/useSavingsDeposits';
+      5
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 12 lines, removed 2 lines
+      20    /** This month's savings deposits, so the current pay day's can be edited here. */
+      21    deposits: SavingsDeposit[];
+      22    onSetDeposit: (weekStart: string, n: number) => void;
+      23 -  /** Scheduled (one-off) expenses the user assigned to a given pay date. */
+      24 -  scheduledForDate?: (thursdayISO: string) => ScheduledExpense[];
+      23 +  /** Scheduled (one-off) expense payoff notes for a given pay date. */
+      24 +  scheduledPayoffsForDate?: (thursdayISO: string) => ScheduledPayoff[];
+      25    /** Credit-card payoff state for a given pay date (cards with a balance left). */
+      26    cardPayoffsForDate?: (thursdayISO: string) => CardPayoff[];
+      27    /** Record a payment against a card on a pay date. */
+     ...
+      40    paid?: number;
+      41  }
+      42
+      43 +export interface ScheduledPayoff {
+      44 +  id: string;
+      45 +  name: string;
+      46 +  due_date: string | null;
+      47 +  /** Amount still to cover after savings earmarks. */
+      48 +  remaining: number;
+      49 +  /** Suggested set-aside this pay day to reach it by the due date. */
+      50 +  suggested: number;
+      51 +}
+      52 +
+      53  /**
+      54   * Paycheck view: a single-paycheck waterfall. Cycle between the month's pay days
+      55   * to see each week's income and how it gets divided. You can put money into
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 1 line, removed 1 line
+      68    coveredOf,
+      69    deposits,
+      70    onSetDeposit,
+      71 -  scheduledForDate,
+      71 +  scheduledPayoffsForDate,
+      72    cardPayoffsForDate,
+      73    onPayCard,
+      74  }: Props) {
+
+● Now the row/total computation — remove the scheduled lump rows, add scheduled payoffs to the total:
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 10 lines, removed 11 lines
+      80    const income = current?.income ?? 0;
+      81    const savingsDeposit = deposits.find((d) => d.date === current?.date)?.amount ?? 0;
+      82
+      83 -  // The waterfall: recurring group set-asides (net of savings) plus any one-off
+      84 -  // scheduled expenses the user pinned to this pay date. Fully-covered / $0 hidden.
+      83 +  // The waterfall: recurring group set-asides (net of savings). Fully-covered /
+      84 +  // $0 rows are hidden.
+      85    const groupRows = groups.map((g) => ({
+      86      key: g.id,
+      87      name: g.name,
+     ...
+       89      setAside: current ? Math.max(0, weeklyOnDate(g, current.date) - coveredOf(g)) : 0,
+       90      note: undefined as string | undefined,
+       91    }));
+       92 -  const scheduledRows = (current ? scheduledForDate?.(current.date) ?? [] : []).map((e) => ({
+       93 -    key: e.id,
+       94 -    name: e.name,
+       95 -    color: '#f0a04b',
+       96 -    setAside: Number(e.amount) || 0,
+       97 -    note: 'one-time' as string | undefined,
+       98 -  }));
+       99 -  const rows = [...groupRows, ...scheduledRows].filter((r) => r.setAside > 0);
+       92 +  const rows = groupRows.filter((r) => r.setAside > 0);
+       93
+       94    const payoffs = current ? cardPayoffsForDate?.(current.date) ?? [] : [];
+       95    const cardPaidThisDate = payoffs.reduce((s, p) => s + (p.paid ?? 0), 0);
+       96
+      104 -  const totalSetAside = savingsDeposit + rows.reduce((sum, r) => sum + r.setAside, 0) + cardPaidThisDa
+          -te;
+       97 +  // Scheduled one-off expenses: spread each toward its due date, showing the
+       98 +  // suggested set-aside this pay day (net of any savings earmarked to it).
+       99 +  const scheduledPayoffs = current ? scheduledPayoffsForDate?.(current.date) ?? [] : [];
+      100 +  const scheduledSetAside = scheduledPayoffs.reduce((s, p) => s + p.suggested, 0);
+      101 +
+      102 +  const totalSetAside =
+      103 +    savingsDeposit + rows.reduce((sum, r) => sum + r.setAside, 0) + cardPaidThisDate + scheduledSetAsi
+          +de;
+      104    const leftOver = income - totalSetAside;
+      105
+      106    let running = income - savingsDeposit;
+
+● Now render the Scheduled section. I'll add it right before the Credit cards block:
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 14 lines
+      265          </div>
+      266        )}
+      267
+      268 +      {/* Scheduled expenses to set aside for this payday */}
+      269 +      {scheduledPayoffs.length > 0 && (
+      270 +        <div className="mt-4">
+      271 +          <h3 className="mb-2 text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.08em', c
+          +olor: 'var(--color-text-secondary)' }}>
+      272 +            Scheduled expenses
+      273 +          </h3>
+      274 +          <div className="flex flex-col gap-2">
+      275 +            {scheduledPayoffs.map((p) => (
+      276 +              <ScheduledPayoffRow key={p.id} payoff={p} />
+      277 +            ))}
+      278 +          </div>
+      279 +        </div>
+      280 +      )}
+      281 +
+      282        {/* Credit cards to pay this payday */}
+      283        {payoffs.length > 0 && (
+      284          <div className="mt-4">
+
+● Now add the ScheduledPayoffRow component (after CardPayoffRow):
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 42 lines
+      392    );
+      393  }
+      394
+      395 +/** One scheduled expense's note on a pay day: amount still to cover and the
+      396 + *  suggested set-aside this pay day to reach it by the due date. Read-only. */
+      397 +function ScheduledPayoffRow({ payoff }: { payoff: ScheduledPayoff }) {
+      398 +  const dueLabel = payoff.due_date
+      399 +    ? new Date(payoff.due_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'nu
+          +meric' })
+      400 +    : null;
+      401 +  const suggested = Math.round(payoff.suggested * 100) / 100;
+      402 +  return (
+      403 +    <div className="rounded-2xl border p-4" style={{ background: 'var(--color-bg-elevated)', borderCol
+          +or: 'var(--color-border)' }}>
+      404 +      <div className="mb-2 flex items-center justify-between gap-2">
+      405 +        <span className="flex min-w-0 items-center gap-2.5">
+      406 +          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: '#f0a04b' }} />
+      407 +          <span className="truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary
+          +)' }}>
+      408 +            {payoff.name}
+      409 +          </span>
+      410 +        </span>
+      411 +        <span className="shrink-0 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+      412 +          {dueLabel ? `due ${dueLabel}` : 'no due date'}
+      413 +        </span>
+      414 +      </div>
+      415 +      <div className="flex items-end justify-between gap-3">
+      416 +        <div className="flex flex-col">
+      417 +          <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+      418 +            Amount due
+      419 +          </span>
+      420 +          <span className="text-lg font-semibold tabular-nums" style={{ color: 'var(--color-text-prima
+          +ry)', letterSpacing: '-0.02em' }}>
+      421 +            {formatMoney(payoff.remaining)}
+      422 +          </span>
+      423 +        </div>
+      424 +        <div className="flex flex-col items-end">
+      425 +          <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+      426 +            Set aside this week
+      427 +          </span>
+      428 +          <span className="text-lg font-semibold tabular-nums" style={{ color: 'var(--color-accent)',
+          +letterSpacing: '-0.02em' }}>
+      429 +            {formatMoney(suggested)}
+      430 +          </span>
+      431 +        </div>
+      432 +      </div>
+      433 +    </div>
+      434 +  );
+      435 +}
+      436 +
+      437  /** Currency input (raw while focused). `big` renders the large income style. */
+      438  function MoneyField({
+      439    value,
+
+● Now wire it all up in BudgetView. First the paycheck-view helper and prop:
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 11 lines
+       87      const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, c.due_date) : 0;
+       88      return { id: c.id, name: c.name, due_date: c.due_date, remaining, suggested, paid: cardPayments.pa
+           ymentOn(c.id, payDate) };
+       89    };
+       90 +
+       91 +  // Savings earmarked toward a scheduled expense (capped at its amount).
+       92 +  const savedForExpense = (e: { id: string; amount: number }) =>
+       93 +    Math.min(savings.expenseEarmarkAmounts[e.id] ?? 0, Number(e.amount) || 0);
+       94 +  /** Payoff note for a scheduled expense on a pay day: net still owed after
+       95 +   *  savings, and the suggested set-aside to reach its due date. */
+       96 +  const scheduledPayoffFor = (e: { id: string; name: string; amount: number; due_date?: string | null
+          +}, payDate: string) => {
+       97 +    const remaining = Math.max(0, (Number(e.amount) || 0) - savedForExpense(e));
+       98 +    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, e.due_date ?? null) : 0;
+       99 +    return { id: e.id, name: e.name, due_date: e.due_date ?? null, remaining, suggested };
+      100 +  };
+      101    // Average per-paycheck income: divide by the month's actual pay-day count
+      102    // (4 or 5) so a 5-Thursday month isn't overstated.
+      103    const weeklyIncome = monthlyIncome / (payDays.length || 4);
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 6 lines, removed 1 line
+      141          coveredOf={(g) => Math.min(savingsMonthlyOf(g), grossMonthlyOf(g)) / 4}
+      142          deposits={deposits.deposits}
+      143          onSetDeposit={deposits.setDeposit}
+      144 -        scheduledForDate={(d) => scheduled.expenses.filter((e) => e.due_date === d)}
+      144 +        scheduledPayoffsForDate={(d) =>
+      145 +          scheduled.expenses
+      146 +            .filter((e) => e.due_date && e.due_date >= d)
+      147 +            .map((e) => scheduledPayoffFor(e, d))
+      148 +            .filter((p) => p.remaining > 0)
+      149 +        }
+      150          cardPayoffsForDate={(d) =>
+      151            creditCards.cards.map((c) => cardPayoffFor(c, d)).filter((p) => p.remaining > 0 || (p.paid ?
+           ? 0) > 0)
+      152          }
+
+● Now the overview totals — net scheduled + covered:
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 6 lines, removed 6 lines
+      164      (s, g) => s + savingsOffset(grossWeeklyOf(g), savingsMonthlyOf(g) / 4).net,
+      165      0
+      166    );
+      167 -  const monthlyCovered = recurringGroups.reduce(
+      168 -    (s, g) => s + Math.min(savingsMonthlyOf(g), grossMonthlyOf(g)),
+      169 -    0
+      170 -  );
+      171 -
+      167    const scheduledThisMonth = scheduled.expenses.filter((e) => e.due_month === monthBounds.start_date);
+      173 -  const scheduledTotal = scheduledThisMonth.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      168 +  const scheduledGross = scheduledThisMonth.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      169 +  const scheduledCovered = scheduledThisMonth.reduce((s, e) => s + savedForExpense(e), 0);
+      170 +  const scheduledTotal = Math.max(0, scheduledGross - scheduledCovered); // net income must cover
+      171
+      172 +  const monthlyCovered =
+      173 +    recurringGroups.reduce((s, g) => s + Math.min(savingsMonthlyOf(g), grossMonthlyOf(g)), 0) + schedu
+          +ledCovered;
+      174 +
+      175    // Card obligation: for cards with a due date, the suggested weekly pace to
+      176    // clear the remaining balance from this month's first payday through the due
+      177    // date. Cards without a due date have no schedule, so contribute 0.
+
+● Now pass the scheduled expenses to SavingsPoolSection:
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 3 lines
+      248          allocated={savings.allocated}
+      249          earmarkAmounts={savings.earmarkAmounts}
+      250          onSetEarmark={savings.setEarmark}
+      251 +        scheduledExpenses={scheduledThisMonth.map((e) => ({ id: e.id, name: e.name, amount: Number(e.a
+          +mount) || 0 }))}
+      252 +        expenseEarmarkAmounts={savings.expenseEarmarkAmounts}
+      253 +        onSetExpenseEarmark={savings.setExpenseEarmark}
+      254        />
+      255
+      256        {/* Summary */}
+
+● Now render the scheduled-expense earmark list in SavingsPoolSection:
+
+● Update(web\src\components\budget\SavingsPoolSection.tsx)
+  ⎿  Added 4 lines
+      68    allocated: number;
+      69    earmarkAmounts: Record<string, number>;
+      70    onSetEarmark: (groupId: string, n: number) => void;
+      71 +  /** One-off scheduled expenses due this month you can earmark savings toward. */
+      72 +  scheduledExpenses: { id: string; name: string; amount: number }[];
+      73 +  expenseEarmarkAmounts: Record<string, number>;
+      74 +  onSetExpenseEarmark: (expenseId: string, n: number) => void;
+      75  }
+      76
+      77  /**
+
+● Update(web\src\components\budget\SavingsPoolSection.tsx)
+  ⎿  Added 20 lines, removed 5 lines
+       93    allocated,
+       94    earmarkAmounts,
+       95    onSetEarmark,
+       96 +  scheduledExpenses,
+       97 +  expenseEarmarkAmounts,
+       98 +  onSetExpenseEarmark,
+       99  }: Props) {
+      100    const [open, setOpen] = useState(false);
+      101    const [warnId, setWarnId] = useState<string | null>(null);
+     ...
+      103    const contributions = contributionsThrough;
+      104    const balance = available - allocated;
+      105
+      103 -  const commitEarmark = (groupId: string, entered: number) => {
+      104 -    const others = allocated - (earmarkAmounts[groupId] ?? 0);
+      106 +  // Both group and scheduled-expense earmarks draw from the same `available`
+      107 +  // balance; `allocated` already sums both, so the cap for one row = available
+      108 +  // minus everything else currently earmarked.
+      109 +  const commitToward = (
+      110 +    id: string,
+      111 +    entered: number,
+      112 +    current: number,
+      113 +    setter: (id: string, n: number) => void
+      114 +  ) => {
+      115 +    const others = allocated - current;
+      116      const maxForThis = Math.max(0, available - others);
+      117      if (entered > maxForThis) {
+      107 -      setWarnId(groupId);
+      108 -      onSetEarmark(groupId, maxForThis);
+      118 +      setWarnId(id);
+      119 +      setter(id, maxForThis);
+      120      } else {
+      121        setWarnId(null);
+      111 -      onSetEarmark(groupId, entered);
+      122 +      setter(id, entered);
+      123      }
+      124    };
+      125 +  const commitEarmark = (groupId: string, entered: number) =>
+      126 +    commitToward(groupId, entered, earmarkAmounts[groupId] ?? 0, onSetEarmark);
+      127 +  const commitExpenseEarmark = (expenseId: string, entered: number) =>
+      128 +    commitToward(expenseId, entered, expenseEarmarkAmounts[expenseId] ?? 0, onSetExpenseEarmark);
+      129
+      130    const Line = ({ label, value, strong }: { label: string; value: string; strong?: boolean }) => (
+      131      <div className="flex items-center justify-between text-sm tabular-nums">
+
+● Now add the scheduled-expense earmark list in the render, after the groups block:
+
+● Update(web\src\components\budget\SavingsPoolSection.tsx)
+  ⎿  Added 31 lines
+      243              </>
+      244            )}
+      245
+      246 +          {scheduledExpenses.length > 0 && (
+      247 +            <>
+      248 +              <span className="mb-2 mt-4 block text-xs" style={{ color: 'var(--color-text-secondary)'
+          +}}>
+      249 +                Toward scheduled expenses
+      250 +              </span>
+      251 +              <div className="flex flex-col gap-2">
+      252 +                {scheduledExpenses.map((e) => (
+      253 +                  <div key={e.id}>
+      254 +                    <div className="flex items-center justify-between gap-3">
+      255 +                      <span className="flex min-w-0 items-center gap-2">
+      256 +                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: '#f0a
+          +04b' }} />
+      257 +                        <span className="min-w-0 truncate text-[15px]" style={{ color: 'var(--color-te
+          +xt-primary)' }}>
+      258 +                          {e.name}
+      259 +                          <span className="ml-1.5 text-[13px]" style={{ color: 'var(--color-text-terti
+          +ary)' }}>
+      260 +                            {formatMoney(e.amount)}
+      261 +                          </span>
+      262 +                        </span>
+      263 +                      </span>
+      264 +                      <MoneyInput value={expenseEarmarkAmounts[e.id] ?? 0} onSave={(n) => commitExpens
+          +eEarmark(e.id, n)} />
+      265 +                    </div>
+      266 +                    {warnId === e.id && (
+      267 +                      <p className="mt-1 text-right text-[12px]" style={{ color: 'var(--color-danger)'
+          + }}>
+      268 +                        Exceeds available savings balance
+      269 +                      </p>
+      270 +                    )}
+      271 +                  </div>
+      272 +                ))}
+      273 +              </div>
+      274 +            </>
+      275 +          )}
+      276 +
+      277            <div
+      278              className="mt-4 flex items-center justify-between border-t pt-3 text-sm tabular-nums"
+      279              style={{ borderColor: 'var(--color-border)' }}
+
+● Now type-check and build:
+
+● Bash(cd web && npx tsc --noEmit 2>&1 | head -30; echo "EXIT: ${PIPESTATUS[0]}")
+  ⎿  EXIT: 0
+  ⎿  Allowed by auto mode classifier
+
+● Bash(cd web && npm run build 2>&1 | tail -12)
+  ⎿  Error: Exit code 1
+     /usr/bin/bash: line 1: cd: web: No such file or directory
+
+● Bash(pwd && npm run build 2>&1 | tail -12)
+  ⎿  /c/Users/brand/Desktop/ToDo_Productivity/web
+     ✓ 829 modules transformed.
+     rendering chunks...
+     … +11 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Build passes. Bump the service worker cache version so clients pick up the new build:
+
+● Update(public\sw.js)
+  ⎿  Added 1 line, removed 1 line
+      16   *     controller to replace, so it activates immediately.
+      17   */
+      18
+      19 -const CACHE_VERSION = 'v5';
+      19 +const CACHE_VERSION = 'v6';
+      20  const CACHE_NAME = `slommy-hq-${CACHE_VERSION}`;
+      21
+      22  // The minimal shell needed to boot offline. Content-hashed JS/CSS are added to
+
+● Now commit and push:
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity && git add -A && git commit -q -m "$(cat <<'EOF'
+      Budget: allocate savings toward scheduled expenses; any-date schedu…)
+  ⎿  warning: in the working copy of 'web/public/sw.js', LF will be replaced by CRLF the next time Git touches it
+     warning: in the working copy of 'web/src/components/budget/BudgetView.tsx', LF will be replaced by CRLF the ne
+     xt time Git touches it
+     … +16 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Pushed (b36f78c). Let me update the budget memory with the new migration/feature so future sessions have it.
+
+  Recalled 1 memory, wrote 1 memory (ctrl+o to expand)
+
+● Done. I picked up from where the last session hit its usage limit and finished all three outstanding requests.
+
+  What I completed this session
+
+  1. Allocate savings toward scheduled expenses (was mid-investigation)
+  - New table budget_savings_expense_earmarks (migration 044, applied to remote) — mirrors group earmarks but keyed by
+  scheduled_expense_id, since budget_savings_earmarks.group_id is NOT-NULL.
+  - Threaded through useSavingsPool (expenseEarmarkAmounts / setExpenseEarmark, folded into allocated),
+  useSavingsWithdrawnBefore (so prior-month earmarks still draw down the running balance), and a new "Toward scheduled
+  expenses" list in the Savings account box. Overview totals now net out savings-covered scheduled amounts.
+
+  2. "$0 left" removed — the green sub-line on a fully-paid credit card is now hidden (remaining > 0 guard). This was
+  the uncommitted edit from last time; it's now committed.
+
+  3. Any-date scheduled payments + Paycheck note
+  - The due-date picker is now a free <input type="date"> instead of a Thursday-only dropdown.
+  - Each scheduled expense shows in the Paycheck view as a card-style payoff note (ScheduledPayoffRow): amount due (net
+  of savings) and set aside this week = net ÷ pay days remaining to the due date — the same shape as the credit-card
+  note. It appears on every payday up to the due date, and its suggested amount folds into the paycheck's "total set
+  aside / left over." The old lump one-time row was removed.
+
+  Verification: tsc --noEmit clean, npm run build passes, migration 044 applied, SW bumped to v6, committed and pushed
+  (b36f78c). Hard-refresh / take the Refresh prompt to pick it up.
+
+  One design note worth flagging: the scheduled-expense payoff note is read-only (it shows the suggested pace but
+  doesn't track per-payday payments like credit cards do, which have their own budget_card_payments ledger). If you'd
+  rather it be interactive — enter what you actually set aside each week and watch the remaining drop — say so and I'll
+  add that tracking.
+
+✻ Crunched for 9m 20s
+
+※ recap: Continuing the budget tab work: I finished all three outstanding requests (savings toward scheduled expenses,
+  any-date scheduling, paycheck payoff note, plus the "$0 left" fix), built cleanly, and pushed. Next: hard-refresh the
+  app to confirm it works, or add interactive per-week payment tracking if you want it. (disable recaps in /config)
+
+❯ need to make it so it shows the current pay check easily so i can breifly check it on the go.
+
+
+
+  Allow to set expenses on specific dates they get charged and have them automatically decide the amount to put away
+  each weeek the same way the credit card does
+
+● Two changes:
+
+  1. Paycheck view opens on the current paycheck (nearest to today) instead of always the month's first — so you can
+  glance at it on the go.
+  2. Scheduled expenses auto-compute a stable weekly set-aside — a flat "put away $X/week" from when you set it up until
+  its charge date (right now the number grows as the date nears, which isn't glanceable).
+
+  Let me start with the current-paycheck default in PaycheckList.
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 1 line, removed 1 line
+      1  import { useEffect, useState } from 'react';
+      2 -import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
+      2 +import { formatMoney, parseMoney, toISODate, type BudgetGroup } from '../../types/budget';
+      3  import type { PayDay } from '../../hooks/budget/usePayDayIncomes';
+      4  import type { SavingsDeposit } from '../../hooks/budget/useSavingsDeposits';
+      5
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 14 lines, removed 3 lines
+      72    cardPayoffsForDate,
+      73    onPayCard,
+      74  }: Props) {
+      75 -  const [idx, setIdx] = useState(0);
+      76 -  // Start at the first pay day whenever the month changes.
+      77 -  useEffect(() => setIdx(0), [monthLabel]);
+      75 +  // The pay day for the week containing today (the most recent Thursday ≤ today);
+      76 +  // if today is before the month's first pay day → the first, if after all → last.
+      77 +  const todayISO = toISODate(new Date());
+      78 +  const currentIdx = (() => {
+      79 +    if (payDays.length === 0) return 0;
+      80 +    const firstFuture = payDays.findIndex((p) => p.date > todayISO);
+      81 +    if (firstFuture === -1) return payDays.length - 1;
+      82 +    return Math.max(0, firstFuture - 1);
+      83 +  })();
+      84 +
+      85 +  const [idx, setIdx] = useState(currentIdx);
+      86 +  // Jump to the current paycheck whenever the month (or its pay days) changes, so
+      87 +  // opening the view lands on the paycheck you're living in right now.
+      88 +  useEffect(() => setIdx(currentIdx), [monthLabel, payDays.length]); // eslint-disable-line react-hooks
+         +/exhaustive-deps
+      89    const clamped = payDays.length === 0 ? 0 : Math.min(idx, payDays.length - 1);
+      90    const current = payDays[clamped];
+      91    const income = current?.income ?? 0;
+
+● Now add a "This week" badge on the pay-day navigator when the current paycheck is shown:
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 9 lines, removed 1 line
+      165            <span className="text-[17px] font-semibold" style={{ color: 'var(--color-text-primary)', let
+           terSpacing: '-0.02em' }}>
+      166              {current?.label ?? 'Pay day'}
+      167            </span>
+      168 -          <span className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+      168 +          <span className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--color-text-te
+          +rtiary)' }}>
+      169              Paycheck {payDays.length ? clamped + 1 : 0} of {payDays.length}
+      170 +            {payDays.length > 0 && clamped === currentIdx && (
+      171 +              <span
+      172 +                className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase"
+      173 +                style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)', lette
+          +rSpacing: '0.04em' }}
+      174 +              >
+      175 +                This week
+      176 +              </span>
+      177 +            )}
+      178            </span>
+      179          </div>
+      180          <button
+
+● Now the flat weekly for scheduled expenses in BudgetView:
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 10 lines, removed 3 lines
+       92    const savedForExpense = (e: { id: string; amount: number }) =>
+       93      Math.min(savings.expenseEarmarkAmounts[e.id] ?? 0, Number(e.amount) || 0);
+       94    /** Payoff note for a scheduled expense on a pay day: net still owed after
+       95 -   *  savings, and the suggested set-aside to reach its due date. */
+       96 -  const scheduledPayoffFor = (e: { id: string; name: string; amount: number; due_date?: string | null
+          -}, payDate: string) => {
+       95 +   *  savings, and a FLAT weekly set-aside. The net is spread evenly across the pay
+       96 +   *  weeks from when the expense was set up (its created date) through its charge
+       97 +   *  date, so the "put away each week" amount stays constant week to week rather
+       98 +   *  than climbing as the date nears. */
+       99 +  const scheduledPayoffFor = (
+      100 +    e: { id: string; name: string; amount: number; due_date?: string | null; created_at?: string },
+      101 +    payDate: string
+      102 +  ) => {
+      103      const remaining = Math.max(0, (Number(e.amount) || 0) - savedForExpense(e));
+       98 -    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, e.due_date ?? null) : 0;
+      104 +    const start = e.created_at ? e.created_at.slice(0, 10) : payDate;
+      105 +    const suggested = remaining > 0 ? remaining / payDatesThrough(start, e.due_date ?? null) : 0;
+      106      return { id: e.id, name: e.name, due_date: e.due_date ?? null, remaining, suggested };
+      107    };
+      108    // Average per-paycheck income: divide by the month's actual pay-day count
+
+● To keep the weekly figure stable the instant an expense is added (before realtime fills in created_at), set it on the
+  optimistic row:
+
+● Update(web\src\hooks\budget\useScheduledExpenses.ts)
+  ⎿  Added 1 line
+      82          amount: value,
+      83          due_month: dueMonth,
+      84          due_date: dueDate,
+      85 +        created_at: new Date().toISOString(),
+      86        };
+      87        setExpenses((prev) => [...prev, row]);
+      88        const { error } = await supabase
+
+● Now type-check and build:
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity/web && npx tsc --noEmit 2>&1 | head -20; echo "TSC EXIT:
+      ${PIPESTATUS[0]}")
+  ⎿  TSC EXIT: 0
+  ⎿  Allowed by auto mode classifier
+
+● Bash(npm run build 2>&1 | tail -6)
+  ⎿  
+     (!) Some chunks are larger than 500 kB after minification. Consider:
+     - Using dynamic import() to code-split the application
+     … +4 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Build passes. Bump the SW cache and commit:
+
+● Update(public\sw.js)
+  ⎿  Added 1 line, removed 1 line
+      16   *     controller to replace, so it activates immediately.
+      17   */
+      18
+      19 -const CACHE_VERSION = 'v6';
+      19 +const CACHE_VERSION = 'v7';
+      20  const CACHE_NAME = `slommy-hq-${CACHE_VERSION}`;
+      21
+      22  // The minimal shell needed to boot offline. Content-hashed JS/CSS are added to
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity && git add -A && git commit -q -m "$(cat <<'EOF'
+      Budget: Paycheck view opens on the current paycheck; flat weekly fo…)
+  ⎿  warning: in the working copy of 'web/public/sw.js', LF will be replaced by CRLF the next time Git touches it
+     warning: in the working copy of 'web/src/components/budget/BudgetView.tsx', LF will be replaced by CRLF the ne
+     xt time Git touches it
+     … +6 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Pushed (ab76839). Both changes are live.
+
+  What changed
+
+  1. Paycheck view opens on your current paycheck
+  It now lands on the pay day for the week containing today (the most recent Thursday ≤ today), marked with a "This
+  week" badge, so you can open it and glance at where you stand without navigating. It still respects manual prev/next
+  and re-centers on "this week" when you switch months. (Future months open on their first paycheck, past months on
+  their last.)
+
+  2. Scheduled expenses auto-decide a flat weekly set-aside
+  - You already set them on a specific charge date (any day).
+  - The Paycheck view now shows a constant "put away each week" amount: the net (after any savings you've earmarked
+  toward it) is spread evenly across the pay weeks from when you set it up through its charge date. So a $800 expense
+  set up 8 pay weeks out shows a steady $100/week — it no longer climbs as the date approaches.
+
+  Verified: tsc clean, build passes, SW bumped to v7, committed and pushed. Hard-refresh / accept the Refresh prompt on
+  the phone to pick it up.
+
+  One honest distinction from the credit-card behavior: the scheduled-expense weekly is a stable auto-suggestion — it
+  doesn't track what you've actually set aside week-to-week (credit cards do, via their payment ledger, which is why
+  they stay flat and catch up if you skip a week). I chose the no-tracking version deliberately because it keeps the
+  "brief check on the go" glanceable with zero tapping. If you'd rather it be interactive — record what you put away
+  each week and have the remaining/weekly adjust like a card — say the word and I'll add that.
+
+✻ Worked for 4m 6s
+
+❯ it needs to open the next one, and for the fixed expenses it still doesnt let me set the payment date, like some
+  things are on the 25th some on the 31st some on the 15th
+
+● Let me fix the "open next paycheck" first, then look at the fixed-expenses date request.
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 6 lines, removed 7 lines
+      72    cardPayoffsForDate,
+      73    onPayCard,
+      74  }: Props) {
+      75 -  // The pay day for the week containing today (the most recent Thursday ≤ today);
+      76 -  // if today is before the month's first pay day → the first, if after all → last.
+      75 +  // The next upcoming pay day (first Thursday on/after today); if today is past
+      76 +  // the month's last pay day → the last one.
+      77    const todayISO = toISODate(new Date());
+      78    const currentIdx = (() => {
+      79      if (payDays.length === 0) return 0;
+      80 -    const firstFuture = payDays.findIndex((p) => p.date > todayISO);
+      81 -    if (firstFuture === -1) return payDays.length - 1;
+      82 -    return Math.max(0, firstFuture - 1);
+      80 +    const next = payDays.findIndex((p) => p.date >= todayISO);
+      81 +    return next === -1 ? payDays.length - 1 : next;
+      82    })();
+      83
+      84    const [idx, setIdx] = useState(currentIdx);
+      86 -  // Jump to the current paycheck whenever the month (or its pay days) changes, so
+      87 -  // opening the view lands on the paycheck you're living in right now.
+      85 +  // Jump to the next paycheck whenever the month (or its pay days) changes, so
+      86 +  // opening the view lands on the paycheck that's coming up.
+      87    useEffect(() => setIdx(currentIdx), [monthLabel, payDays.length]); // eslint-disable-line react-hooks
+          /exhaustive-deps
+      88    const clamped = payDays.length === 0 ? 0 : Math.min(idx, payDays.length - 1);
+      89    const current = payDays[clamped];
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 1 line, removed 1 line
+      171                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase"
+      172                  style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)', lette
+           rSpacing: '0.04em' }}
+      173                >
+      174 -                This week
+      174 +                Next up
+      175                </span>
+      176              )}
+      177            </span>
+
+● Now the fixed-expenses date request. Let me look at the OverviewTable and how groups are structured.
+
+  Read 1 file (ctrl+o to expand)
+
+● The "open next paycheck" fix is unambiguous — let me ship it. Type-check, build, commit:
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity/web && npx tsc --noEmit 2>&1 | head -10; echo "TSC: ${PIPESTATUS[0]}"
+      && npm run build 2>&1 | tail -3)
+  ⎿  TSC: 0
+     - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/
+     #output-manualchunks
+     … +2 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Update(public\sw.js)
+  ⎿  Added 1 line, removed 1 line
+      16   *     controller to replace, so it activates immediately.
+      17   */
+      18
+      19 -const CACHE_VERSION = 'v7';
+      19 +const CACHE_VERSION = 'v8';
+      20  const CACHE_NAME = `slommy-hq-${CACHE_VERSION}`;
+      21
+      22  // The minimal shell needed to boot offline. Content-hashed JS/CSS are added to
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity && git add -A && git commit -q -m "$(cat <<'EOF'
+      Budget: Paycheck view opens on the next upcoming paycheck ("Next up…)
+  ⎿  warning: in the working copy of 'web/public/sw.js', LF will be replaced by CRLF the next time Git touches it
+     warning: in the working copy of 'web/src/components/budget/PaycheckList.tsx', LF will be replaced by CRLF the
+     next time Git touches it
+     … +2 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Paycheck view now opens on the next upcoming paycheck (a50c645, badged "Next up").
+
+  Now, the fixed-expenses payment date. Recurring fixed costs (rent, bills) currently just split evenly across every
+  paycheck — there's no field for when each one is charged. Before I build it, I want to get the behavior right, because
+  it changes how the money flows:
+
+● User declined to answer questions
+  ⎿  · When you set a charge day (e.g. 15th/25th/31st) on a fixed expense, what should it actually do? (Full: put-away
+     toward the day / Just show the date)
+
+● What would you like to clarify? Tell me how you're picturing the fixed-expense charge dates working and I'll adjust —
+  for example: should each fixed bill get its own weekly "put away $X" toward its charge day (like the scheduled
+  expenses and credit cards now do), or do you just want to record the day each one is charged while the cost keeps
+  splitting evenly across paychecks? And anything else about how you want it to look or behave on the paycheck screen.
+
+✻ Crunched for 2m 17s
+
+❯ should function the exact same as the credit card balance where i can have a suggested amount and i can put more
+  towards it if i want.
+
+● Got it — fixed expenses should behave exactly like the credit-card balance: a suggested per-paycheck amount you can
+  top up. Let me look at the card payments hook to mirror it.
+
+  Read 1 file (ctrl+o to expand)
+
+● This is a real feature: dated fixed expenses that behave like the card balance (suggested per-paycheck + top-up,
+  tracked). Let me check the group hook to see how updates work.
+
+  Read 1 file (ctrl+o to expand)
+
+● This is a substantial feature. Here's my plan: fixed expenses get an optional charge day; a dated one drops out of the
+  even-split waterfall and instead shows in the Paycheck view exactly like a credit card — suggested per-paycheck
+  amount, editable, tracked, with a "use suggested" button. Let me build it.
+
+  Migration first:
+
+● Write(supabase\migrations\045_fixed_expense_charge_day.sql)
+  ⎿  Wrote 41 lines to supabase\migrations\045_fixed_expense_charge_day.sql
+       1 -- ============================================================================
+       2 -- 045_fixed_expense_charge_day.sql — a recurring fixed-cost group can carry a
+       3 -- charge day (day of month it's billed), turning it into a per-month payoff
+       4 -- tracker just like a credit card.
+       5 --
+       6 -- budget_groups.due_day (1–31, null = no charge day → keep the flat even split).
+       7 -- budget_group_payments is the per-pay-day ledger of what you've set aside toward
+       8 -- a dated group, mirroring budget_card_payments. Remaining for a month = the
+       9 -- group's net monthly amount − what's been set aside on that month's earlier pay
+      10 -- days; suggested set-aside = remaining ÷ pay days left until the charge day.
+     … +31 lines (ctrl+o to expand)
+
+● Bash(./web/node_modules/.bin/supabase db push 2>&1 | tail -8)
+  ⎿   • 045_fixed_expense_charge_day.sql
+
+      [Y/n]
+     … +7 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Now the type + group hook:
+
+● Update(web\src\types\budget.ts)
+  ⎿  Added 3 lines
+      47    cc_weeks: number;
+      48    cc_start_date: string | null; // YYYY-MM-DD (first pay date)
+      49    cc_due_date: string | null; // YYYY-MM-DD (paid off by)
+      50 +  /** Day of month (1–31) this fixed cost is charged. null → flat even split; set
+      51 +   *  → per-month payoff tracker (like a card) via budget_group_payments. */
+      52 +  due_day?: number | null;
+      53    created_at?: string;
+      54  }
+      55
+
+● Update(web\src\hooks\budget\useBudgetGroups.ts)
+  ⎿  Added 1 line
+      12    cc_weeks?: number;
+      13    cc_start_date?: string | null;
+      14    cc_due_date?: string | null;
+      15 +  due_day?: number | null;
+      16  }
+      17
+      18  const byPosition = (a: BudgetGroup, b: BudgetGroup) => a.position - b.position;
+
+● Update(web\src\hooks\budget\useBudgetGroups.ts)
+  ⎿  Added 1 line
+      137                  ...(patch.cc_weeks !== undefined ? { cc_weeks: patch.cc_weeks } : {}),
+      138                  ...(patch.cc_start_date !== undefined ? { cc_start_date: patch.cc_start_date } : {}),
+      139                  ...(patch.cc_due_date !== undefined ? { cc_due_date: patch.cc_due_date } : {}),
+      140 +                ...(patch.due_day !== undefined ? { due_day: patch.due_day } : {}),
+      141                }
+      142              : g
+      143          )
+
+● Update(web\src\hooks\budget\useBudgetGroups.ts)
+  ⎿  Added 1 line
+      152        if (patch.cc_weeks !== undefined) dbPatch.cc_weeks = patch.cc_weeks;
+      153        if (patch.cc_start_date !== undefined) dbPatch.cc_start_date = patch.cc_start_date;
+      154        if (patch.cc_due_date !== undefined) dbPatch.cc_due_date = patch.cc_due_date;
+      155 +      if (patch.due_day !== undefined) dbPatch.due_day = patch.due_day;
+      156        if (Object.keys(dbPatch).length === 0) return;
+      157        const { error } = await supabase.from('budget_groups').update(dbPatch).eq('id', id);
+      158        if (error) console.error('updateGroup failed:', error.message);
+
+● Now the new useGroupPayments hook (mirrors card payments, with a month-scoped range sum):
+
+● Write(web\src\hooks\budget\useGroupPayments.ts)
+  ⎿  Wrote 118 lines to web\src\hooks\budget\useGroupPayments.ts
+       1 import { useCallback, useEffect, useRef, useState } from 'react';
+       2 import { supabase } from '../../lib/supabase';
+       3
+       4 interface GroupPaymentRow {
+       5   id: string;
+       6   user_id: string;
+       7   group_id: string;
+       8   pay_date: string; // YYYY-MM-DD
+       9   amount: number;
+      10 }
+     … +109 lines (ctrl+o to expand)
+
+● Now the Overview table — add the charge-day editor. First the prop and a helper/component:
+
+● Update(web\src\components\budget\OverviewTable.tsx)
+  ⎿  Added 50 lines
+      41    onAddGroup: (name: string, color: string) => void;
+      42    onRename: (id: string, name: string) => void;
+      43    onDelete: (id: string) => void;
+      44 +  /** Set/clear the day of month a fixed cost is charged (enables the payoff
+      45 +   *  tracker in the Paycheck view). Omit to hide the charge-day control. */
+      46 +  onSetDueDay?: (id: string, day: number | null) => void;
+      47  }
+      48
+      49 +/** "1st", "2nd", "25th" … */
+      50 +function ordinal(d: number): string {
+      51 +  const s = ['th', 'st', 'nd', 'rd'];
+      52 +  const v = d % 100;
+      53 +  return d + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
+      54 +}
+      55 +
+      56 +/** A tiny inline control under a group name to set the day of month it's charged. */
+      57 +function DueDayControl({ day, onSave }: { day: number | null; onSave: (d: number | null) => void }) {
+      58 +  const [open, setOpen] = useState(false);
+      59 +  if (open) {
+      60 +    return (
+      61 +      <select
+      62 +        data-no-drag
+      63 +        autoFocus
+      64 +        value={day ?? ''}
+      65 +        onChange={(e) => {
+      66 +          const v = e.target.value;
+      67 +          onSave(v === '' ? null : Number(v));
+      68 +          setOpen(false);
+      69 +        }}
+      70 +        onBlur={() => setOpen(false)}
+      71 +        className="mt-0.5 self-start rounded-md border px-1 py-0.5 text-[11px] outline-none"
+      72 +        style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-accent-muted)', color
+         +: 'var(--color-text-primary)' }}
+      73 +      >
+      74 +        <option value="">No charge day</option>
+      75 +        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+      76 +          <option key={d} value={d}>
+      77 +            {ordinal(d)}
+      78 +          </option>
+      79 +        ))}
+      80 +      </select>
+      81 +    );
+      82 +  }
+      83 +  return (
+      84 +    <button
+      85 +      data-no-drag
+      86 +      type="button"
+      87 +      onClick={() => setOpen(true)}
+      88 +      className="mt-0.5 self-start text-[11px] active:opacity-70"
+      89 +      style={{ color: day ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
+      90 +    >
+      91 +      {day ? `Charged ${ordinal(day)}` : '+ charge day'}
+      92 +    </button>
+      93 +  );
+      94 +}
+      95 +
+      96  /** A labelled currency input (raw number while focused, formatted on blur). */
+      97  function IncomeField({ label, value, onSave }: { label: string; value: number; onSave: (n: number) => v
+          oid }) {
+      98    const [focused, setFocused] = useState(false);
+
+● Update(web\src\components\budget\OverviewTable.tsx)
+  ⎿  Added 1 line
+      227    onAddGroup,
+      228    onRename,
+      229    onDelete,
+      230 +  onSetDueDay,
+      231  }: Props) {
+      232    const [swipe, setSwipe] = useState<{ id: string; x: number } | null>(null);
+      233    const [editing, setEditing] = useState<EditState | null>(null);
+
+● Now restructure the name cell to add the charge-day control:
+
+● Update(web\src\components\budget\OverviewTable.tsx)
+  ⎿  Added 19 lines, removed 14 lines
+      434                        cursor: 'pointer',
+      435                      }}
+      436                    >
+      437 -                    {/* Name + color dot */}
+      437 +                    {/* Name + color dot + optional charge day */}
+      438                      <div data-col="name" className="flex items-center gap-2.5 px-4 py-2" style={{ widt
+           h: NAME_W }}>
+      439                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: g.color
+            }} />
+      440 -                      {editName ? (
+      441 -                        <NameInput
+      442 -                          initial={g.name}
+      443 -                          onCommit={(v) => {
+      444 -                            if (v && v !== g.name) onRename(g.id, v);
+      445 -                            setEditing(null);
+      446 -                          }}
+      447 -                        />
+      448 -                      ) : (
+      449 -                        <span className="min-w-0 flex-1 truncate text-[15px] font-medium" style={{ col
+          -or: 'var(--color-text-primary)' }}>
+      450 -                          {g.name}
+      451 -                        </span>
+      452 -                      )}
+      440 +                      <div className="flex min-w-0 flex-1 flex-col">
+      441 +                        {editName ? (
+      442 +                          <NameInput
+      443 +                            initial={g.name}
+      444 +                            onCommit={(v) => {
+      445 +                              if (v && v !== g.name) onRename(g.id, v);
+      446 +                              setEditing(null);
+      447 +                            }}
+      448 +                          />
+      449 +                        ) : (
+      450 +                          <span className="min-w-0 truncate text-[15px] font-medium" style={{ color: '
+          +var(--color-text-primary)' }}>
+      451 +                            {g.name}
+      452 +                          </span>
+      453 +                        )}
+      454 +                        {onSetDueDay && !(roWeekly && roMonthly) && (
+      455 +                          <DueDayControl day={g.due_day ?? null} onSave={(d) => onSetDueDay(g.id, d)}
+          +/>
+      456 +                        )}
+      457 +                      </div>
+      458                      </div>
+      459
+      460                      {/* Monthly */}
+
+● Now the PaycheckList — reuse the card payoff row (parametrized) for dated fixed expenses. First the type + props:
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 6 lines
+      26    cardPayoffsForDate?: (thursdayISO: string) => CardPayoff[];
+      27    /** Record a payment against a card on a pay date. */
+      28    onPayCard?: (cardId: string, thursdayISO: string, amount: number) => void;
+      29 +  /** Dated fixed-cost groups as per-month payoff trackers for a given pay date. */
+      30 +  groupPayoffsForDate?: (thursdayISO: string) => CardPayoff[];
+      31 +  /** Record what was set aside toward a dated fixed cost on a pay date. */
+      32 +  onPayGroup?: (groupId: string, thursdayISO: string, amount: number) => void;
+      33  }
+      34
+      35  export interface CardPayoff {
+     ...
+      42    suggested: number;
+      43    /** Payment already recorded for this card on this pay day. */
+      44    paid?: number;
+      45 +  /** Accent dot color (defaults to the card blue). */
+      46 +  color?: string;
+      47  }
+      48
+      49  export interface ScheduledPayoff {
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 2 lines
+      77    scheduledPayoffsForDate,
+      78    cardPayoffsForDate,
+      79    onPayCard,
+      80 +  groupPayoffsForDate,
+      81 +  onPayGroup,
+      82  }: Props) {
+      83    // The next upcoming pay day (first Thursday on/after today); if today is past
+      84    // the month's last pay day → the last one.
+
+● Now the totals computation — add dated-group payoffs:
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 10 lines, removed 1 line
+      112    const payoffs = current ? cardPayoffsForDate?.(current.date) ?? [] : [];
+      113    const cardPaidThisDate = payoffs.reduce((s, p) => s + (p.paid ?? 0), 0);
+      114
+      115 +  // Dated fixed-cost groups: a per-month payoff tracker (like a card). What's
+      116 +  // recorded on this pay day counts toward the total set aside.
+      117 +  const groupPayoffs = current ? groupPayoffsForDate?.(current.date) ?? [] : [];
+      118 +  const groupPaidThisDate = groupPayoffs.reduce((s, p) => s + (p.paid ?? 0), 0);
+      119 +
+      120    // Scheduled one-off expenses: spread each toward its due date, showing the
+      121    // suggested set-aside this pay day (net of any savings earmarked to it).
+      122    const scheduledPayoffs = current ? scheduledPayoffsForDate?.(current.date) ?? [] : [];
+      123    const scheduledSetAside = scheduledPayoffs.reduce((s, p) => s + p.suggested, 0);
+      124
+      125    const totalSetAside =
+      121 -    savingsDeposit + rows.reduce((sum, r) => sum + r.setAside, 0) + cardPaidThisDate + scheduledSetAsi
+          -de;
+      126 +    savingsDeposit +
+      127 +    rows.reduce((sum, r) => sum + r.setAside, 0) +
+      128 +    cardPaidThisDate +
+      129 +    groupPaidThisDate +
+      130 +    scheduledSetAside;
+      131    const leftOver = income - totalSetAside;
+      132
+      133    let running = income - savingsDeposit;
+
+● Now render the "Fixed expenses" section (before Scheduled expenses), and parametrize CardPayoffRow:
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 21 lines
+      300          </div>
+      301        )}
+      302
+      303 +      {/* Dated fixed expenses to set aside for this payday */}
+      304 +      {groupPayoffs.length > 0 && (
+      305 +        <div className="mt-4">
+      306 +          <h3 className="mb-2 text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.08em', c
+          +olor: 'var(--color-text-secondary)' }}>
+      307 +            Fixed expenses
+      308 +          </h3>
+      309 +          <div className="flex flex-col gap-2">
+      310 +            {groupPayoffs.map((p) => (
+      311 +              <CardPayoffRow
+      312 +                key={p.id}
+      313 +                payoff={p}
+      314 +                color={p.color ?? '#8b8aa8'}
+      315 +                remainingLabel="Left to set aside"
+      316 +                inputLabel="Setting aside this payday"
+      317 +                onPay={(amt) => current && onPayGroup?.(p.id, current.date, amt)}
+      318 +              />
+      319 +            ))}
+      320 +          </div>
+      321 +        </div>
+      322 +      )}
+      323 +
+      324        {/* Scheduled expenses to set aside for this payday */}
+      325        {scheduledPayoffs.length > 0 && (
+      326          <div className="mt-4">
+
+● Now parametrize CardPayoffRow to accept color and labels:
+
+● Update(web\src\components\budget\PaycheckList.tsx)
+  ⎿  Added 19 lines, removed 6 lines
+      375    );
+      376  }
+      377
+      378 -/** One card's payoff row on a pay day: balance left, suggested payment, and an
+      379 - *  editable "paying this payday" field with a one-tap "use suggested" button. */
+      380 -function CardPayoffRow({ payoff, onPay }: { payoff: CardPayoff; onPay: (n: number) => void }) {
+      378 +/** One payoff row on a pay day: amount left, suggested set-aside, and an editable
+      379 + *  field with a one-tap "use suggested" button. Shared by credit cards and dated
+      380 + *  fixed-cost groups (labels/color are parametrized). */
+      381 +function CardPayoffRow({
+      382 +  payoff,
+      383 +  onPay,
+      384 +  color = '#5c9eff',
+      385 +  remainingLabel = 'Balance left',
+      386 +  inputLabel = 'Paying this payday',
+      387 +}: {
+      388 +  payoff: CardPayoff;
+      389 +  onPay: (n: number) => void;
+      390 +  color?: string;
+      391 +  remainingLabel?: string;
+      392 +  inputLabel?: string;
+      393 +}) {
+      394    const [focused, setFocused] = useState(false);
+      395    const [text, setText] = useState('');
+      396    const paid = payoff.paid;
+     ...
+      403      <div className="rounded-2xl border p-4" style={{ background: 'var(--color-bg-elevated)', borderCol
+           or: 'var(--color-border)' }}>
+      404        <div className="mb-2 flex items-center justify-between gap-2">
+      405          <span className="flex min-w-0 items-center gap-2.5">
+      393 -          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: '#5c9eff' }} />
+      406 +          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
+      407            <span className="truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary
+           )' }}>
+      408              {payoff.name}
+      409            </span>
+     ...
+      413          </span>
+      414        </div>
+      415        <div className="mb-2 flex items-center justify-between text-sm">
+      403 -        <span style={{ color: 'var(--color-text-secondary)' }}>Balance left</span>
+      416 +        <span style={{ color: 'var(--color-text-secondary)' }}>{remainingLabel}</span>
+      417          <span className="tabular-nums" style={{ color: 'var(--color-text-primary)' }}>
+      418            {formatMoney(payoff.remaining)}
+      419          </span>
+     ...
+      421        <div className="flex items-end gap-2">
+      422          <label className="flex-1">
+      423            <span className="mb-1 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+      411 -            Paying this payday
+      424 +            {inputLabel}
+      425            </span>
+      426            <input
+      427              inputMode="decimal"
+
+● Now wire it into BudgetView — import the hook, add the payoff helper, split dated/undated groups, and thread the
+  props:
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 1 line
+      20  import { useSavingsDeposits } from '../../hooks/budget/useSavingsDeposits';
+      21  import { useCreditCards } from '../../hooks/budget/useCreditCards';
+      22  import { useCardPayments } from '../../hooks/budget/useCardPayments';
+      23 +import { useGroupPayments } from '../../hooks/budget/useGroupPayments';
+      24  import { useCardCharges } from '../../hooks/budget/useCardCharges';
+      25  import { useScheduledExpenses } from '../../hooks/budget/useScheduledExpenses';
+      26  import OverviewTable from './OverviewTable';
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 1 line
+      65    const deposits = useSavingsDeposits(userId, budgetId, monthBounds.start_date, account.startMonth);
+      66    const creditCards = useCreditCards(userId, budgetId);
+      67    const cardPayments = useCardPayments(userId);
+      68 +  const groupPayments = useGroupPayments(userId);
+      69    const cardCharges = useCardCharges(userId);
+      70    const scheduled = useScheduledExpenses(userId, budgetId);
+      71
+
+● Now add the group-payoff helper right before the paycheck branch, and split the groups:
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 20 lines, removed 1 line
+      137    const saveMonthly = (g: BudgetGroup, entered: number) =>
+      138      void allocations.setAmount(g.id, Math.max(0, fromView(entered, 'monthly')));
+      139
+      140 +  // A dated fixed cost (due_day set) is a per-month payoff tracker like a card:
+      141 +  // target = its net monthly amount, due on the charge day of the viewed month,
+      142 +  // paid down across that month's pay days via budget_group_payments.
+      143 +  const dueDateInMonth = (day: number, monthStartISO: string): string => {
+      144 +    const [y, m] = monthStartISO.split('-').map(Number);
+      145 +    const lastDay = new Date(y, m, 0).getDate();
+      146 +    const dd = Math.min(Math.max(1, day), lastDay);
+      147 +    return `${monthStartISO.slice(0, 7)}-${String(dd).padStart(2, '0')}`;
+      148 +  };
+      149 +  const groupPayoffFor = (g: BudgetGroup, payDate: string) => {
+      150 +    const net = savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net;
+      151 +    const dueDate = dueDateInMonth(g.due_day ?? 1, monthBounds.start_date);
+      152 +    const paidBefore = groupPayments.paidInRange(g.id, monthBounds.start_date, payDate);
+      153 +    const remaining = Math.max(0, net - paidBefore);
+      154 +    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, dueDate) : 0;
+      155 +    return { id: g.id, name: g.name, color: g.color, due_date: dueDate, remaining, suggested, paid: gr
+          +oupPayments.paymentOn(g.id, payDate) };
+      156 +  };
+      157 +  const isDated = (g: BudgetGroup) => g.due_day != null;
+      158 +
+      159    if (view === 'paycheck') {
+      160      return (
+      161        <PaycheckList
+      143 -        groups={recurringGroups.filter((g) => !isSavings(g))}
+      162 +        groups={recurringGroups.filter((g) => !isSavings(g) && !isDated(g))}
+      163          payDays={payDays}
+      164          monthLabel={monthBounds.label}
+      165          onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 7 lines
+      179            creditCards.cards.map((c) => cardPayoffFor(c, d)).filter((p) => p.remaining > 0 || (p.paid ?
+           ? 0) > 0)
+      180          }
+      181          onPayCard={(cardId, d, amt) => void cardPayments.setPayment(cardId, d, amt)}
+      182 +        groupPayoffsForDate={(d) =>
+      183 +          recurringGroups
+      184 +            .filter((g) => !isSavings(g) && isDated(g))
+      185 +            .map((g) => groupPayoffFor(g, d))
+      186 +            .filter((p) => p.remaining > 0 || (p.paid ?? 0) > 0)
+      187 +        }
+      188 +        onPayGroup={(groupId, d, amt) => void groupPayments.setPayment(groupId, d, amt)}
+      189        />
+      190      );
+      191    }
+
+● Now pass onSetDueDay to the OverviewTable:
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 1 line
+      247          onAddGroup={groupsApi.addGroup}
+      248          onRename={(id, name) => void groupsApi.updateGroup(id, { name })}
+      249          onDelete={groupsApi.deleteGroup}
+      250 +        onSetDueDay={(id, day) => void groupsApi.updateGroup(id, { due_day: day })}
+      251        />
+      252
+      253        <CreditCardSection
+
+● Type-check and build:
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity/web && npx tsc --noEmit 2>&1 | head -20; echo "TSC:
+      ${PIPESTATUS[0]}")
+  ⎿  TSC: 0
+  ⎿  Allowed by auto mode classifier
+
+● Bash(npm run build 2>&1 | tail -4)
+  ⎿  - Using dynamic import() to code-split the application
+     - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/
+     #output-manualchunks
+     … +2 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Build passes. Bump SW and commit:
+
+● Update(public\sw.js)
+  ⎿  Added 1 line, removed 1 line
+      16   *     controller to replace, so it activates immediately.
+      17   */
+      18
+      19 -const CACHE_VERSION = 'v8';
+      19 +const CACHE_VERSION = 'v9';
+      20  const CACHE_NAME = `slommy-hq-${CACHE_VERSION}`;
+      21
+      22  // The minimal shell needed to boot offline. Content-hashed JS/CSS are added to
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity && git add -A && git commit -q -m "$(cat <<'EOF'
+      Budget: fixed expenses can carry a charge day and pay down like a c…)
+  ⎿  warning: in the working copy of 'web/public/sw.js', LF will be replaced by CRLF the next time Git touches it
+     warning: in the working copy of 'web/src/components/budget/BudgetView.tsx', LF will be replaced by CRLF the ne
+     xt time Git touches it
+     … +14 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Both changes are pushed. Let me update the project memory with the new migration/feature.
+
+  Wrote 1 memory (ctrl+o to expand)
+
+● Both requests are done and pushed.
+
+  1. Paycheck view opens on the next paycheck (a50c645)
+
+  It now lands on the next upcoming pay day (first Thursday on/after today), badged "Next up" — so a quick check on the
+  go shows the paycheck that's actually coming, not the month's first.
+
+  2. Fixed expenses work exactly like the credit-card balance (715392c)
+
+  Give any Recurring Fixed Cost a charge day and it behaves like a card:
+
+  - In the Overview, each fixed-cost row has a small "+ charge day" control under its name — tap it and pick the day of
+  the month it's billed (15th, 25th, 31st, etc.). It shows as "Charged 25th."
+  - In the Paycheck view, a dated expense drops out of the flat even-split and shows in a "Fixed expenses" section
+  identical to credit cards: amount left, a suggested set-aside this payday (remaining ÷ pay days until the charge day),
+  and an editable field with a "use suggested" button so you can put more toward it whenever you want. What you set
+  aside is tracked per pay day and counts toward that paycheck's total.
+  - It resets every month (each month re-bills the monthly amount, due on that month's charge day), and savings you've
+  earmarked toward the group reduce the target.
+  - Fixed costs without a charge day keep splitting evenly across paychecks as before.
+
+  Under the hood: migration 045 (budget_groups.due_day + a budget_group_payments ledger, applied to remote), a new
+  useGroupPayments hook mirroring the card one, and the payoff row is now shared between cards and fixed expenses.
+
+  Verified: tsc clean, build passes, migration applied, SW bumped to v9, both commits pushed. Hard-refresh / accept the
+  Refresh prompt on the phone to pick it up.
+
+  One thing to confirm once you try it: I set a dated fixed expense's suggested pace to remaining ÷ pay days left until
+  the charge day (same formula as cards). If the bill is due the 1st, that means you'd be setting it aside across the
+  same month's paychecks that come before the 1st — which for an early-month due date is very few paychecks. If instead
+  you'd want to save up over the prior weeks (a true sinking fund that funds next month's 1st), tell me and I'll shift
+  the window back.
+
+✻ Baked for 7m 13s
+
+※ recap: Improving the budget app's Paycheck view: the current task—letting fixed expenses carry a charge day and pay
+  down like credit cards—is built and pushed. Next, confirm the suggested set-aside window works for you, especially for
+  early-month due dates. (disable recaps in /config)
+
+❯ if something is set to charge on the 25th it needs to be counting from the last 25th to the next 25th and same for
+  anything else.
+
+● Right — a bill on the 25th should fund over its own rolling cycle (last 25th → next 25th), not reset on the 1st of the
+  calendar month. Let me fix the payoff window to be anchored on the charge day.
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 21 lines, removed 12 lines
+      137    const saveMonthly = (g: BudgetGroup, entered: number) =>
+      138      void allocations.setAmount(g.id, Math.max(0, fromView(entered, 'monthly')));
+      139
+      140 -  // A dated fixed cost (due_day set) is a per-month payoff tracker like a card:
+      141 -  // target = its net monthly amount, due on the charge day of the viewed month,
+      142 -  // paid down across that month's pay days via budget_group_payments.
+      143 -  const dueDateInMonth = (day: number, monthStartISO: string): string => {
+      144 -    const [y, m] = monthStartISO.split('-').map(Number);
+      145 -    const lastDay = new Date(y, m, 0).getDate();
+      146 -    const dd = Math.min(Math.max(1, day), lastDay);
+      147 -    return `${monthStartISO.slice(0, 7)}-${String(dd).padStart(2, '0')}`;
+      140 +  // A dated fixed cost (due_day set) is a payoff tracker like a card, but its
+      141 +  // funding cycle is anchored on the charge DAY, not the calendar month: a bill
+      142 +  // on the 25th funds from the last 25th to the next 25th. For a given pay day we
+      143 +  // find the next charge day on/after it, count set-asides back to the previous
+      144 +  // charge day, and spread what's left across the pay days until the next charge.
+      145 +  const chargeDateOn = (day: number, year: number, monthIndex0: number): Date => {
+      146 +    const lastDay = new Date(year, monthIndex0 + 1, 0).getDate();
+      147 +    return new Date(year, monthIndex0, Math.min(Math.max(1, day), lastDay));
+      148    };
+      149 +  const nextChargeOnOrAfter = (day: number, fromISO: string): Date => {
+      150 +    const [y, m, d] = fromISO.split('-').map(Number);
+      151 +    const from = new Date(y, m - 1, d);
+      152 +    const thisMonth = chargeDateOn(day, y, m - 1);
+      153 +    return thisMonth < from ? chargeDateOn(day, y, m) : thisMonth; // roll to next month if past
+      154 +  };
+      155    const groupPayoffFor = (g: BudgetGroup, payDate: string) => {
+      156      const net = savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net;
+      151 -    const dueDate = dueDateInMonth(g.due_day ?? 1, monthBounds.start_date);
+      152 -    const paidBefore = groupPayments.paidInRange(g.id, monthBounds.start_date, payDate);
+      157 +    const day = g.due_day ?? 1;
+      158 +    const next = nextChargeOnOrAfter(day, payDate);
+      159 +    const prev = chargeDateOn(day, next.getFullYear(), next.getMonth() - 1); // one cycle back
+      160 +    const nextISO = toISODate(next);
+      161 +    const paidBefore = groupPayments.paidInRange(g.id, toISODate(prev), payDate); // this cycle, befor
+          +e today
+      162      const remaining = Math.max(0, net - paidBefore);
+      154 -    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, dueDate) : 0;
+      155 -    return { id: g.id, name: g.name, color: g.color, due_date: dueDate, remaining, suggested, paid: gr
+          -oupPayments.paymentOn(g.id, payDate) };
+      163 +    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, nextISO) : 0;
+      164 +    return { id: g.id, name: g.name, color: g.color, due_date: nextISO, remaining, suggested, paid: gr
+          +oupPayments.paymentOn(g.id, payDate) };
+      165    };
+      166    const isDated = (g: BudgetGroup) => g.due_day != null;
+      167
+
+● Now add toISODate to the imports:
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 1 line
+       6    periodForCursor,
+       7    savingsOffset,
+       8    shiftCursor,
+       9 +  toISODate,
+      10    toView,
+      11    type BudgetGroup,
+      12    type CreditCard,
+
+● Type-check and build:
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity/web && npx tsc --noEmit 2>&1 | head -15; echo "TSC: ${PIPESTATUS[0]}"
+      && npm run build 2>&1 | tail -3)
+  ⎿  TSC: 0
+     - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/
+     #output-manualchunks
+     … +2 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Update(public\sw.js)
+  ⎿  Added 1 line, removed 1 line
+      16   *     controller to replace, so it activates immediately.
+      17   */
+      18
+      19 -const CACHE_VERSION = 'v9';
+      19 +const CACHE_VERSION = 'v10';
+      20  const CACHE_NAME = `slommy-hq-${CACHE_VERSION}`;
+      21
+      22  // The minimal shell needed to boot offline. Content-hashed JS/CSS are added to
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity && git add -A && git commit -q -m "$(cat <<'EOF'
+      Budget: dated fixed-cost funding cycle anchors on the charge day, n…)
+  ⎿  warning: in the working copy of 'web/public/sw.js', LF will be replaced by CRLF the next time Git touches it
+     warning: in the working copy of 'web/src/components/budget/BudgetView.tsx', LF will be replaced by CRLF the ne
+     xt time Git touches it
+     … +2 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Pushed (35b1503). Let me correct the memory note about the cycle.
+
+  Wrote 1 memory (ctrl+o to expand)
+
+● Fixed and pushed (35b1503).
+
+  Dated fixed expenses now fund over a rolling cycle anchored on the charge day, not the calendar month. For a bill on
+  the 25th:
+
+  - On any pay day, it finds the next 25th (this month's if you're on/before it, next month's if you're past it), sums
+  what you've already set aside back to the previous 25th, and spreads the remainder across the pay days between now and
+  that next 25th.
+  - So late-July paychecks correctly fund the Aug 25th bill, and it no longer resets on the 1st.
+  - The day is clamped to the month's length, so a bill on the 31st falls on the last day in short months (Feb →
+  28th/29th), and the same rolling logic applies to any charge day.
+
+  Verified: tsc clean, build passes, SW bumped to v10, pushed. Hard-refresh / take the Refresh prompt to pick it up.
+
+✻ Cogitated for 2m 19s
+
+※ recap: Improving the budget app's paycheck and expense tracking. Just finished making dated fixed expenses fund over a
+  rolling cycle anchored on their charge day (e.g. 25th to 25th); it's built, tested, and pushed. Next: you verify it
+  on your phone. (disable recaps in /config)
+
+❯ add a calendar view so i can visualize better
+
+● A calendar view makes sense — you've got pay days, fixed-expense charge days, scheduled expenses, and card due dates
+  all on specific dates. Let me look at how the view toggle is set up.
+
+  Read 1 file (ctrl+o to expand)
+
+● I'll add a Calendar view as a third tab that plots pay days, fixed-expense charge days, scheduled expenses, and card
+  due dates across the month, with an agenda list. Let me register the view first.
+
+● Update(web\src\components\budget\BudgetTab.tsx)
+  ⎿  Added 1 line
+       9  const VIEWS: { id: BudgetViewMode; label: string }[] = [
+      10    { id: 'overview', label: 'Overview' },
+      11    { id: 'paycheck', label: 'Paycheck' },
+      12 +  { id: 'calendar', label: 'Calendar' },
+      13  ];
+       5
+       6 export interface CalEvent {
+       7   /** YYYY-MM-DD the event lands on. */
+       8   date: string;
+       9   kind: CalEventKind;
+      10   label: string;
+     … +267 lines (ctrl+o to expand)
+
+● Now wire it into BudgetView — add the mode, import, and the branch that builds the events:
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 2 lines, removed 1 line
+      29  import CreditCardSection from './CreditCardSection';
+      30  import ScheduledExpensesSection from './ScheduledExpensesSection';
+      31  import SavingsPoolSection from './SavingsPoolSection';
+      32 +import BudgetCalendar, { type CalEvent } from './BudgetCalendar';
+      33
+      33 -export type BudgetViewMode = 'overview' | 'paycheck';
+      34 +export type BudgetViewMode = 'overview' | 'paycheck' | 'calendar';
+      35
+      36  /**
+      37   * Shared data layer for the two budget views (Round 2 model).
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(web\src\components\budget\BudgetView.tsx)
+  ⎿  Added 41 lines
+      201      );
+      202    }
+      203
+      204 +  if (view === 'calendar') {
+      205 +    const ym = monthBounds.start_date.slice(0, 7);
+      206 +    const [cy, cm] = monthBounds.start_date.split('-').map(Number);
+      207 +    const events: CalEvent[] = [];
+      208 +
+      209 +    // Pay days (income) in this calendar month.
+      210 +    for (const p of payDays) {
+      211 +      if (p.date.slice(0, 7) !== ym || !(p.income > 0)) continue;
+      212 +      events.push({ date: p.date, kind: 'pay', label: 'Paycheck', amount: p.income, color: 'var(--colo
+          +r-success)' });
+      213 +    }
+      214 +    // Fixed costs with a charge day (net of savings).
+      215 +    for (const g of recurringGroups) {
+      216 +      if (isSavings(g) || g.due_day == null) continue;
+      217 +      const net = savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net;
+      218 +      if (!(net > 0)) continue;
+      219 +      events.push({ date: toISODate(chargeDateOn(g.due_day, cy, cm - 1)), kind: 'fixed', label: g.name
+          +, amount: net, color: g.color });
+      220 +    }
+      221 +    // Scheduled one-off expenses dated to this month.
+      222 +    for (const e of scheduled.expenses) {
+      223 +      if (!e.due_date || e.due_date.slice(0, 7) !== ym) continue;
+      224 +      events.push({ date: e.due_date, kind: 'scheduled', label: e.name, amount: Number(e.amount) || 0,
+          + color: '#f0a04b' });
+      225 +    }
+      226 +    // Credit-card due dates in this month (remaining owed).
+      227 +    for (const c of creditCards.cards) {
+      228 +      if (!c.due_date || c.due_date.slice(0, 7) !== ym) continue;
+      229 +      const remaining = cardRemaining(c);
+      230 +      if (!(remaining > 0)) continue;
+      231 +      events.push({ date: c.due_date, kind: 'card', label: c.name, amount: remaining, color: '#5c9eff'
+          + });
+      232 +    }
+      233 +
+      234 +    return (
+      235 +      <BudgetCalendar
+      236 +        monthStart={monthBounds.start_date}
+      237 +        monthLabel={monthBounds.label}
+      238 +        onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
+      239 +        onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
+      240 +        events={events}
+      241 +      />
+      242 +    );
+      243 +  }
+      244 +
+      245    // --- summary --------------------------------------------------------------
+      246    const recurringNetMonthly = recurringGroups.reduce(
+      247      (s, g) => s + savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net,
+
+● Type-check and build:
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity/web && npx tsc --noEmit 2>&1 | head -20; echo "TSC:
+      ${PIPESTATUS[0]}")
+  ⎿  TSC: 0
+  ⎿  Allowed by auto mode classifier
+
+● Bash(npm run build 2>&1 | tail -4)
+  ⎿  - Using dynamic import() to code-split the application
+     - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/
+     #output-manualchunks
+     … +2 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Build passes. Bump SW and commit:
+
+● Update(public\sw.js)
+  ⎿  Added 1 line, removed 1 line
+      16   *     controller to replace, so it activates immediately.
+      17   */
+      18
+      19 -const CACHE_VERSION = 'v10';
+      19 +const CACHE_VERSION = 'v11';
+      20  const CACHE_NAME = `slommy-hq-${CACHE_VERSION}`;
+      21
+      22  // The minimal shell needed to boot offline. Content-hashed JS/CSS are added to
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity && git add -A && git commit -q -m "$(cat <<'EOF'
+      Budget: add a Calendar view…)
+  ⎿  warning: in the working copy of 'web/public/sw.js', LF will be replaced by CRLF the next time Git touches it
+     warning: in the working copy of 'web/src/components/budget/BudgetTab.tsx', LF will be replaced by CRLF the nex
+     t time Git touches it
+     … +6 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Pushed (2d19c12). Let me note the new view in memory.
+
+  Wrote 1 memory (ctrl+o to expand)
+
+● Added a Calendar view (2d19c12) — now a third tab alongside Overview and Paycheck.
+
+  It plots the whole month on a grid, with everything dated shown as colored markers on each day:
+  - 🟢 Paychecks (pay days with income)
+  - ⚪ Fixed costs on their charge day (net of savings)
+  - 🟠 Scheduled one-off expenses on their date
+  - 🔵 Credit-card due dates (amount owed)
+
+  Plus:
+  - A coming-in / going-out summary for the month at the top.
+  - Today is highlighted, and month arrows navigate like the other views.
+  - A legend and a tappable agenda below — tap any day to focus just its events (with amounts), tap "All month" to see
+  the whole month's list chronologically.
+
+  Verified: tsc clean, build passes, SW bumped to v11, pushed. Hard-refresh / accept the Refresh prompt on the phone to
+  see the new tab.
+
+  One thing you'll notice: fixed costs appear on the calendar under their calendar-month charge date (e.g. the 25th of
+  the month you're viewing), which is the intuitive "this is when it hits" placement — distinct from the Paycheck view's
+  rolling last-25th→next-25th funding cycle. If you'd rather the calendar also reflect the funding window somehow, let
+  me know, but I think showing the actual charge date is what "visualize better" calls for.
+
+✻ Churned for 4m 0s
+
+※ recap: We're building out the Budget tab's features; I just added a Calendar view plotting pay days, fixed costs,
+  scheduled expenses, and card due dates, and pushed it. Next: you test it and tell me what to adjust.
+
+❯ make me another tab with a simplified version of this. It sums up my savings account, displays everything on a
+  calendar view, lets me set payment dates, shows the running total of amounts of money i add to my savigns (put away)
+  and amounts of money getrting taken out of the savings (payments)
+
+● A standalone Savings tab makes sense. Let me first understand how top-level tabs/navigation work in the app.
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity/web && ls src/ && echo "=== App/nav ===" && ls src/components/ | head
+      -40)
+  ⎿  App.tsx
+     components
+     context
+     … +38 lines (ctrl+o to expand)
+
+  Read 2 files (ctrl+o to expand)
+
+● Let me check where the budget design tokens are scoped so the new tab can reuse them.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Now I'll build the standalone Savings tab. Migration first:
+
+● Write(~\Desktop\ToDo_Productivity\supabase\migrations\046_savings_ledger.sql)
+  ⎿  Wrote 34 lines to ..\supabase\migrations\046_savings_ledger.sql
+       1 -- ============================================================================
+       2 -- 046_savings_ledger.sql — a simple standalone savings tracker (its own top-level
+       3 -- tab, independent of the Budget tab's savings accounting).
+       4 --
+       5 -- Each row is one dated movement of money: kind 'in' = money put away (deposit),
+       6 -- kind 'out' = money taken out (a payment). The running balance = Σ in − Σ out.
+       7 -- Idempotent — safe to re-run.
+       8 -- ============================================================================
+       9
+      10 create table if not exists public.savings_ledger (
+     … +24 lines (ctrl+o to expand)
+
+● Bash(./web/node_modules/.bin/supabase db push 2>&1 | tail -6)
+  ⎿  /usr/bin/bash: line 1: ./web/node_modules/.bin/supabase: No such file or directory
+  ⎿  Allowed by auto mode classifier
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity && ./web/node_modules/.bin/supabase db push 2>&1 | tail -6)
+  ⎿   [Y/n]
+     Applying migration 046_savings_ledger.sql...
+     NOTICE (00000): policy "savings_ledger_all_own" for relation "public.savings_ledger" does not exist, skipping
+     … +4 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Now the ledger hook:
+
+● Write(web\src\hooks\useSavingsLedger.ts)
+  ⎿  Wrote 148 lines to web\src\hooks\useSavingsLedger.ts
+       1 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+       2 import { supabase } from '../lib/supabase';
+       3
+       4 export type LedgerKind = 'in' | 'out';
+       5
+       6 export interface LedgerEntry {
+       7   id: string;
+       8   user_id: string;
+       9   entry_date: string; // YYYY-MM-DD
+       1 import { useMemo, useState } from 'react';
+       2 import { formatMoney, parseMoney, toISODate } from '../../types/budget';
+       3 import { useSavingsLedger, type LedgerKind } from '../../hooks/useSavingsLedger';
+       4
+       5 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+       6 const IN_COLOR = 'var(--color-success)';
+       7 const OUT_COLOR = '#5c9eff';
+       8 const pad = (n: number) => String(n).padStart(2, '0');
+       9
+      10 function dayLabel(iso: string): string {
+     … +405 lines (ctrl+o to expand)
+
+● Now wire it into the sidebar and App. Add the tab type + nav button:
+
+● Update(web\src\components\Sidebar.tsx)
+  ⎿  Added 1 line, removed 1 line
+      1 -export type Tab = 'todo' | 'voice' | 'workout' | 'budget' | 'productivity' | 'notes' | 'settings';
+      1 +export type Tab = 'todo' | 'voice' | 'workout' | 'budget' | 'savings' | 'productivity' | 'notes' | 'sett
+        +ings';
+      2
+      3  interface Props {
+      4    active: Tab;
+
+● Update(web\src\components\Sidebar.tsx)
+  ⎿  Added 7 lines
+      103          </svg>
+      104        </NavButton>
+      105
+      106 +      <NavButton active={active === 'savings'} label="Savings" onClick={() => select('savings')}>
+      107 +        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth=
+          +"2" strokeLinecap="round" strokeLinejoin="round">
+      108 +          <path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1
+          +.4-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z" />
+      109 +          <path d="M2 9v1c0 1.1.9 2 2 2h1M16 11h0" />
+      110 +        </svg>
+      111 +      </NavButton>
+      112 +
+      113        <NavButton
+      114          active={active === 'productivity'}
+      115          label="Focus"
+
+● Update(web\src\App.tsx)
+  ⎿  Added 1 line
+      18  import VoiceController from './components/voice/VoiceController';
+      19  import WorkoutTab from './components/workout/WorkoutTab';
+      20  import BudgetTab from './components/budget/BudgetTab';
+      21 +import SavingsTab from './components/savings/SavingsTab';
+      22  import ProductivityView from './components/ProductivityView';
+      23  import NotesTab from './components/notes/NotesTab';
+      24  import SettingsView from './components/SettingsView';
+
+● Update(web\src\App.tsx)
+  ⎿  Added 1 line
+      130              {tab === 'voice' && <VoiceTab />}
+      131              {tab === 'workout' && <WorkoutTab userId={userId} showRpe={workoutPrefs.showRpe} />}
+      132              {tab === 'budget' && <BudgetTab userId={userId} />}
+      133 +            {tab === 'savings' && <SavingsTab userId={userId} />}
+      134              {tab === 'productivity' && <ProductivityView userId={userId} />}
+      135              {tab === 'notes' && <NotesTab userId={userId} />}
+      136              {tab === 'settings' && (
+
+● Type-check and build:
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity/web && npx tsc --noEmit 2>&1 | head -20; echo "TSC:
+      ${PIPESTATUS[0]}")
+  ⎿  TSC: 0
+  ⎿  Allowed by auto mode classifier
+
+● Bash(npm run build 2>&1 | tail -4)
+  ⎿  - Using dynamic import() to code-split the application
+     - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/
+     #output-manualchunks
+     … +2 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Build passes. Bump SW and commit:
+
+● Update(public\sw.js)
+  ⎿  Added 1 line, removed 1 line
+      16   *     controller to replace, so it activates immediately.
+      17   */
+      18
+      19 -const CACHE_VERSION = 'v11';
+      19 +const CACHE_VERSION = 'v12';
+      20  const CACHE_NAME = `slommy-hq-${CACHE_VERSION}`;
+      21
+      22  // The minimal shell needed to boot offline. Content-hashed JS/CSS are added to
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity && git add -A && git commit -q -m "$(cat <<'EOF'
+      Add a standalone Savings tab (simplified savings tracker)…)
+  ⎿  warning: in the working copy of 'web/public/sw.js', LF will be replaced by CRLF the next time Git touches it
+     warning: in the working copy of 'web/src/App.tsx', LF will be replaced by CRLF the next time Git touches it
+     warning: in the working copy of 'web/src/components/Sidebar.tsx', LF will be replaced by CRLF the next time Gi
+     … +9 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Pushed (8d53216). Let me record the new tab in memory.
+
+  Wrote 2 memories (ctrl+o to expand)
+
+● Added a standalone Savings tab (8d53216) — a simplified savings tracker separate from the Budget tab.
+
+  What it does:
+  - Running balance up top — the sum of everything you've put away minus everything you've taken out.
+  - All-time totals: "Put away" (money in, green) and "Taken out" (payments, blue).
+  - Calendar view of the month — each dated movement shows as a colored dot (green = put away, blue = payment), today
+  highlighted. Tap any day to focus just its entries.
+  - Set payment dates: the add form lets you pick In (put away) or Out (payment), an amount, a date, and an optional
+  note.
+  - Agenda below the calendar lists each entry with the running balance after it, so you can see the total climb and
+  drop over time. Delete any entry with a tap (with confirm).
+  - Bottom-of-legend shows this month's +in · −out at a glance.
+
+  Under the hood: migration 046 (savings_ledger table — entry_date, kind in/out, amount, note; applied to remote), a
+  useSavingsLedger hook (totals + per-entry running balance, realtime), and a new Savings nav item in the sidebar. It
+  reuses the Budget tab's design tokens so it matches the rest of the app in light/dark.
+
+  Verified: tsc clean, build passes, migration applied, SW bumped to v12, pushed. Hard-refresh / accept the Refresh
+  prompt to see the new Savings tab in the sidebar.
+
+  It's fully independent from the Budget tab's savings account (this is a clean, simple ledger of its own). If you'd
+  instead want it to pull from or sync with the budget's savings numbers, tell me and I can connect them.
+
+✻ Cooked for 4m 39s
+
+❯ i have no way to remove things if i added them to my savings
+
+● You're right — the delete affordance was a tiny X that relied on a native confirm dialog (which can silently fail in
+  an installed PWA). Let me make removal obvious and reliable with an inline confirm.
+
+● Update(web\src\components\savings\SavingsTab.tsx)
+  ⎿  Added 7 lines, removed 34 lines
+      236                  </span>
+      237                  <div className="flex flex-col gap-2">
+      238                    {(byDay.get(date) ?? []).map((e) => (
+      239 -                    <div
+      239 +                    <AgendaRow
+      240                        key={e.id}
+      241 -                      className="flex items-center gap-3 rounded-xl border px-3 py-2.5"
+      242 -                      style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-borde
+          -r)' }}
+      243 -                    >
+      244 -                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: e.kind
+          -=== 'in' ? IN_COLOR : OUT_COLOR }} />
+      245 -                      <span className="flex min-w-0 flex-1 flex-col">
+      246 -                        <span className="truncate text-[15px] font-medium" style={{ color: 'var(--colo
+          -r-text-primary)' }}>
+      247 -                          {e.note || (e.kind === 'in' ? 'Put away' : 'Payment')}
+      248 -                        </span>
+      249 -                        <span className="text-[11px] tabular-nums" style={{ color: 'var(--color-text-t
+          -ertiary)' }}>
+      250 -                          Balance {formatMoney(ledger.runningBalance[e.id] ?? 0)}
+      251 -                        </span>
+      252 -                      </span>
+      253 -                      <span
+      254 -                        className="shrink-0 text-[15px] font-semibold tabular-nums"
+      255 -                        style={{ color: e.kind === 'in' ? IN_COLOR : OUT_COLOR, letterSpacing: '-0.02e
+          -m' }}
+      256 -                      >
+      257 -                        {e.kind === 'in' ? '+' : '−'}
+      258 -                        {formatMoney(Number(e.amount) || 0)}
+      259 -                      </span>
+      260 -                      <button
+      261 -                        type="button"
+      262 -                        aria-label="Delete entry"
+      263 -                        onClick={() => {
+      264 -                          if (window.confirm('Delete this entry?')) void ledger.deleteEntry(e.id);
+      265 -                        }}
+      266 -                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg active:opacity-
+          -70"
+      267 -                        style={{ color: 'var(--color-text-tertiary)' }}
+      268 -                      >
+      269 -                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentCol
+          -or" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      270 -                          <path d="M18 6 6 18M6 6l12 12" />
+      271 -                        </svg>
+      272 -                      </button>
+      273 -                    </div>
+      241 +                      note={e.note || (e.kind === 'in' ? 'Put away' : 'Payment')}
+      242 +                      amount={Number(e.amount) || 0}
+      243 +                      kind={e.kind}
+      244 +                      balance={ledger.runningBalance[e.id] ?? 0}
+      245 +                      onDelete={() => void ledger.deleteEntry(e.id)}
+      246 +                    />
+      247                    ))}
+      248                  </div>
+      249                </div>
+
+❯ allow me to have a starting balance of the savigns as well
+
+● Now the starting balance. Let me add its migration, thread it through the hook, and add the AgendaRow +
+  starting-balance UI. Migration first:
+
+● Write(supabase\migrations\047_savings_starting_balance.sql)
+  ⎿  Wrote 26 lines to supabase\migrations\047_savings_starting_balance.sql
+       1 -- ============================================================================
+       2 -- 047_savings_starting_balance.sql — a starting balance for the standalone
+       3 -- Savings tab, so the running balance builds on money you already had saved.
+       4 --
+       5 -- One row per user. Current balance = starting_balance + Σ(in) − Σ(out) from
+       6 -- savings_ledger. Idempotent — safe to re-run.
+       7 -- ============================================================================
+       8
+       9 create table if not exists public.savings_settings (
+      10   user_id          uuid primary key references auth.users (id) on delete cascade,
+     … +16 lines (ctrl+o to expand)
+
+● Bash(./web/node_modules/.bin/supabase db push 2>&1 | tail -6)
+  ⎿   [Y/n]
+     Applying migration 047_savings_starting_balance.sql...
+     NOTICE (00000): policy "savings_settings_all_own" for relation "public.savings_settings" does not exist, skipp
+     … +5 lines (ctrl+o to expand)
+  ⎿  Allowed by auto mode classifier
+
+● Now thread starting balance through the hook:
+
+● Update(web\src\hooks\useSavingsLedger.ts)
+  ⎿  Added 1 line
+      26   */
+      27  export function useSavingsLedger(userId: string | null) {
+      28    const [entries, setEntries] = useState<LedgerEntry[]>([]);
+      29 +  const [startingBalance, setStartingBalanceState] = useState(0);
+      30    const [loading, setLoading] = useState(true);
+      31    const ref = useRef<LedgerEntry[]>([]);
+      32    ref.current = entries;
+
+● Update(web\src\hooks\useSavingsLedger.ts)
+  ⎿  Added 29 lines
+      53        }
+      54        setEntries(((data as LedgerEntry[]) ?? []).sort(byWhen));
+      55        setLoading(false);
+      56 +
+      57 +      const { data: settings } = await supabase
+      58 +        .from('savings_settings')
+      59 +        .select('starting_balance')
+      60 +        .eq('user_id', userId)
+      61 +        .maybeSingle();
+      62 +      if (cancelled) return;
+      63 +      setStartingBalanceState(Number((settings as { starting_balance: number } | null)?.starting_balanc
+         +e) || 0);
+      64      })();
+      65      return () => {
+      66        cancelled = true;
+     ...
+       87            });
+       88          }
+       89        )
+       90 +      .on(
+       91 +        'postgres_changes',
+       92 +        { event: '*', schema: 'public', table: 'savings_settings', filter: `user_id=eq.${userId}` },
+       93 +        (payload) => {
+       94 +          if (payload.eventType === 'DELETE') return;
+       95 +          setStartingBalanceState(Number((payload.new as { starting_balance: number }).starting_balanc
+          +e) || 0);
+       96 +        }
+       97 +      )
+       98        .subscribe();
+       99      return () => {
+      100        supabase.removeChannel(channel);
+      101      };
+      102    }, [userId]);
+      103
+      104 +  const setStartingBalance = useCallback(
+      105 +    async (n: number) => {
+      106 +      if (!userId) return;
+      107 +      const value = Math.max(0, n);
+      108 +      setStartingBalanceState(value);
+      109 +      const { error } = await supabase
+      110 +        .from('savings_settings')
+      111 +        .upsert({ user_id: userId, starting_balance: value, updated_at: new Date().toISOString() }, {
+          +onConflict: 'user_id' });
+      112 +      if (error) console.error('setStartingBalance failed:', error.message);
+      113 +    },
+      114 +    [userId]
+      115 +  );
+      116 +
+      117    const addEntry = useCallback(
+      118      async (kind: LedgerKind, amount: number, entryDate: string, note: string) => {
+      119        if (!userId) return;
+
+● Now include the starting balance in the running totals and return it:
+
+● Update(web\src\hooks\useSavingsLedger.ts)
+  ⎿  Added 5 lines, removed 3 lines
+      148      let tin = 0;
+      149      let tout = 0;
+      150      const running: Record<string, number> = {};
+      151 -    let bal = 0;
+      151 +    let bal = startingBalance; // the running balance builds on the starting balance
+      152      for (const e of entries) {
+      153        const amt = Number(e.amount) || 0;
+      154        if (e.kind === 'in') {
+     ...
+      161        running[e.id] = bal;
+      162      }
+      163      return { totalIn: tin, totalOut: tout, runningBalance: running };
+      164 -  }, [entries]);
+      164 +  }, [entries, startingBalance]);
+      165
+      166    return {
+      167      entries,
+      168      loading,
+      169      addEntry,
+      170      deleteEntry,
+      171 +    startingBalance,
+      172 +    setStartingBalance,
+      173      totalIn,
+      174      totalOut,
+      173 -    balance: totalIn - totalOut,
+      175 +    balance: startingBalance + totalIn - totalOut,
+      176      runningBalance,
+      177    };
+      178  }
+
+● Now add the AgendaRow + StartingBalanceInput components and the starting-balance UI in SavingsTab:
+
+● Update(web\src\components\savings\SavingsTab.tsx)
+  ⎿  Added 6 lines
+      75            <span className="text-3xl font-bold tabular-nums" style={{ color: ledger.balance >= 0 ? 'var(
+          --color-text-primary)' : 'var(--color-danger)', letterSpacing: '-0.03em' }}>
+      76              {formatMoney(ledger.balance)}
+      77            </span>
+      78 +          <div className="mt-4 flex items-center justify-between border-t pt-3" style={{ borderColor: '
+         +var(--color-border)' }}>
+      79 +            <span className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+      80 +              Starting balance
+      81 +            </span>
+      82 +            <StartingBalanceInput value={ledger.startingBalance} onSave={ledger.setStartingBalance} />
+      83 +          </div>
+      84          </div>
+      85
+      86          {/* Totals */}
+
+● Now append the two new components at the end of the file:
+
+● Update(web\src\components\savings\SavingsTab.tsx)
+  ⎿  Added 101 lines
+      357      </div>
+      358    );
+      359  }
+      360 +
+      361 +/** One agenda entry with an inline (no native dialog) remove confirm — reliable
+      362 + *  inside an installed PWA where window.confirm can be suppressed. */
+      363 +function AgendaRow({
+      364 +  note,
+      365 +  amount,
+      366 +  kind,
+      367 +  balance,
+      368 +  onDelete,
+      369 +}: {
+      370 +  note: string;
+      371 +  amount: number;
+      372 +  kind: LedgerKind;
+      373 +  balance: number;
+      374 +  onDelete: () => void;
+      375 +}) {
+      376 +  const [confirming, setConfirming] = useState(false);
+      377 +  const color = kind === 'in' ? IN_COLOR : OUT_COLOR;
+      378 +  return (
+      379 +    <div className="flex items-center gap-3 rounded-xl border px-3 py-2.5" style={{ background: 'var(-
+          +-color-bg-elevated)', borderColor: 'var(--color-border)' }}>
+      380 +      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
+      381 +      <span className="flex min-w-0 flex-1 flex-col">
+      382 +        <span className="truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)'
+          + }}>
+      383 +          {note}
+      384 +        </span>
+      385 +        <span className="text-[11px] tabular-nums" style={{ color: 'var(--color-text-tertiary)' }}>
+      386 +          Balance {formatMoney(balance)}
+      387 +        </span>
+      388 +      </span>
+      389 +      {confirming ? (
+      390 +        <span className="flex shrink-0 items-center gap-2">
+      391 +          <button
+      392 +            type="button"
+      393 +            onClick={() => setConfirming(false)}
+      394 +            className="rounded-lg border px-2.5 py-1.5 text-[13px] font-semibold active:opacity-70"
+      395 +            style={{ borderColor: 'var(--color-border-strong)', color: 'var(--color-text-secondary)' }
+          +}
+      396 +          >
+      397 +            Cancel
+      398 +          </button>
+      399 +          <button
+      400 +            type="button"
+      401 +            onClick={onDelete}
+      402 +            className="rounded-lg px-2.5 py-1.5 text-[13px] font-semibold active:opacity-70"
+      403 +            style={{ background: 'var(--color-danger)', color: '#fff' }}
+      404 +          >
+      405 +            Remove
+      406 +          </button>
+      407 +        </span>
+      408 +      ) : (
+      409 +        <>
+      410 +          <span className="shrink-0 text-[15px] font-semibold tabular-nums" style={{ color, letterSpac
+          +ing: '-0.02em' }}>
+      411 +            {kind === 'in' ? '+' : '−'}
+      412 +            {formatMoney(amount)}
+      413 +          </span>
+      414 +          <button
+      415 +            type="button"
+      416 +            aria-label="Remove entry"
+      417 +            onClick={() => setConfirming(true)}
+      418 +            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border active:opacity-70"
+      419 +            style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}
+      420 +          >
+      421 +            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWi
+          +dth="2" strokeLinecap="round" strokeLinejoin="round">
+      422 +              <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-
+          +2-2V6" />
+      423 +              <path d="M10 11v6M14 11v6" />
+      424 +            </svg>
+      425 +          </button>
+      426 +        </>
+      427 +      )}
+      428 +    </div>
+      429 +  );
+      430 +}
+      431 +
+      432 +/** Compact money input for the starting balance (raw while focused). */
+      433 +function StartingBalanceInput({ value, onSave }: { value: number; onSave: (n: number) => void }) {
+      434 +  const [focused, setFocused] = useState(false);
+      435 +  const [text, setText] = useState('');
+      436 +  const display = focused ? text : value ? formatMoney(value) : '';
+      437 +  return (
+      438 +    <input
+      439 +      inputMode="decimal"
+      440 +      placeholder="$0"
+      441 +      value={display}
+      442 +      onFocus={(e) => {
+      443 +        setFocused(true);
+      444 +        setText(value ? String(value) : '');
+      445 +        requestAnimationFrame(() => e.target.select());
+      446 +      }}
+      447 +      onChange={(e) => setText(e.target.value)}
+      448 +      onBlur={() => {
+      449 +        setFocused(false);
+      450 +        const n = parseMoney(text);
+      451 +        if (n !== value) onSave(n);
+      452 +      }}
+      453 +      onKeyDown={(e) => {
+      454 +        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+      455 +      }}
+      456 +      className="w-32 rounded-lg border px-3 text-right text-[15px] font-semibold tabular-nums outline
+          +-none"
+      457 +      style={{ height: '40px', background: 'var(--color-bg-surface)', borderColor: focused ? 'var(--co
+          +lor-accent-muted)' : 'var(--color-border)', color: 'var(--color-text-primary)' }}
+      458 +    />
+      459 +  );
+      460 +}
+
+● Type-check and build:
+
+● Bash(cd /c/Users/brand/Desktop/ToDo_Productivity/web && npx tsc --noEmit 2>&1 | head -20; echo "TSC: ${PIPESTATUS[0]}"
+      && npm run build 2>&1 | tail -3)
+  ⎿  Waiting…
+
+✶ Drizzling… (3m 10s · ↓ 14.2k tokens)
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← for agents                                           /rc

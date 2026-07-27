@@ -41,6 +41,32 @@ function payDateLabel(iso: string): string {
   return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+/** The pay-day Thursday of the pay period a date falls in (the Thursday on/before it). */
+function payPeriodStart(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() - ((date.getDay() - 4 + 7) % 7)); // back to Thursday
+  return toISODate(date);
+}
+
+/**
+ * Every pay-day Thursday the user could start saving on: from this pay period
+ * through the one the expense is charged in. Always at least one option.
+ */
+function saveFromOptions(dueDate: string): string[] {
+  const first = payPeriodStart(toISODate(new Date()));
+  const last = payPeriodStart(dueDate);
+  if (last <= first) return [first];
+  const out: string[] = [];
+  const [y, m, d] = first.split('-').map(Number);
+  const cur = new Date(y, m - 1, d);
+  while (toISODate(cur) <= last) {
+    out.push(toISODate(cur));
+    cur.setDate(cur.getDate() + 7);
+  }
+  return out;
+}
+
 interface Props {
   /** Expenses due in the currently-viewed month (already filtered). */
   expenses: ScheduledExpense[];
@@ -49,7 +75,7 @@ interface Props {
   monthLabel: string;
   /** Cards available to charge an expense to. */
   cards: CreditCard[];
-  onAdd: (name: string, amount: number, dueDate: string) => void;
+  onAdd: (name: string, amount: number, dueDate: string, saveFrom?: string | null) => void;
   /** Charge the (named) amount to a card's balance instead of scheduling cash. */
   onChargeToCard: (cardId: string, name: string, amount: number) => void;
   onDelete: (id: string) => void;
@@ -66,15 +92,23 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [saveFrom, setSaveFrom] = useState('');
   const [charge, setCharge] = useState(false);
   const [cardId, setCardId] = useState('');
 
   const total = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
 
+  // Pay periods the set-asides could start on, and how many weeks that leaves.
+  const startOptions = dueDate ? saveFromOptions(dueDate) : [];
+  const chosenStart = startOptions.includes(saveFrom) ? saveFrom : (startOptions[0] ?? '');
+  const weeksFromStart = chosenStart ? startOptions.length - startOptions.indexOf(chosenStart) : 0;
+
   const openAdd = () => {
     // Default the due date to today (or this month if viewing another month).
     const today = toISODate(new Date());
-    setDueDate(today.slice(0, 7) === monthStart.slice(0, 7) ? today : monthStart);
+    const due = today.slice(0, 7) === monthStart.slice(0, 7) ? today : monthStart;
+    setDueDate(due);
+    setSaveFrom(saveFromOptions(due)[0] ?? '');
     setCardId(cards[0]?.id ?? '');
     setCharge(false);
     setAdding(true);
@@ -97,7 +131,7 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
       return;
     }
     if (!n || !dueDate) return;
-    onAdd(n, amt, dueDate);
+    onAdd(n, amt, dueDate, chosenStart || null);
     reset();
   };
 
@@ -209,7 +243,12 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
               <input
                 type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  // Keep the start pay period valid for the new charge date.
+                  const opts = e.target.value ? saveFromOptions(e.target.value) : [];
+                  if (!opts.includes(saveFrom)) setSaveFrom(opts[0] ?? '');
+                }}
                 className="min-w-0 flex-1 rounded-xl border px-3 text-base outline-none"
                 style={{ height: '46px', background: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
               />
@@ -223,6 +262,30 @@ export default function ScheduledExpensesSection({ expenses, monthStart, monthLa
               {charge ? 'Charge' : 'Add'}
             </button>
           </div>
+          {!charge && startOptions.length > 0 && (
+            <label className="flex flex-col gap-1 text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
+              Start saving on
+              <select
+                value={chosenStart}
+                onChange={(e) => setSaveFrom(e.target.value)}
+                className="w-full rounded-xl border px-3 text-base outline-none"
+                style={{ height: '46px', background: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+              >
+                {startOptions.map((d, i) => (
+                  <option key={d} value={d}>
+                    {payDateLabel(d)}
+                    {i === 0 ? ' (this pay period)' : ''}
+                  </option>
+                ))}
+              </select>
+              <span style={{ color: 'var(--color-text-tertiary)' }}>
+                {weeksFromStart === 1 ? 'Set aside in full on that paycheck' : `Spread across ${weeksFromStart} paychecks`}
+                {parseMoney(amount) > 0 && weeksFromStart > 0
+                  ? ` · ${formatMoney(parseMoney(amount) / weeksFromStart)}/wk`
+                  : ''}
+              </span>
+            </label>
+          )}
         </div>
       ) : (
         <button

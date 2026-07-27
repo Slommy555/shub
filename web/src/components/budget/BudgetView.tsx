@@ -97,15 +97,16 @@ export default function BudgetView({
     Math.min(savings.expenseEarmarkAmounts[e.id] ?? 0, Number(e.amount) || 0);
   /** Payoff note for a scheduled expense on a pay day: net still owed after
    *  savings, and a FLAT weekly set-aside. The net is spread evenly across the pay
-   *  weeks from when the expense was set up (its created date) through its charge
-   *  date, so the "put away each week" amount stays constant week to week rather
-   *  than climbing as the date nears. */
+   *  weeks from the pay period the user chose to start saving on (save_from_date,
+   *  falling back to the created date for older rows) through its charge date, so
+   *  the "put away each week" amount stays constant week to week rather than
+   *  climbing as the date nears. */
   const scheduledPayoffFor = (
-    e: { id: string; name: string; amount: number; due_date?: string | null; created_at?: string },
+    e: { id: string; name: string; amount: number; due_date?: string | null; save_from_date?: string | null; created_at?: string },
     payDate: string
   ) => {
     const remaining = Math.max(0, (Number(e.amount) || 0) - savedForExpense(e));
-    const start = e.created_at ? e.created_at.slice(0, 10) : payDate;
+    const start = e.save_from_date ?? (e.created_at ? e.created_at.slice(0, 10) : payDate);
     const suggested = remaining > 0 ? remaining / payDatesThrough(start, e.due_date ?? null) : 0;
     return { id: e.id, name: e.name, due_date: e.due_date ?? null, remaining, suggested };
   };
@@ -182,7 +183,8 @@ export default function BudgetView({
         onSetDeposit={deposits.setDeposit}
         scheduledPayoffsForDate={(d) =>
           scheduled.expenses
-            .filter((e) => e.due_date && e.due_date >= d)
+            // Only from the pay period the user chose to start saving on.
+            .filter((e) => e.due_date && e.due_date >= d && (!e.save_from_date || e.save_from_date <= d))
             .map((e) => scheduledPayoffFor(e, d))
             .filter((p) => p.remaining > 0)
         }

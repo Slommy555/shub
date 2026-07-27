@@ -75,6 +75,12 @@ export default function SavingsTab({ userId }: { userId: string }) {
           <span className="text-3xl font-bold tabular-nums" style={{ color: ledger.balance >= 0 ? 'var(--color-text-primary)' : 'var(--color-danger)', letterSpacing: '-0.03em' }}>
             {formatMoney(ledger.balance)}
           </span>
+          <div className="mt-4 flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              Starting balance
+            </span>
+            <StartingBalanceInput value={ledger.startingBalance} onSave={ledger.setStartingBalance} />
+          </div>
         </div>
 
         {/* Totals */}
@@ -236,41 +242,14 @@ export default function SavingsTab({ userId }: { userId: string }) {
                 </span>
                 <div className="flex flex-col gap-2">
                   {(byDay.get(date) ?? []).map((e) => (
-                    <div
+                    <AgendaRow
                       key={e.id}
-                      className="flex items-center gap-3 rounded-xl border px-3 py-2.5"
-                      style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
-                    >
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: e.kind === 'in' ? IN_COLOR : OUT_COLOR }} />
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                          {e.note || (e.kind === 'in' ? 'Put away' : 'Payment')}
-                        </span>
-                        <span className="text-[11px] tabular-nums" style={{ color: 'var(--color-text-tertiary)' }}>
-                          Balance {formatMoney(ledger.runningBalance[e.id] ?? 0)}
-                        </span>
-                      </span>
-                      <span
-                        className="shrink-0 text-[15px] font-semibold tabular-nums"
-                        style={{ color: e.kind === 'in' ? IN_COLOR : OUT_COLOR, letterSpacing: '-0.02em' }}
-                      >
-                        {e.kind === 'in' ? '+' : '−'}
-                        {formatMoney(Number(e.amount) || 0)}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label="Delete entry"
-                        onClick={() => {
-                          if (window.confirm('Delete this entry?')) void ledger.deleteEntry(e.id);
-                        }}
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg active:opacity-70"
-                        style={{ color: 'var(--color-text-tertiary)' }}
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18 6 6 18M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
+                      note={e.note || (e.kind === 'in' ? 'Put away' : 'Payment')}
+                      amount={Number(e.amount) || 0}
+                      kind={e.kind}
+                      balance={ledger.runningBalance[e.id] ?? 0}
+                      onDelete={() => void ledger.deleteEntry(e.id)}
+                    />
                   ))}
                 </div>
               </div>
@@ -376,5 +355,106 @@ function AddEntryForm({
         </button>
       </div>
     </div>
+  );
+}
+
+/** One agenda entry with an inline (no native dialog) remove confirm — reliable
+ *  inside an installed PWA where window.confirm can be suppressed. */
+function AgendaRow({
+  note,
+  amount,
+  kind,
+  balance,
+  onDelete,
+}: {
+  note: string;
+  amount: number;
+  kind: LedgerKind;
+  balance: number;
+  onDelete: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const color = kind === 'in' ? IN_COLOR : OUT_COLOR;
+  return (
+    <div className="flex items-center gap-3 rounded-xl border px-3 py-2.5" style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}>
+      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
+          {note}
+        </span>
+        <span className="text-[11px] tabular-nums" style={{ color: 'var(--color-text-tertiary)' }}>
+          Balance {formatMoney(balance)}
+        </span>
+      </span>
+      {confirming ? (
+        <span className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            className="rounded-lg border px-2.5 py-1.5 text-[13px] font-semibold active:opacity-70"
+            style={{ borderColor: 'var(--color-border-strong)', color: 'var(--color-text-secondary)' }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="rounded-lg px-2.5 py-1.5 text-[13px] font-semibold active:opacity-70"
+            style={{ background: 'var(--color-danger)', color: '#fff' }}
+          >
+            Remove
+          </button>
+        </span>
+      ) : (
+        <>
+          <span className="shrink-0 text-[15px] font-semibold tabular-nums" style={{ color, letterSpacing: '-0.02em' }}>
+            {kind === 'in' ? '+' : '−'}
+            {formatMoney(amount)}
+          </span>
+          <button
+            type="button"
+            aria-label="Remove entry"
+            onClick={() => setConfirming(true)}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border active:opacity-70"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+              <path d="M10 11v6M14 11v6" />
+            </svg>
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Compact money input for the starting balance (raw while focused). */
+function StartingBalanceInput({ value, onSave }: { value: number; onSave: (n: number) => void }) {
+  const [focused, setFocused] = useState(false);
+  const [text, setText] = useState('');
+  const display = focused ? text : value ? formatMoney(value) : '';
+  return (
+    <input
+      inputMode="decimal"
+      placeholder="$0"
+      value={display}
+      onFocus={(e) => {
+        setFocused(true);
+        setText(value ? String(value) : '');
+        requestAnimationFrame(() => e.target.select());
+      }}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        setFocused(false);
+        const n = parseMoney(text);
+        if (n !== value) onSave(n);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+      }}
+      className="w-32 rounded-lg border px-3 text-right text-[15px] font-semibold tabular-nums outline-none"
+      style={{ height: '40px', background: 'var(--color-bg-surface)', borderColor: focused ? 'var(--color-accent-muted)' : 'var(--color-border)', color: 'var(--color-text-primary)' }}
+    />
   );
 }

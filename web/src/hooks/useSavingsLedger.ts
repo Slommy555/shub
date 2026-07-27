@@ -26,6 +26,7 @@ const byWhen = (a: LedgerEntry, b: LedgerEntry) => {
  */
 export function useSavingsLedger(userId: string | null) {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
+  const [startingBalance, setStartingBalanceState] = useState(0);
   const [loading, setLoading] = useState(true);
   const ref = useRef<LedgerEntry[]>([]);
   ref.current = entries;
@@ -52,6 +53,14 @@ export function useSavingsLedger(userId: string | null) {
       }
       setEntries(((data as LedgerEntry[]) ?? []).sort(byWhen));
       setLoading(false);
+
+      const { data: settings } = await supabase
+        .from('savings_settings')
+        .select('starting_balance')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (cancelled) return;
+      setStartingBalanceState(Number((settings as { starting_balance: number } | null)?.starting_balance) || 0);
     })();
     return () => {
       cancelled = true;
@@ -78,11 +87,32 @@ export function useSavingsLedger(userId: string | null) {
           });
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'savings_settings', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') return;
+          setStartingBalanceState(Number((payload.new as { starting_balance: number }).starting_balance) || 0);
+        }
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
   }, [userId]);
+
+  const setStartingBalance = useCallback(
+    async (n: number) => {
+      if (!userId) return;
+      const value = Math.max(0, n);
+      setStartingBalanceState(value);
+      const { error } = await supabase
+        .from('savings_settings')
+        .upsert({ user_id: userId, starting_balance: value, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+      if (error) console.error('setStartingBalance failed:', error.message);
+    },
+    [userId]
+  );
 
   const addEntry = useCallback(
     async (kind: LedgerKind, amount: number, entryDate: string, note: string) => {
@@ -118,7 +148,7 @@ export function useSavingsLedger(userId: string | null) {
     let tin = 0;
     let tout = 0;
     const running: Record<string, number> = {};
-    let bal = 0;
+    let bal = startingBalance; // the running balance builds on the starting balance
     for (const e of entries) {
       const amt = Number(e.amount) || 0;
       if (e.kind === 'in') {
@@ -131,16 +161,18 @@ export function useSavingsLedger(userId: string | null) {
       running[e.id] = bal;
     }
     return { totalIn: tin, totalOut: tout, runningBalance: running };
-  }, [entries]);
+  }, [entries, startingBalance]);
 
   return {
     entries,
     loading,
     addEntry,
     deleteEntry,
+    startingBalance,
+    setStartingBalance,
     totalIn,
     totalOut,
-    balance: totalIn - totalOut,
+    balance: startingBalance + totalIn - totalOut,
     runningBalance,
   };
 }

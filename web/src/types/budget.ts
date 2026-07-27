@@ -153,6 +153,7 @@ export interface ScheduledExpense {
   amount: number;
   due_month: string; // YYYY-MM-01 (month grouping)
   due_date?: string | null; // YYYY-MM-DD — the specific pay-day Thursday, if chosen
+  save_from_date?: string | null; // YYYY-MM-DD — pay day the set-asides start on
   created_at?: string;
 }
 
