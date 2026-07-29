@@ -33,6 +33,14 @@ body {
   .above-dock {
     bottom: calc(env(safe-area-inset-bottom) + 76px) !important;
   }
+  /* The active workout stacks more chrome at the bottom than any other screen —
+     the dock, the action bar, and the rest timer above it. */
+  .pb-session {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 230px) !important;
+  }
+}
+.pb-session {
+  padding-bottom: 170px;
 }
 
 body {

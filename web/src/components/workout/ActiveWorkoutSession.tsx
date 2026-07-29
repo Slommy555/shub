@@ -31,14 +31,25 @@ import { haptic } from '../../lib/native';
 import type { UseWorkoutSession } from '../../hooks/workout/useWorkoutSession';
 import ExerciseModal from './ExerciseModal';
 
+/** Hard cap on a session. Past this the workout is ended and saved on its own —
+ *  a forgotten session would otherwise log a 14-hour "workout". */
+export const MAX_SESSION_MS = 2.5 * 60 * 60 * 1000;
+/** How long before the cap the countdown warning appears. */
+const WARN_MS = 15 * 60 * 1000;
+/** How long the "rest done" flash stays up after a timer runs out. */
+const REST_DONE_MS = 6000;
+
 interface Props {
   api: UseWorkoutSession;
   exercises: Exercise[];
   onCreateCustom: (name: string, groups: MuscleGroup[]) => Promise<Exercise | null>;
   onDeleteExercise: (id: string) => void;
-  onFinished: (summary: WorkoutSummary) => void;
-  /** Save the just-finished session as a reusable template; resolves to its name. */
-  onSaveAsTemplate: (name: string, exercises: SessionExercise[]) => Promise<string | null>;
+  /** Hands the saved session up so the summary screen can outlive this one. */
+  onFinished: (
+    summary: WorkoutSummary,
+    snapshot: { name: string; exercises: SessionExercise[] },
+    auto: boolean
+  ) => void;
   /** Whether to show the RPE column in the set logger (Settings → Workout). */
   showRpe: boolean;
 }
@@ -50,9 +61,9 @@ const SET_TYPE_NEXT: Record<SetType, SetType> = {
 };
 
 const badge =
-  'rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300';
+  'rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300';
 const numInput =
-  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-center text-sm outline-none focus:border-gray-500 dark:border-gray-700 dark:bg-gray-950';
+  'w-full rounded-xl border border-gray-200 bg-white px-1.5 py-2 text-center text-base font-semibold tabular-nums outline-none focus:border-accent-500 dark:border-gray-700 dark:bg-gray-950';
 
 /** Grid column template for the set table — the RPE column drops out when the
  *  user has RPE display turned off. Shared by the header and every set row. */
@@ -65,6 +76,11 @@ function gridColsFor(showRpe: boolean): string {
 /** An exercise is "complete" once it has sets and every set is checked off. */
 function isExerciseComplete(ex: SessionExercise): boolean {
   return ex.sets.length > 0 && ex.sets.every((s) => s.done);
+}
+
+/** Does this session have anything worth saving? */
+function hasLoggedWork(exercises: SessionExercise[]): boolean {
+  return exercises.some((e) => e.sets.some((s) => s.weight_lbs != null || s.reps != null));
 }
 
 // Animate layout changes even when they're caused by a programmatic reorder
@@ -148,7 +164,7 @@ function SetRow({
   const typeLabel = set.type === 'warmup' ? 'W' : set.type === 'failure' ? 'F' : index + 1;
 
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative overflow-hidden rounded-xl">
       <div className="absolute inset-y-0 right-0 flex w-16 items-center justify-center bg-red-500 text-xs font-medium text-white">
         Delete
       </div>
@@ -156,7 +172,9 @@ function SetRow({
         // Owns its own horizontal gesture (swipe left to delete), so the
         // app-level swipe navigation must keep its hands off this row.
         data-no-swipe
-        className={`relative grid ${gridCls} items-center gap-1 bg-white py-1 dark:bg-gray-900`}
+        className={`relative grid ${gridCls} items-center gap-1.5 py-1 transition-colors ${
+          set.done ? 'bg-accent-50/70 dark:bg-accent-500/10' : 'bg-white dark:bg-gray-900'
+        }`}
         style={{ transform: `translateX(${dx}px)`, transition: startX.current === null ? 'transform 0.15s' : 'none' }}
         onTouchStart={(e) => {
           startX.current = e.touches[0].clientX;
@@ -177,7 +195,7 @@ function SetRow({
           onClick={() => onChange({ type: SET_TYPE_NEXT[set.type] })}
           aria-label={`Set type: ${set.type}. Tap to change.`}
           title="Tap to cycle: normal → warm-up → failure"
-          className={`text-center text-xs ${TYPE_CELL[set.type]}`}
+          className={`text-center text-sm font-semibold ${TYPE_CELL[set.type]}`}
         >
           {typeLabel}
         </button>
@@ -222,12 +240,12 @@ function SetRow({
           }}
           aria-label="Mark set done"
           aria-pressed={set.done}
-          className="grid h-11 w-11 place-items-center justify-self-center rounded-md"
+          className="grid h-11 w-11 place-items-center justify-self-center rounded-xl"
         >
           <span
-            className={`grid h-7 w-7 place-items-center rounded-md border text-sm ${
+            className={`grid h-8 w-8 place-items-center rounded-xl border text-sm transition-all ${
               set.done
-                ? 'border-gray-800 bg-gray-800 text-white dark:border-gray-200 dark:bg-gray-200 dark:text-gray-900'
+                ? 'border-transparent bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-glow'
                 : 'border-gray-300 text-transparent dark:border-gray-600'
             }`}
           >
@@ -256,18 +274,30 @@ function ExerciseBlock({
   startRest,
   showRpe,
   completed,
+  current,
 }: {
   ex: SessionExercise;
   api: UseWorkoutSession;
   startRest: (seconds: number) => void;
   showRpe: boolean;
   completed: boolean;
+  /** The exercise you're on right now — the one the screen is built around. */
+  current: boolean;
 }) {
   const restSeconds = ex.restSeconds ?? DEFAULT_REST_SECONDS;
   const gridCls = gridColsFor(showRpe);
   const [noteOpen, setNoteOpen] = useState(false);
+  // null = follow the current exercise; true/false = the user chose.
+  const [openOverride, setOpenOverride] = useState<boolean | null>(null);
+  const open = openOverride ?? current;
   const exNotes = ex.notes ?? '';
   const showNote = noteOpen || exNotes.trim().length > 0;
+
+  const doneSets = ex.sets.filter((s) => s.done).length;
+  const topSet = ex.sets.reduce<SessionSet | null>((best, s) => {
+    if (s.weight_lbs == null) return best;
+    return !best || (best.weight_lbs ?? 0) < s.weight_lbs ? s : best;
+  }, null);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: ex.key,
@@ -283,128 +313,175 @@ function ExerciseBlock({
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-2xl border border-gray-200 bg-white p-3 shadow-sm transition-opacity duration-300 dark:border-gray-800 dark:bg-gray-900 ${
-        completed && !isDragging ? 'opacity-40' : ''
-      }`}
+      className={[
+        'rounded-2xl border bg-white transition-all duration-300 dark:bg-gray-900',
+        current
+          ? 'border-accent-400/60 shadow-glow ring-1 ring-accent-400/40'
+          : 'border-gray-200 shadow-card dark:border-gray-800',
+        completed && !open && !isDragging ? 'opacity-60' : '',
+      ].join(' ')}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="flex items-center gap-1.5 truncate text-sm font-semibold">
+      {/* Title row — doubles as the collapse toggle. */}
+      <div className={`flex items-start gap-2 ${open ? 'p-3.5 pb-2' : 'p-3'}`}>
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Reorder exercise"
+          className="-ml-1 grid h-9 w-6 shrink-0 cursor-grab touch-none place-items-center rounded-lg text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-gray-600"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+            <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+            <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setOpenOverride(!open)}
+          aria-expanded={open}
+          className="min-w-0 flex-1 text-left"
+        >
+          <span className="flex flex-wrap items-center gap-1.5">
             {completed && (
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-green-600 dark:text-green-400" aria-label="Completed">
                 <path d="M20 6 9 17l-5-5" />
               </svg>
             )}
-            <span className="truncate">{ex.exercise.name}</span>
-          </h3>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {ex.exercise.muscle_groups.map((m) => (
-              <span key={m} className={badge}>
-                {MUSCLE_LABELS[m]}
+            <span className={`min-w-0 break-words font-semibold ${current ? 'text-[17px]' : 'text-sm'}`}>
+              {ex.exercise.name}
+            </span>
+            {current && (
+              <span className="shrink-0 rounded-full bg-gradient-to-b from-accent-500 to-accent-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                Now
               </span>
-            ))}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
+            )}
+          </span>
+
+          {open ? (
+            <span className="mt-1.5 flex flex-wrap gap-1">
+              {ex.exercise.muscle_groups.map((m) => (
+                <span key={m} className={badge}>
+                  {MUSCLE_LABELS[m]}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span className="mt-0.5 block text-xs text-gray-500">
+              {doneSets}/{ex.sets.length} sets
+              {topSet?.weight_lbs != null && ` · top ${topSet.weight_lbs}×${topSet.reps ?? '—'}`}
+            </span>
+          )}
+        </button>
+
+        <div className="flex shrink-0 items-center">
+          {open && (
+            <button
+              type="button"
+              onClick={() => api.removeExercise(ex.key)}
+              aria-label="Remove exercise"
+              className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:hover:bg-gray-800"
+            >
+              ×
+            </button>
+          )}
           <button
             type="button"
-            {...attributes}
-            {...listeners}
-            aria-label="Reorder exercise"
-            className="cursor-grab touch-none rounded-md p-1.5 text-gray-400 hover:bg-gray-100 active:cursor-grabbing dark:hover:bg-gray-800"
+            onClick={() => setOpenOverride(!open)}
+            aria-label={open ? 'Collapse exercise' : 'Expand exercise'}
+            className="grid h-9 w-8 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
-              <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-              <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+            <svg
+              width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className={`transition-transform ${open ? 'rotate-180' : ''}`}
+            >
+              <path d="m6 9 6 6 6-6" />
             </svg>
           </button>
-          <button
-            type="button"
-            onClick={() => api.removeExercise(ex.key)}
-            aria-label="Remove exercise"
-            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:hover:bg-gray-800"
-          >
-            ×
-          </button>
         </div>
       </div>
 
-      {/* per-exercise note — one note for the whole exercise, collapsed until used */}
-      {showNote ? (
-        <textarea
-          value={exNotes}
-          onChange={(e) => api.setExerciseNotes(ex.key, e.target.value)}
-          placeholder="Notes for this exercise…"
-          rows={2}
-          autoFocus={noteOpen && !exNotes}
-          className="mt-2 w-full resize-y rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-gray-500 dark:border-gray-700 dark:bg-gray-950"
-          aria-label={`Notes for ${ex.exercise.name}`}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setNoteOpen(true)}
-          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Add note
-        </button>
+      {open && (
+        <div className="px-3.5 pb-3.5">
+          {/* per-exercise note — one note for the whole exercise, collapsed until used */}
+          {showNote ? (
+            <textarea
+              value={exNotes}
+              onChange={(e) => api.setExerciseNotes(ex.key, e.target.value)}
+              placeholder="Notes for this exercise…"
+              rows={2}
+              autoFocus={noteOpen && !exNotes}
+              className="w-full resize-y rounded-xl border border-gray-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-accent-500 dark:border-gray-700 dark:bg-gray-950"
+              aria-label={`Notes for ${ex.exercise.name}`}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setNoteOpen(true)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Add note
+            </button>
+          )}
+
+          {/* per-exercise rest (feeds the rest timer; editable here or in templates) */}
+          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-500">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="13" r="8" />
+              <path d="M12 9v4l2 2M9 2h6" strokeLinecap="round" />
+            </svg>
+            Rest
+            <input
+              type="number"
+              inputMode="numeric"
+              value={ex.restSeconds ?? ''}
+              placeholder={String(DEFAULT_REST_SECONDS)}
+              onChange={(e) => api.setExerciseRest(ex.key, num(e.target.value))}
+              className="w-14 rounded-lg border border-gray-200 bg-white px-1.5 py-0.5 text-center text-xs outline-none focus:border-accent-500 dark:border-gray-700 dark:bg-gray-950"
+              aria-label="Rest seconds"
+            />
+            s between sets
+          </div>
+
+          {/* column headers */}
+          <div className={`mt-3 grid ${gridCls} gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-400`}>
+            <span className="text-center">#</span>
+            <span className="text-center">lbs</span>
+            <span className="text-center">reps</span>
+            {showRpe && <span className="text-center">rpe</span>}
+            <span className="text-center">✓</span>
+            <span />
+          </div>
+
+          <div className="mt-1 space-y-1">
+            {ex.sets.map((st, i) => (
+              <SetRow
+                key={st.id}
+                index={i}
+                set={st}
+                gridCls={gridCls}
+                showRpe={showRpe}
+                onChange={(patch) => api.updateSet(ex.key, st.id, patch)}
+                onDelete={() => api.deleteSet(ex.key, st.id)}
+                onCompleted={() => startRest(st.rest ?? restSeconds)}
+              />
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => api.addSet(ex.key)}
+            className="mt-2 w-full rounded-xl border border-dashed border-gray-300 py-2 text-xs font-semibold text-gray-500 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+          >
+            + Add set
+          </button>
+        </div>
       )}
-
-      {/* per-exercise rest (used by the rest timer; editable here or in templates) */}
-      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-500">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="13" r="8" />
-          <path d="M12 9v4l2 2M9 2h6" strokeLinecap="round" />
-        </svg>
-        Rest
-        <input
-          type="number"
-          inputMode="numeric"
-          value={ex.restSeconds ?? ''}
-          placeholder={String(DEFAULT_REST_SECONDS)}
-          onChange={(e) => api.setExerciseRest(ex.key, num(e.target.value))}
-          className="w-14 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-center text-xs outline-none focus:border-gray-500 dark:border-gray-700 dark:bg-gray-950"
-          aria-label="Rest seconds"
-        />
-        s between sets
-      </div>
-
-      {/* column headers */}
-      <div className={`mt-3 grid ${gridCls} gap-1 px-0 text-[10px] font-medium uppercase tracking-wide text-gray-400`}>
-        <span className="text-center">#</span>
-        <span className="text-center">lbs</span>
-        <span className="text-center">reps</span>
-        {showRpe && <span className="text-center">rpe</span>}
-        <span className="text-center">✓</span>
-        <span />
-      </div>
-
-      <div className="mt-1 divide-y divide-gray-100 dark:divide-gray-800">
-        {ex.sets.map((st, i) => (
-          <SetRow
-            key={st.id}
-            index={i}
-            set={st}
-            gridCls={gridCls}
-            showRpe={showRpe}
-            onChange={(patch) => api.updateSet(ex.key, st.id, patch)}
-            onDelete={() => api.deleteSet(ex.key, st.id)}
-            onCompleted={() => startRest(st.rest ?? restSeconds)}
-          />
-        ))}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => api.addSet(ex.key)}
-        className="mt-2 w-full rounded-lg border border-dashed border-gray-300 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-      >
-        + Add set
-      </button>
     </div>
   );
 }
@@ -417,7 +494,6 @@ export default function ActiveWorkoutSession({
   onCreateCustom,
   onDeleteExercise,
   onFinished,
-  onSaveAsTemplate,
   showRpe,
 }: Props) {
   const session = api.session!;
@@ -427,33 +503,42 @@ export default function ActiveWorkoutSession({
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(session.name);
   const [notes, setNotes] = useState('');
-  const [saved, setSaved] = useState<WorkoutSummary | null>(null);
   const [saving, setSaving] = useState(false);
-  // The session is cleared from the store on finish, so hold onto what was in it
-  // for the summary screen's "Save as template" action.
-  const [finished, setFinished] = useState<{ name: string; exercises: SessionExercise[] } | null>(
-    null
-  );
-  const [tplName, setTplName] = useState('');
-  const [tplSaving, setTplSaving] = useState(false);
-  const [tplSaved, setTplSaved] = useState<string | null>(null);
-  // Rest timer between sets — starts when a set is checked off.
-  const [rest, setRest] = useState<{ endsAt: number } | null>(null);
+  // Rest timer between sets — starts when a set is checked off. `total` drives
+  // the progress bar; `doneAt` keeps the "rest over" flash on screen briefly.
+  const [rest, setRest] = useState<{ endsAt: number; total: number } | null>(null);
+  const [restDoneAt, setRestDoneAt] = useState<number | null>(null);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
-  // Auto-clear the rest timer when it reaches zero.
+  // Rest reaching zero: buzz once, then show the "rest over" card for a moment.
   useEffect(() => {
-    if (rest && now >= rest.endsAt) setRest(null);
+    if (rest && now >= rest.endsAt) {
+      setRest(null);
+      setRestDoneAt(Date.now());
+      haptic();
+    }
   }, [now, rest]);
 
-  const startRest = (seconds: number) => setRest({ endsAt: Date.now() + seconds * 1000 });
+  const startRest = (seconds: number) => {
+    setRestDoneAt(null);
+    setRest({ endsAt: Date.now() + seconds * 1000, total: Math.max(1, seconds) });
+  };
   const adjustRest = (delta: number) =>
-    setRest((r) => (r ? { endsAt: Math.max(Date.now(), r.endsAt + delta * 1000) } : r));
+    setRest((r) =>
+      r
+        ? {
+            endsAt: Math.max(Date.now(), r.endsAt + delta * 1000),
+            total: Math.max(1, r.total + delta),
+          }
+        : r
+    );
   const restRemaining = rest ? Math.max(0, Math.round((rest.endsAt - now) / 1000)) : 0;
+  const restPct = rest ? Math.max(0, Math.min(100, (restRemaining / rest.total) * 100)) : 0;
+  const restJustDone = restDoneAt != null && now - restDoneAt < REST_DONE_MS;
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -475,8 +560,10 @@ export default function ActiveWorkoutSession({
     return [...incomplete, ...complete];
   }, [session.exercises]);
 
-  const allComplete =
-    session.exercises.length > 0 && session.exercises.every(isExerciseComplete);
+  // The exercise you're on: the first one that still has unchecked sets.
+  const currentKey = displayExercises.find((x) => !isExerciseComplete(x))?.key ?? null;
+  const doneCount = session.exercises.filter(isExerciseComplete).length;
+  const allComplete = session.exercises.length > 0 && doneCount === session.exercises.length;
 
   function onDragEnd(e: DragEndEvent) {
     const { active, over } = e;
@@ -487,26 +574,31 @@ export default function ActiveWorkoutSession({
     api.reorderExercises(arrayMove(displayExercises, oldIndex, newIndex));
   }
 
-  async function confirmFinish() {
-    if (saving) return;
-    setSaving(true);
-    const snapshot = { name: session.name, exercises: session.exercises };
-    const summary = await api.finish(notes);
-    setSaving(false);
-    if (summary) {
-      setFinished(snapshot);
-      setTplName(snapshot.name === 'Freestyle Workout' ? '' : snapshot.name);
-      setSaved(summary);
-    }
-  }
+  const savingRef = useRef(false);
 
-  async function saveTemplateFromFinished() {
-    if (!finished || tplSaving) return;
-    const name = tplName.trim() || finished.name;
-    setTplSaving(true);
-    const created = await onSaveAsTemplate(name, finished.exercises);
-    setTplSaving(false);
-    if (created) setTplSaved(created);
+  /** Write the session to the log. `auto` marks the 2h30m cap ending it. */
+  async function endSession(auto: boolean) {
+    if (savingRef.current) return;
+    const snapshot = { name: session.name, exercises: session.exercises };
+    // An abandoned session with nothing logged isn't worth a row in History.
+    if (auto && !hasLoggedWork(session.exercises)) {
+      api.discard();
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    const note = auto
+      ? [notes.trim(), 'Auto-ended after 2h30m.'].filter(Boolean).join('\n')
+      : notes;
+    // Stamp an auto-end at the cap itself, so a session that sat open while the
+    // app was closed still logs as 2h30m rather than the wall-clock gap.
+    const cappedAt = new Date(
+      new Date(session.startedAt).getTime() + MAX_SESSION_MS
+    ).toISOString();
+    const summary = await api.finish(note, auto ? cappedAt : undefined);
+    savingRef.current = false;
+    setSaving(false);
+    if (summary) onFinished(summary, snapshot, auto);
   }
 
   function commitRename() {
@@ -519,126 +611,85 @@ export default function ActiveWorkoutSession({
   }
 
   const elapsed = now - new Date(session.startedAt).getTime();
+  const remainingToCap = MAX_SESSION_MS - elapsed;
 
-  // --- saved summary card --------------------------------------------------
-  if (saved) {
-    return (
-      <div className="mx-auto max-w-app p-4">
-        <div className="rounded-3xl border border-gray-200 bg-white p-6 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-gray-800 text-white">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M7 12.5l3.2 3.2L17 9" />
-            </svg>
-          </div>
-          <h2 className="text-lg font-bold">Workout complete</h2>
-          <p className="mt-1 text-sm text-gray-500">{finished?.name ?? session.name}</p>
-          <div className="mt-4 grid grid-cols-2 gap-3 text-left">
-            <Stat label="Total volume" value={`${Math.round(saved.totalVolume).toLocaleString()} lbs`} />
-            <Stat label="Duration" value={formatTimer(saved.durationMs)} />
-            <Stat label="Exercises" value={String(saved.exerciseCount)} />
-            <Stat label="Sets" value={String(saved.totalSets)} />
-          </div>
-          <div className="mt-3 flex flex-wrap justify-center gap-1">
-            {saved.muscleGroups.map((m) => (
-              <span key={m} className={badge}>
-                {MUSCLE_LABELS[m]}
-              </span>
-            ))}
-          </div>
-          {/* Turn what you just did into a repeatable template — the main way a
-              freestyle session becomes something you can run again. */}
-          {finished && finished.exercises.length > 0 && (
-            <div className="mt-5 rounded-2xl border border-gray-200 p-3 text-left dark:border-gray-800">
-              {tplSaved ? (
-                <p className="text-center text-xs font-medium text-green-600 dark:text-green-400">
-                  Saved as template “{tplSaved}”.
-                </p>
-              ) : (
-                <>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                    Save as template
-                  </p>
-                  <p className="mt-0.5 text-xs text-gray-500">
-                    Keep this exact set-up so you can repeat it in one tap.
-                  </p>
-                  <div className="mt-2 flex gap-2">
-                    <input
-                      value={tplName}
-                      onChange={(e) => setTplName(e.target.value)}
-                      placeholder={finished.name}
-                      className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent-500 dark:border-gray-700 dark:bg-gray-950"
-                      aria-label="Template name"
-                    />
-                    <button
-                      type="button"
-                      onClick={saveTemplateFromFinished}
-                      disabled={tplSaving}
-                      className="btn-accent shrink-0 px-3 py-2 text-xs font-semibold disabled:opacity-60"
-                    >
-                      {tplSaving ? 'Saving…' : 'Save'}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() => onFinished(saved)}
-            className="mt-4 w-full rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
-          >
-            Done
-          </button>
-          <p className="mt-2 text-[11px] text-gray-400">
-            This session is saved — find it any time under Workout → History.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // The 2h30m cap. Also covers a session resumed from localStorage that already
+  // ran past the limit while the app was closed — the first tick catches it.
+  useEffect(() => {
+    if (elapsed < MAX_SESSION_MS) return;
+    void endSession(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elapsed]);
 
   return (
-    <div className="pb-fab mx-auto max-w-app p-4 pb-28">
+    <div className="pb-session mx-auto max-w-app p-4">
       {/* header */}
-      <div className="glass sticky top-0 z-10 -mx-4 mb-3 flex items-center justify-between gap-3 border-b px-4 py-3">
-        <div className="min-w-0">
-          {renaming ? (
-            <input
-              value={nameDraft}
-              onChange={(e) => setNameDraft(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename();
-                if (e.key === 'Escape') {
+      <div className="glass sticky top-0 z-10 -mx-4 mb-4 border-b px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {renaming ? (
+              <input
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={commitRename}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename();
+                  if (e.key === 'Escape') {
+                    setNameDraft(session.name);
+                    setRenaming(false);
+                  }
+                }}
+                autoFocus
+                aria-label="Workout name"
+                className="w-full rounded-xl border border-gray-300 bg-white px-2 py-1 text-lg font-bold outline-none focus:border-accent-500 dark:border-gray-600 dark:bg-gray-900"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
                   setNameDraft(session.name);
-                  setRenaming(false);
-                }
-              }}
-              autoFocus
-              aria-label="Workout name"
-              className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-base font-bold outline-none focus:border-accent-500 dark:border-gray-600 dark:bg-gray-900"
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setNameDraft(session.name);
-                setRenaming(true);
-              }}
-              title="Tap to rename this workout"
-              className="flex items-center gap-1.5 text-left"
-            >
-              <h1 className="truncate text-base font-bold">{session.name}</h1>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-400">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-              </svg>
-            </button>
-          )}
-          <p className="text-xs text-gray-500">{preview.totalSets} sets logged</p>
+                  setRenaming(true);
+                }}
+                title="Tap to rename this workout"
+                className="flex w-full items-center gap-1.5 text-left"
+              >
+                <h1 className="truncate text-lg font-bold tracking-tight">{session.name}</h1>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-400">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </button>
+            )}
+            <p className="mt-0.5 text-xs text-gray-500">
+              {preview.totalSets} sets · {Math.round(preview.totalVolume).toLocaleString()} lbs
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="font-mono text-2xl font-bold leading-none tabular-nums">
+              {formatTimer(elapsed)}
+            </div>
+            <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+              {doneCount}/{session.exercises.length} done
+            </div>
+          </div>
         </div>
-        <div className="font-mono text-lg tabular-nums">{formatTimer(elapsed)}</div>
+
+        {/* progress through the exercises */}
+        {session.exercises.length > 0 && (
+          <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-600 transition-[width] duration-500"
+              style={{ width: `${(doneCount / session.exercises.length) * 100}%` }}
+            />
+          </div>
+        )}
+
+        {/* heads-up before the 2h30m cap ends the session */}
+        {remainingToCap < WARN_MS && remainingToCap > 0 && (
+          <p className="mt-2 rounded-xl bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+            Auto-finishing in {formatClock(Math.round(remainingToCap / 1000))} — sessions cap at 2h30m.
+          </p>
+        )}
       </div>
 
       {/* all-done banner */}
@@ -646,8 +697,8 @@ export default function ActiveWorkoutSession({
         <div className="mb-3 flex items-center gap-3 rounded-2xl border border-green-200 bg-green-50 p-3 dark:border-green-500/30 dark:bg-green-500/10">
           <span className="text-2xl">🎉</span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-green-800 dark:text-green-300">Workout complete!</p>
-            <p className="text-xs text-green-700/80 dark:text-green-400/80">Every exercise is done. Ready to log it?</p>
+            <p className="text-sm font-semibold text-green-800 dark:text-green-300">Every exercise done</p>
+            <p className="text-xs text-green-700/80 dark:text-green-400/80">Ready to log it?</p>
           </div>
           <button
             type="button"
@@ -670,7 +721,7 @@ export default function ActiveWorkoutSession({
             items={displayExercises.map((x) => x.key)}
             strategy={verticalListSortingStrategy}
           >
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {displayExercises.map((ex) => (
                 <ExerciseBlock
                   key={ex.key}
@@ -679,6 +730,7 @@ export default function ActiveWorkoutSession({
                   startRest={startRest}
                   showRpe={showRpe}
                   completed={isExerciseComplete(ex)}
+                  current={ex.key === currentKey}
                 />
               ))}
             </div>
@@ -689,7 +741,7 @@ export default function ActiveWorkoutSession({
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className="mt-3 w-full rounded-2xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+        className="mt-3 w-full rounded-2xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 shadow-card transition-colors hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
       >
         + Add exercise
       </button>
@@ -701,50 +753,85 @@ export default function ActiveWorkoutSession({
         </p>
       )}
 
-      {/* footer actions */}
-      <div className="above-dock fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-800 dark:bg-gray-950/95">
-        <div className="mx-auto max-w-app">
-          {rest && (
-            <div className="mb-2 flex items-center gap-2 rounded-xl bg-gray-800 px-3 py-2 text-white dark:bg-gray-200 dark:text-gray-900">
-              <span className="text-xs font-medium uppercase tracking-wide opacity-70">Rest</span>
-              <span className="font-mono text-lg tabular-nums">{formatClock(restRemaining)}</span>
-              <div className="ml-auto flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => adjustRest(-15)}
-                  className="rounded-md bg-white/20 px-2 py-1 text-xs font-medium dark:bg-black/10"
-                >
-                  −15s
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjustRest(15)}
-                  className="rounded-md bg-white/20 px-2 py-1 text-xs font-medium dark:bg-black/10"
-                >
-                  +15s
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRest(null)}
-                  className="rounded-md bg-white/20 px-2 py-1 text-xs font-medium dark:bg-black/10"
-                >
-                  Skip
-                </button>
+      {/* Floating action bar — same glass pill language as the mobile dock, with
+          the rest timer riding directly above it so it's impossible to miss. */}
+      <div className="above-dock fixed inset-x-0 bottom-0 z-20 px-3 pb-3 pt-2 sm:pb-4">
+        <div className="mx-auto max-w-app space-y-2">
+          {(rest || restJustDone) && (
+            <div
+              className={[
+                'animate-pop-in overflow-hidden rounded-[1.4rem] px-4 py-3 text-white shadow-pop',
+                rest
+                  ? 'bg-gradient-to-br from-accent-500 to-accent-700'
+                  : 'bg-gradient-to-br from-green-500 to-green-700',
+              ].join(' ')}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/75">
+                    {rest ? 'Rest' : 'Rest over'}
+                  </p>
+                  <p className="font-mono text-4xl font-bold leading-none tabular-nums">
+                    {rest ? formatClock(restRemaining) : 'Go'}
+                  </p>
+                </div>
+                {rest ? (
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => adjustRest(-15)}
+                      className="h-9 rounded-xl bg-white/20 px-2.5 text-xs font-bold transition-colors hover:bg-white/30"
+                    >
+                      −15s
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjustRest(15)}
+                      className="h-9 rounded-xl bg-white/20 px-2.5 text-xs font-bold transition-colors hover:bg-white/30"
+                    >
+                      +15s
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRest(null)}
+                      className="h-9 rounded-xl bg-white/20 px-2.5 text-xs font-bold transition-colors hover:bg-white/30"
+                    >
+                      Skip
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setRestDoneAt(null)}
+                    className="h-9 shrink-0 rounded-xl bg-white/20 px-3 text-xs font-bold transition-colors hover:bg-white/30"
+                  >
+                    Dismiss
+                  </button>
+                )}
               </div>
+              {rest && (
+                <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-black/20">
+                  <div
+                    className="h-full rounded-full bg-white/90 transition-[width] duration-1000 ease-linear"
+                    style={{ width: `${restPct}%` }}
+                  />
+                </div>
+              )}
             </div>
           )}
-          <div className="flex gap-2">
+
+          <div className="glass flex items-center gap-2 rounded-[1.4rem] border p-1.5 shadow-pop">
             <button
               type="button"
               onClick={handleDiscard}
-              className="rounded-xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              className="grid h-11 shrink-0 place-items-center rounded-2xl px-4 text-sm font-semibold text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600 dark:text-gray-400 dark:hover:bg-gray-800"
             >
               Discard
             </button>
             <button
               type="button"
               onClick={() => setReviewing(true)}
-              className="flex-1 rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white hover:bg-gray-700"
+              className="btn-accent h-11 min-w-0 flex-1 rounded-2xl px-4 text-sm font-semibold"
             >
               Finish workout
             </button>
@@ -767,39 +854,43 @@ export default function ActiveWorkoutSession({
 
       {/* finish review */}
       {reviewing && (
-        <div data-no-swipe className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => !saving && setReviewing(false)}>
+        <div
+          data-no-swipe
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
+          onClick={() => !saving && setReviewing(false)}
+        >
           <div
             className="w-full max-w-app rounded-t-3xl bg-white p-5 shadow-xl animate-slide-up dark:bg-gray-900 sm:rounded-3xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-bold">Finish workout</h2>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <Stat label="Total volume" value={`${Math.round(preview.totalVolume).toLocaleString()} lbs`} />
-              <Stat label="Duration" value={formatTimer(elapsed)} />
-              <Stat label="Exercises" value={String(preview.exerciseCount)} />
-              <Stat label="Sets" value={String(preview.totalSets)} />
+            <div className="mt-4 grid grid-cols-2 gap-2.5">
+              <ReviewStat label="Volume" value={`${Math.round(preview.totalVolume).toLocaleString()} lbs`} />
+              <ReviewStat label="Duration" value={formatTimer(elapsed)} />
+              <ReviewStat label="Exercises" value={String(preview.exerciseCount)} />
+              <ReviewStat label="Sets" value={String(preview.totalSets)} />
             </div>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Session notes (optional)…"
               rows={2}
-              className="mt-3 w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-gray-500 dark:border-gray-700 dark:bg-gray-950"
+              className="mt-3 w-full resize-y rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent-500 dark:border-gray-700 dark:bg-gray-950"
             />
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
                 onClick={() => setReviewing(false)}
                 disabled={saving}
-                className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-medium dark:border-gray-700"
+                className="flex-1 rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold dark:border-gray-700"
               >
                 Keep going
               </button>
               <button
                 type="button"
-                onClick={confirmFinish}
+                onClick={() => endSession(false)}
                 disabled={saving}
-                className="flex-1 rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-60"
+                className="btn-accent flex-1 px-4 py-3 text-sm font-semibold disabled:opacity-60"
               >
                 {saving ? 'Saving…' : 'Save workout'}
               </button>
@@ -811,11 +902,13 @@ export default function ActiveWorkoutSession({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function ReviewStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-800/60">
-      <div className="text-[11px] uppercase tracking-wide text-gray-400">{label}</div>
-      <div className="text-base font-semibold">{value}</div>
+    <div className="rounded-2xl bg-gray-50 px-3 py-2.5 dark:bg-gray-800/60">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+        {label}
+      </div>
+      <div className="mt-0.5 text-lg font-bold tabular-nums">{value}</div>
     </div>
   );
 }

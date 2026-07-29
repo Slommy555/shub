@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   type Exercise,
   type MuscleGroup,
@@ -6,6 +7,7 @@ import {
 } from '../../types/workout';
 import type { UseWorkoutSession } from '../../hooks/workout/useWorkoutSession';
 import ActiveWorkoutSession from './ActiveWorkoutSession';
+import WorkoutSummaryCard, { type FinishedWorkout } from './WorkoutSummaryCard';
 
 interface Props {
   exercises: Exercise[];
@@ -30,6 +32,10 @@ export default function LogTab({
   onSaveAsTemplate,
   showRpe,
 }: Props) {
+  // Finishing clears the session from the store, so the summary is held here —
+  // otherwise the active-session screen unmounts before it can be shown.
+  const [finished, setFinished] = useState<FinishedWorkout | null>(null);
+
   // Active session takes over the whole tab.
   if (sessionApi.session) {
     return (
@@ -38,9 +44,21 @@ export default function LogTab({
         exercises={exercises}
         onCreateCustom={createCustom}
         onDeleteExercise={deleteExercise}
-        onFinished={onWorkoutFinished}
-        onSaveAsTemplate={onSaveAsTemplate}
+        onFinished={(summary, snapshot, auto) => {
+          setFinished({ summary, name: snapshot.name, exercises: snapshot.exercises, auto });
+          onWorkoutFinished();
+        }}
         showRpe={showRpe}
+      />
+    );
+  }
+
+  if (finished) {
+    return (
+      <WorkoutSummaryCard
+        finished={finished}
+        onSaveAsTemplate={onSaveAsTemplate}
+        onDone={() => setFinished(null)}
       />
     );
   }

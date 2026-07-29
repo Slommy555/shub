@@ -213,10 +213,12 @@ export function useWorkoutSession(userId: string | null) {
   const discard = useCallback(() => setSession(null), []);
 
   const finish = useCallback(
-    async (notes: string): Promise<WorkoutSummary | null> => {
+    async (notes: string, completedAtOverride?: string): Promise<WorkoutSummary | null> => {
       if (!userId || !session) return null;
       const logId = crypto.randomUUID();
-      const completedAt = new Date().toISOString();
+      // The caller can pin the end time — the 2h30m auto-end stamps the session
+      // at the cap so a workout left open overnight doesn't log as 14 hours.
+      const completedAt = completedAtOverride ?? new Date().toISOString();
 
       const setRows: {
         id: string;
