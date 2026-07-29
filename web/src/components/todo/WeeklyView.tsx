@@ -359,7 +359,7 @@ export default function WeeklyView({
                     className={[
                       'flex h-12 w-full flex-col items-center justify-center rounded-xl text-[11px] font-semibold uppercase transition-all',
                       sel
-                        ? 'bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-glow'
+                        ? 'bg-gradient-to-b from-accent-500 to-accent-600 text-accentfg shadow-glow'
                         : today
                           ? 'text-accent-700 ring-1 ring-inset ring-accent-400/70 dark:text-accent-200'
                           : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800',

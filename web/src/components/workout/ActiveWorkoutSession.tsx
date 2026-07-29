@@ -222,7 +222,7 @@ function SetRow({
           <span
             className={`grid h-8 w-8 place-items-center rounded-xl border text-sm transition-all ${
               set.done
-                ? 'border-transparent bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-glow'
+                ? 'border-transparent bg-gradient-to-b from-accent-500 to-accent-600 text-accentfg shadow-glow'
                 : 'border-gray-300 text-transparent dark:border-gray-600'
             }`}
           >
@@ -330,7 +330,7 @@ function ExerciseBlock({
               {ex.exercise.name}
             </span>
             {current && (
-              <span className="shrink-0 rounded-full bg-gradient-to-b from-accent-500 to-accent-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              <span className="shrink-0 rounded-full bg-gradient-to-b from-accent-500 to-accent-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accentfg">
                 Now
               </span>
             )}
@@ -516,6 +516,10 @@ export default function ActiveWorkoutSession({
   const restRemaining = rest ? Math.max(0, Math.round((rest.endsAt - now) / 1000)) : 0;
   const restPct = rest ? Math.max(0, Math.min(100, (restRemaining / rest.total) * 100)) : 0;
   const restJustDone = restDoneAt != null && now - restDoneAt < REST_DONE_MS;
+  // Rest-card buttons tint with the accent foreground so they stay legible on
+  // both a deep accent (white text) and a bright one (near-black text).
+  const chipCls =
+    'h-9 rounded-xl bg-accentfg/20 px-2.5 text-xs font-bold transition-colors hover:bg-accentfg/30';
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -737,15 +741,18 @@ export default function ActiveWorkoutSession({
           {(rest || restJustDone) && (
             <div
               className={[
-                'animate-pop-in overflow-hidden rounded-[1.4rem] px-4 py-3 text-white shadow-pop',
+                'animate-pop-in overflow-hidden rounded-[1.4rem] px-4 py-3 shadow-pop',
+                // The resting card is accent-tinted, so its text/controls follow
+                // the accent's readable foreground; the "done" card is green and
+                // always takes white.
                 rest
-                  ? 'bg-gradient-to-br from-accent-500 to-accent-700'
-                  : 'bg-gradient-to-br from-green-500 to-green-700',
+                  ? 'bg-gradient-to-br from-accent-500 to-accent-700 text-accentfg'
+                  : 'bg-gradient-to-br from-green-500 to-green-700 text-white',
               ].join(' ')}
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/75">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] opacity-75">
                     {rest ? 'Rest' : 'Rest over'}
                   </p>
                   <p className="font-mono text-4xl font-bold leading-none tabular-nums">
@@ -757,21 +764,21 @@ export default function ActiveWorkoutSession({
                     <button
                       type="button"
                       onClick={() => adjustRest(-15)}
-                      className="h-9 rounded-xl bg-white/20 px-2.5 text-xs font-bold transition-colors hover:bg-white/30"
+                      className={chipCls}
                     >
                       −15s
                     </button>
                     <button
                       type="button"
                       onClick={() => adjustRest(15)}
-                      className="h-9 rounded-xl bg-white/20 px-2.5 text-xs font-bold transition-colors hover:bg-white/30"
+                      className={chipCls}
                     >
                       +15s
                     </button>
                     <button
                       type="button"
                       onClick={() => setRest(null)}
-                      className="h-9 rounded-xl bg-white/20 px-2.5 text-xs font-bold transition-colors hover:bg-white/30"
+                      className={chipCls}
                     >
                       Skip
                     </button>
@@ -789,7 +796,7 @@ export default function ActiveWorkoutSession({
               {rest && (
                 <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-black/20">
                   <div
-                    className="h-full rounded-full bg-white/90 transition-[width] duration-1000 ease-linear"
+                    className="h-full rounded-full bg-accentfg/90 transition-[width] duration-1000 ease-linear"
                     style={{ width: `${restPct}%` }}
                   />
                 </div>

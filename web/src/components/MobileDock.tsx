@@ -36,7 +36,7 @@ export default function MobileDock({ active, onSelect }: Props) {
               className={[
                 'flex h-11 items-center justify-center gap-1.5 rounded-2xl transition-all duration-200 ease-out',
                 on
-                  ? 'min-w-0 flex-1 bg-gradient-to-b from-accent-500 to-accent-600 px-2.5 text-white shadow-glow'
+                  ? 'min-w-0 flex-1 bg-gradient-to-b from-accent-500 to-accent-600 px-2.5 text-accentfg shadow-glow'
                   : 'w-10 shrink-0 text-gray-500 active:scale-90 active:bg-gray-100 dark:text-gray-400 dark:active:bg-gray-800',
               ].join(' ')}
             >

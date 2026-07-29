@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Task } from '../types';
 
 /** Local YYYY-MM-DD for "today" (avoids UTC off-by-one from toISOString). */
@@ -23,8 +23,6 @@ const CHECK_INTERVAL_MS = 60_000;
 /** How long before a timed event starts we begin reminding about it. */
 const EVENT_LEAD_MIN = 30;
 
-type Permission = NotificationPermission | 'unsupported';
-
 /** A timed event = a task with both a start and end time (work, meetings, …). */
 export function isEvent(task: Task): boolean {
   return !!task.start_time && !!task.end_time;
@@ -48,24 +46,12 @@ export interface UpcomingEvent {
  *  - `upcomingEvents`: timed events scheduled for today that start within the
  *    next 30 minutes — these read as "X starts in N minutes!" rather than a
  *    task reminder, since an event isn't a task to check off.
- * Fires browser notifications when permission is granted; the returned lists
- * also drive in-app banners.
+ * Purely in-app: the lists drive the on-screen banners. This app sends no OS or
+ * push notifications at all, so nothing here asks for notification permission.
  */
 export function useReminders(tasks: Task[]) {
-  const [permission, setPermission] = useState<Permission>(
-    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
-  );
   // Bumped every interval tick so the memo below recomputes against the clock.
   const [tick, setTick] = useState(0);
-  // Tracks which task ids we've already notified about this session, so we
-  // don't re-fire the same browser notification every minute.
-  const [notified, setNotified] = useState<Set<string>>(new Set());
-
-  const requestPermission = useCallback(async () => {
-    if (typeof Notification === 'undefined') return;
-    const result = await Notification.requestPermission();
-    setPermission(result);
-  }, []);
 
   // Plain to-dos due today or overdue — timed events are handled separately.
   const dueTasks = useMemo(() => {
@@ -94,52 +80,7 @@ export function useReminders(tasks: Task[]) {
     return () => clearInterval(id);
   }, []);
 
-  // Fire browser notifications for newly-due tasks (when allowed).
-  useEffect(() => {
-    if (permission !== 'granted' || dueTasks.length === 0) return;
-
-    const fresh = dueTasks.filter((t) => !notified.has(t.id));
-    if (fresh.length === 0) return;
-
-    const title = fresh.length === 1 ? 'Task due' : `${fresh.length} tasks due`;
-    const body = fresh.map((t) => `• ${t.text}`).join('\n');
-    try {
-      new Notification(title, { body, tag: 'todo-reminders' });
-    } catch {
-      /* some environments block construction; the in-app banner still shows */
-    }
-
-    setNotified((prev) => {
-      const next = new Set(prev);
-      fresh.forEach((t) => next.add(t.id));
-      return next;
-    });
-  }, [dueTasks, permission, notified]);
-
-  // Fire an event-style notification when a timed event is coming up.
-  useEffect(() => {
-    if (permission !== 'granted' || upcomingEvents.length === 0) return;
-
-    // Key on the event id so we remind once as it enters the lead window.
-    const fresh = upcomingEvents.filter((e) => !notified.has(`event:${e.task.id}`));
-    if (fresh.length === 0) return;
-
-    for (const { task, minutesUntil } of fresh) {
-      try {
-        new Notification('Reminder', { body: eventReminderText(task, minutesUntil), tag: `event-${task.id}` });
-      } catch {
-        /* some environments block construction; the in-app banner still shows */
-      }
-    }
-
-    setNotified((prev) => {
-      const next = new Set(prev);
-      fresh.forEach((e) => next.add(`event:${e.task.id}`));
-      return next;
-    });
-  }, [upcomingEvents, permission, notified]);
-
-  return { dueTasks, upcomingEvents, permission, requestPermission };
+  return { dueTasks, upcomingEvents };
 }
 
 /** "Work starts in 30 minutes!" / "Work starts now!" */

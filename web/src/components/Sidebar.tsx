@@ -28,7 +28,7 @@ export default function Sidebar({ active, onSelect }: Props) {
               t.id === 'settings' ? 'mt-auto' : '',
               'group relative flex w-full flex-col items-center gap-1 rounded-2xl py-2.5 text-[10px] font-semibold transition-all duration-200',
               on
-                ? 'bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-glow'
+                ? 'bg-gradient-to-b from-accent-500 to-accent-600 text-accentfg shadow-glow'
                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100',
             ].join(' ')}
           >

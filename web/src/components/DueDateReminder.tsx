@@ -6,24 +6,16 @@ import { titleCase } from '../lib/text';
 interface Props {
   dueTasks: Task[];
   upcomingEvents: UpcomingEvent[];
-  permission: NotificationPermission | 'unsupported';
-  onRequestPermission: () => void;
 }
 
 /**
- * Non-blocking reminder UI. When browser notifications are granted, the hook
- * fires those; this component additionally shows an in-app toast/banner so the
- * reminder is visible even without OS notifications. Dismissable per session.
+ * Non-blocking, in-app reminder UI — a toast/banner shown inside the app while
+ * it's open. The app sends no OS or push notifications. Dismissable per session.
  *
  * Timed events (work, meetings, …) get their own "starts in N minutes" banner,
  * separate from the to-do "due today" reminder — an event isn't a task.
  */
-export default function DueDateReminder({
-  dueTasks,
-  upcomingEvents,
-  permission,
-  onRequestPermission,
-}: Props) {
+export default function DueDateReminder({ dueTasks, upcomingEvents }: Props) {
   const [dismissed, setDismissed] = useState(false);
 
   // Re-show the toast if the set of reminders changes.
@@ -87,16 +79,6 @@ export default function DueDateReminder({
                 ))}
                 {overflow > 0 && <li className="text-amber-700/80">+ {overflow} more</li>}
               </ul>
-
-              {permission === 'default' && (
-                <button
-                  type="button"
-                  onClick={onRequestPermission}
-                  className="mt-2 text-xs font-medium text-amber-700 underline underline-offset-2 hover:text-amber-900 dark:text-amber-300"
-                >
-                  Enable browser notifications
-                </button>
-              )}
             </div>
 
             <button

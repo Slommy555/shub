@@ -7,15 +7,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuthContext } from '../hooks/useAuth';
 import { ThemeProvider, useTheme } from '../lib/theme';
-import { usePushRegistration } from '../hooks/usePushRegistration';
 import { LoginScreen } from '../components/LoginScreen';
 
 function Gate() {
-  const { session, user, loading } = useAuthContext();
+  const { session, loading } = useAuthContext();
   const { colors, scheme } = useTheme();
-
-  // Ask for notification permission + save a push token once signed in.
-  usePushRegistration(user?.id ?? null);
 
   if (loading) {
     return (

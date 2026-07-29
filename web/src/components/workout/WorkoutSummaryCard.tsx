@@ -63,8 +63,8 @@ export default function WorkoutSummaryCard({ finished, onSaveAsTemplate, onDone 
   return (
     <div className="pb-fab mx-auto max-w-app p-4">
       <div className="surface animate-pop-in rounded-3xl p-6 text-center">
-        <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-glow">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-b from-accent-500 to-accent-600 text-accentfg shadow-glow">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M7 12.5l3.2 3.2L17 9" />
           </svg>
         </div>

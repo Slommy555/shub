@@ -25,25 +25,30 @@ export default {
           900: '#191924',
           950: '#101017',
         },
-        // Single accent — soft lavender (see UI_SKILL.md). Used sparingly for
-        // active states, focus rings and primary highlights.
+        // The single accent, used for active states, focus rings and primary
+        // highlights. Every shade reads from a CSS variable holding an "R G B"
+        // triple, so Settings → Accent color can re-tint the whole app at
+        // runtime. Defaults (soft lavender, per UI_SKILL.md) live in index.css;
+        // the <alpha-value> placeholder keeps `/60` opacity modifiers working.
         accent: {
-          50: '#f5f3ff',
-          100: '#ede9ff',
-          200: '#ddd6fe',
-          300: '#c9bdfa',
-          400: '#b8a9f5',
-          500: '#9b88e8',
-          600: '#7c6fb0',
-          700: '#645a90',
-          800: '#4a4370',
-          900: '#332e52',
+          50: 'rgb(var(--accent-50) / <alpha-value>)',
+          100: 'rgb(var(--accent-100) / <alpha-value>)',
+          200: 'rgb(var(--accent-200) / <alpha-value>)',
+          300: 'rgb(var(--accent-300) / <alpha-value>)',
+          400: 'rgb(var(--accent-400) / <alpha-value>)',
+          500: 'rgb(var(--accent-500) / <alpha-value>)',
+          600: 'rgb(var(--accent-600) / <alpha-value>)',
+          700: 'rgb(var(--accent-700) / <alpha-value>)',
+          800: 'rgb(var(--accent-800) / <alpha-value>)',
+          900: 'rgb(var(--accent-900) / <alpha-value>)',
         },
+        /* Readable text/icon color on top of an accent fill. */
+        accentfg: 'rgb(var(--accent-fg) / <alpha-value>)',
       },
       boxShadow: {
         card: '0 1px 2px rgba(16, 16, 23, 0.04), 0 8px 24px -12px rgba(16, 16, 23, 0.12)',
         pop: '0 12px 40px -12px rgba(16, 16, 23, 0.35)',
-        glow: '0 6px 20px -6px rgba(124, 111, 176, 0.55)',
+        glow: '0 6px 20px -6px rgb(var(--accent-600) / 0.55)',
       },
       keyframes: {
         'slide-up': {

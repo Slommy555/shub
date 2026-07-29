@@ -4,6 +4,22 @@
 
 :root {
   color-scheme: light dark;
+
+  /* Accent ramp as "R G B" triples so Tailwind's accent-* utilities (and their
+     /opacity modifiers) can be re-tinted at runtime — Settings → Accent color
+     writes these same variables onto <html>. Default: soft lavender. */
+  --accent-50: 245 243 255;
+  --accent-100: 237 233 255;
+  --accent-200: 221 214 254;
+  --accent-300: 201 189 250;
+  --accent-400: 184 169 245;
+  --accent-500: 155 136 232;
+  --accent-600: 124 111 176;
+  --accent-700: 100 90 144;
+  --accent-800: 74 67 112;
+  --accent-900: 51 46 82;
+  /* Text/icons on an accent fill — flipped to near-black for bright accents. */
+  --accent-fg: 255 255 255;
 }
 
 html,
@@ -52,14 +68,14 @@ body {
   /* Soft ambient wash behind the page — a faint lavender bloom in the top-left
      and a cooler one bottom-right. Fixed so it never scrolls with content. */
   background-image:
-    radial-gradient(1200px 600px at 0% -10%, rgba(184, 169, 245, 0.14), transparent 60%),
-    radial-gradient(900px 500px at 100% 110%, rgba(124, 111, 176, 0.1), transparent 60%);
+    radial-gradient(1200px 600px at 0% -10%, rgb(var(--accent-400) / 0.14), transparent 60%),
+    radial-gradient(900px 500px at 100% 110%, rgb(var(--accent-600) / 0.1), transparent 60%);
   background-attachment: fixed;
 }
 .dark body {
   background-image:
-    radial-gradient(1100px 560px at 0% -10%, rgba(124, 111, 176, 0.16), transparent 62%),
-    radial-gradient(900px 520px at 100% 108%, rgba(90, 82, 140, 0.14), transparent 60%);
+    radial-gradient(1100px 560px at 0% -10%, rgb(var(--accent-600) / 0.18), transparent 62%),
+    radial-gradient(900px 520px at 100% 108%, rgb(var(--accent-700) / 0.16), transparent 60%);
 }
 /* Custom user colors take over completely — drop the ambient wash. */
 html[data-theme-custom] body {
@@ -78,7 +94,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 button:focus-visible {
-  outline: 2px solid rgba(124, 111, 176, 0.55);
+  outline: 2px solid rgb(var(--accent-600) / 0.6);
   outline-offset: 1px;
 }
 
@@ -88,14 +104,14 @@ input[type='radio'],
 input[type='range'],
 input[type='date'],
 input[type='time'] {
-  accent-color: #7c6fb0;
+  accent-color: rgb(var(--accent-600));
 }
 .dark input[type='checkbox'],
 .dark input[type='radio'],
 .dark input[type='range'],
 .dark input[type='date'],
 .dark input[type='time'] {
-  accent-color: #b8a9f5;
+  accent-color: rgb(var(--accent-400));
 }
 
 /* Slim, unobtrusive scrollbars (desktop). */
@@ -137,7 +153,7 @@ input[type='time'] {
 
   /* Primary action — accent gradient with a soft glow. */
   .btn-accent {
-    @apply rounded-xl bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-glow transition-[transform,box-shadow,filter] hover:brightness-105 active:scale-[0.98];
+    @apply rounded-xl bg-gradient-to-b from-accent-500 to-accent-600 text-accentfg shadow-glow transition-[transform,box-shadow,filter] hover:brightness-105 active:scale-[0.98];
   }
 
   /* Segmented control shell + its pills. */

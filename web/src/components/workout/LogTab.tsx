@@ -76,7 +76,7 @@ export default function LogTab({
         className="btn-accent flex w-full items-center gap-3 rounded-2xl px-4 py-4 text-left"
       >
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/20">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
         </span>

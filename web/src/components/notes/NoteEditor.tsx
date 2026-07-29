@@ -155,16 +155,6 @@ export default function NoteEditor({ note, pageTitle, onUpdate, onDelete, onBack
             aria-label="Note title"
             className="w-full bg-transparent text-2xl font-bold tracking-tight text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
           />
-          {/* Flag this note to be pulled into the daily brief (Telegram / push). */}
-          <label className="mt-1.5 inline-flex cursor-pointer items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-            <input
-              type="checkbox"
-              checked={note.include_in_brief}
-              onChange={(e) => void onUpdate(note.id, { include_in_brief: e.target.checked })}
-              className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-gray-600 focus:ring-gray-400/40 dark:border-gray-600 dark:bg-gray-800"
-            />
-            Daily update
-          </label>
           <div className="mt-3">
             <Toolbar editor={editor} />
             <EditorContent editor={editor} className="mt-2" />

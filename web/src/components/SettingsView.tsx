@@ -2,20 +2,27 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { APPEARANCE_FIELDS, type useAppearance } from '../hooks/useAppearance';
 import type { UseWorkoutPrefs } from '../hooks/workout/useWorkoutPrefs';
+import type { UseAccent } from '../hooks/useAccent';
 import ThemeToggle from './ThemeToggle';
 import SetPasswordDialog from './SetPasswordDialog';
 import CategoryManager from './CategoryManager';
-import NotificationSettings from './NotificationSettings';
-import TelegramBriefSettings from './settings/TelegramBriefSettings';
+import AccentPicker from './settings/AccentPicker';
 
 interface Props {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   appearance: ReturnType<typeof useAppearance>;
+  accent: UseAccent;
   workoutPrefs: UseWorkoutPrefs;
 }
 
-export default function SettingsView({ theme, onToggleTheme, appearance, workoutPrefs }: Props) {
+export default function SettingsView({
+  theme,
+  onToggleTheme,
+  appearance,
+  accent,
+  workoutPrefs,
+}: Props) {
   const { user, signOut } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
 
@@ -36,6 +43,8 @@ export default function SettingsView({ theme, onToggleTheme, appearance, workout
             </div>
             <ThemeToggle theme={theme} onToggle={onToggleTheme} />
           </div>
+
+          <AccentPicker accent={accent} />
 
           {/* Custom colors */}
           <div className="mt-4 border-t border-gray-100 pt-3 dark:border-gray-800">
@@ -158,10 +167,6 @@ export default function SettingsView({ theme, onToggleTheme, appearance, workout
             </button>
           </div>
         </section>
-
-        <NotificationSettings />
-
-        <TelegramBriefSettings />
 
         <CategoryManager />
       </div>

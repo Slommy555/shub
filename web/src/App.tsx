@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useTheme } from './hooks/useTheme';
 import { useAppearance } from './hooks/useAppearance';
+import { useAccent } from './hooks/useAccent';
 import { useWorkoutPrefs } from './hooks/workout/useWorkoutPrefs';
 import { useWorkScheduleSync } from './hooks/useWorkScheduleSync';
 import { useTasks } from './hooks/useTasks';
@@ -29,17 +30,13 @@ import NotesTab from './components/notes/NotesTab';
 import SettingsView from './components/SettingsView';
 import DueDateReminder from './components/DueDateReminder';
 import EditTaskDialog from './components/EditTaskDialog';
-import DailyBriefModal from './components/DailyBriefModal';
-import { useDailyBriefs } from './hooks/useDailyBriefs';
 
 function Shell({ userId }: { userId: string }) {
   const [tab, setTab] = useState<Tab>('todo');
   const [editing, setEditing] = useState<Task | null>(null);
-  const [briefText, setBriefText] = useState<string | null>(null);
-  const [briefOpen, setBriefOpen] = useState(false);
-  const { latest: latestBrief } = useDailyBriefs(userId);
   const { resolvedTheme, toggleTheme } = useTheme(userId);
   const appearance = useAppearance(userId);
+  const accent = useAccent(userId);
   const workoutPrefs = useWorkoutPrefs(userId);
   // Keep the recurring work schedule (localStorage) synced to Supabase so work
   // shifts configured on one device show up in the timeline on every device.
@@ -56,7 +53,7 @@ function Shell({ userId }: { userId: string }) {
     count: TAB_IDS.length,
     onChange: (i) => setTab(TAB_IDS[i]),
   });
-  const { dueTasks, upcomingEvents, permission, requestPermission } = useReminders(api.tasks);
+  const { dueTasks, upcomingEvents } = useReminders(api.tasks);
 
   // Clipboard actions. The hook owns the payload; creating/deleting rows stays
   // here where the task API lives.
@@ -90,25 +87,6 @@ function Shell({ userId }: { userId: string }) {
   // Keep the open editor in sync with the latest task data (realtime edits).
   const editingTask = editing ? api.tasks.find((t) => t.id === editing.id) ?? editing : null;
 
-  // When the user taps a push notification, the service worker posts a message
-  // to the page (see public/sw.js notificationclick handler). A daily-brief tap
-  // opens the brief modal; a message carrying a `tab` navigates there.
-  useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
-    const onMessage = (event: MessageEvent) => {
-      const msg = event.data;
-      if (!msg || msg.type !== 'notification-click') return;
-      const data = (msg.data ?? {}) as { tab?: string; type?: string; fullBrief?: string };
-      if (data.type === 'daily_brief') {
-        setBriefText(data.fullBrief ?? latestBrief);
-        setBriefOpen(true);
-      }
-      if (data.tab) setTab(data.tab as Tab);
-    };
-    navigator.serviceWorker.addEventListener('message', onMessage);
-    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
-  }, [latestBrief]);
-
   return (
     <AppProvider
       value={{
@@ -134,25 +112,6 @@ function Shell({ userId }: { userId: string }) {
         <div className="flex min-h-screen">
           <Sidebar active={tab} onSelect={setTab} />
 
-          {/* Daily-brief bell (top-right). Opens the most recent brief. */}
-          <button
-            type="button"
-            onClick={() => {
-              setBriefText(latestBrief);
-              setBriefOpen(true);
-            }}
-            aria-label="Daily brief"
-            className="glass fixed right-3 top-3 z-40 grid h-10 w-10 place-items-center rounded-full border text-gray-600 shadow-card transition-transform active:scale-95 dark:text-gray-300"
-            style={{ marginRight: 'env(safe-area-inset-right)', marginTop: 'env(safe-area-inset-top)' }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            {latestBrief && (
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent-500 ring-2 ring-white/70 dark:ring-gray-900/70" />
-            )}
-          </button>
-
           <main
             className="min-w-0 flex-1"
             ref={swipe.ref}
@@ -170,6 +129,7 @@ function Shell({ userId }: { userId: string }) {
                   theme={resolvedTheme}
                   onToggleTheme={toggleTheme}
                   appearance={appearance}
+                  accent={accent}
                   workoutPrefs={workoutPrefs}
                 />
               )}
@@ -178,18 +138,9 @@ function Shell({ userId }: { userId: string }) {
 
           <MobileDock active={tab} onSelect={setTab} />
 
-          <DueDateReminder
-            dueTasks={dueTasks}
-            upcomingEvents={upcomingEvents}
-            permission={permission}
-            onRequestPermission={requestPermission}
-          />
+          <DueDateReminder dueTasks={dueTasks} upcomingEvents={upcomingEvents} />
 
           {editingTask && <EditTaskDialog task={editingTask} onClose={() => setEditing(null)} />}
-
-          {briefOpen && (
-            <DailyBriefModal brief={briefText} onClose={() => setBriefOpen(false)} />
-          )}
         </div>
       </VoiceController>
     </AppProvider>

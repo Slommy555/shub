@@ -54,7 +54,7 @@ type PickerKind = null | 'bedtime' | 'waketime' | 'workStart' | 'workEnd';
 /**
  * Sleep & Work Hours settings. Persists four times + a work-days set into
  * user_preferences (migration 029). UI-only for now — the values are stored so
- * Claude can use them later for schedule optimization + the Telegram brief.
+ * Claude can use them later for schedule optimization.
  */
 export function SleepWorkHours() {
   const { colors } = useTheme();
