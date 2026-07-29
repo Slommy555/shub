@@ -157,38 +157,15 @@ function SetRow({
   onDelete: () => void;
   onCompleted: () => void;
 }) {
-  const [dx, setDx] = useState(0);
-  const startX = useRef<number | null>(null);
-
   // The leading cell doubles as a set-type cycler: # → W (warm-up) → F (failure).
   const typeLabel = set.type === 'warmup' ? 'W' : set.type === 'failure' ? 'F' : index + 1;
 
   return (
-    <div className="relative overflow-hidden rounded-xl">
-      <div className="absolute inset-y-0 right-0 flex w-16 items-center justify-center bg-red-500 text-xs font-medium text-white">
-        Delete
-      </div>
+    <div className="overflow-hidden rounded-xl">
       <div
-        // Owns its own horizontal gesture (swipe left to delete), so the
-        // app-level swipe navigation must keep its hands off this row.
-        data-no-swipe
-        className={`relative grid ${gridCls} items-center gap-1.5 py-1 transition-colors ${
-          set.done ? 'bg-accent-50/70 dark:bg-accent-500/10' : 'bg-white dark:bg-gray-900'
+        className={`grid ${gridCls} items-center gap-1.5 py-1 transition-colors ${
+          set.done ? 'bg-accent-50 dark:bg-accent-500/10' : 'bg-white dark:bg-gray-900'
         }`}
-        style={{ transform: `translateX(${dx}px)`, transition: startX.current === null ? 'transform 0.15s' : 'none' }}
-        onTouchStart={(e) => {
-          startX.current = e.touches[0].clientX;
-        }}
-        onTouchMove={(e) => {
-          if (startX.current === null) return;
-          const delta = e.touches[0].clientX - startX.current;
-          if (delta < 0) setDx(Math.max(delta, -80));
-        }}
-        onTouchEnd={() => {
-          if (dx < -60) onDelete();
-          setDx(0);
-          startX.current = null;
-        }}
       >
         <button
           type="button"
@@ -252,7 +229,7 @@ function SetRow({
             ✓
           </span>
         </button>
-        {/* explicit delete (always visible; swipe-left also deletes on mobile) */}
+        {/* delete this set — the only way to remove a row */}
         <button
           type="button"
           onClick={onDelete}
