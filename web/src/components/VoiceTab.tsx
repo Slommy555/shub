@@ -53,7 +53,7 @@ export default function VoiceTab() {
           onClick={voice.startManual}
           disabled={busy}
           aria-label="Start recording"
-          className="grid h-24 w-24 place-items-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+          className="btn-accent grid h-28 w-28 place-items-center rounded-full text-white disabled:opacity-50"
         >
           <MicIcon size={40} />
         </button>
@@ -71,9 +71,9 @@ export default function VoiceTab() {
           <p className="font-semibold text-gray-600 dark:text-gray-300">Works on every tab</p>
           {isMobile ? (
             <p className="mt-1">
-              Tap the mic button in the corner from any page to record, then review your proposed
-              tasks. Mention work shifts or events (like a hike) and they’ll show up as time blocks in
-              the Schedule view.
+              Tap the mic above to record, then review your proposed tasks — the review popup follows
+              you onto any tab. Mention work shifts or events (like a hike) and they’ll show up as
+              time blocks in the Schedule view.
             </p>
           ) : (
             <p className="mt-1">

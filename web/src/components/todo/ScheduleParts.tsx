@@ -20,7 +20,18 @@ export function ScheduleCard({
   overlay?: boolean;
   showSubtasks?: boolean;
 }) {
-  const { categories, openEditTask, deleteTask, updateSubtask, tasks } = useApp();
+  const {
+    categories,
+    openEditTask,
+    deleteTask,
+    updateSubtask,
+    tasks,
+    copyTask,
+    cutTask,
+    duplicateTask,
+    pasteTask,
+    hasClipboard,
+  } = useApp();
   // Virtual repeat occurrences point back to their real (base) task; all edits,
   // deletes and toggles act on that base, and the occurrence can't be dragged.
   const isOccurrence = Boolean(task.occurrence_of);
@@ -55,11 +66,11 @@ export function ScheduleCard({
             }
       }
       className={[
-        'flex flex-col gap-1 rounded-lg border bg-white px-2 py-1.5 text-[13px] shadow-sm dark:bg-gray-900',
+        'flex flex-col gap-1 rounded-xl border bg-white px-2 py-1.5 text-[13px] shadow-card dark:bg-gray-900',
         'border-gray-200 dark:border-gray-800',
         task.done ? 'opacity-50' : '',
         !overlay && isDragging ? 'opacity-30' : '',
-        overlay ? 'cursor-grabbing shadow-lg ring-1 ring-gray-400' : '',
+        overlay ? 'cursor-grabbing shadow-pop ring-1 ring-accent-400/70' : '',
       ].join(' ')}
     >
       {menu && (
@@ -73,6 +84,12 @@ export function ScheduleCard({
               label: task.done ? 'Mark as not done' : 'Mark as done',
               onClick: () => onToggle(baseTask.id, !task.done),
             },
+            { label: 'Copy', onClick: () => copyTask(baseTask) },
+            ...(isOccurrence ? [] : [{ label: 'Cut', onClick: () => cutTask(baseTask) }]),
+            { label: 'Duplicate', onClick: () => duplicateTask(baseTask, listDate(task)) },
+            ...(hasClipboard
+              ? [{ label: 'Paste into this day', onClick: () => pasteTask(listDate(task)) }]
+              : []),
             {
               label: isOccurrence ? 'Delete series' : 'Delete',
               danger: true,

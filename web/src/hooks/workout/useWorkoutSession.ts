@@ -55,13 +55,28 @@ export function useWorkoutSession(userId: string | null) {
     }
   }, [session]);
 
-  const startFreestyle = useCallback(() => {
+  const startFreestyle = useCallback((name?: string) => {
     setSession({
       templateId: null,
-      name: 'Freestyle Workout',
+      name: name?.trim() || 'Freestyle Workout',
       startedAt: new Date().toISOString(),
       exercises: [],
     });
+  }, []);
+
+  /** Start a fresh session from already-built exercises (e.g. repeat a past log). */
+  const startFromExercises = useCallback((name: string, exercises: SessionExercise[]) => {
+    setSession({
+      templateId: null,
+      name: name.trim() || 'Workout',
+      startedAt: new Date().toISOString(),
+      exercises,
+    });
+  }, []);
+
+  /** Rename the in-progress session (freestyle sessions start unnamed-ish). */
+  const rename = useCallback((name: string) => {
+    setSession((s) => (s ? { ...s, name: name.trim() || s.name } : s));
   }, []);
 
   const startFromTemplate = useCallback((tpl: TemplateWithExercises) => {
@@ -288,6 +303,8 @@ export function useWorkoutSession(userId: string | null) {
     session,
     startFreestyle,
     startFromTemplate,
+    startFromExercises,
+    rename,
     addExercise,
     removeExercise,
     reorderExercises,

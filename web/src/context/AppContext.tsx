@@ -13,6 +13,7 @@ export interface AppContextValue {
     category: Category;
     priority: Priority;
     due_date: string | null;
+    notes?: string | null;
     scheduled_date?: string | null;
     start_time?: string | null;
     end_time?: string | null;
@@ -34,6 +35,16 @@ export interface AppContextValue {
   ) => void;
   updateTask: (id: string, patch: Partial<Task>) => void;
   deleteTask: (id: string) => void;
+  /** Persist a new order for the whole task list (drag-to-reorder). */
+  reorderTasks: (ordered: Task[]) => void;
+  /** True when a task is sitting on the app clipboard, ready to paste. */
+  hasClipboard: boolean;
+  copyTask: (task: Task) => void;
+  cutTask: (task: Task) => void;
+  /** Copy a task and immediately paste it onto `day` (defaults to its own day). */
+  duplicateTask: (task: Task, day?: string | null) => void;
+  /** Paste the clipboard task onto `day` (null = unscheduled). */
+  pasteTask: (day: string | null) => void;
   addSubtask: (taskId: string, text: string) => void;
   updateSubtask: (id: string, patch: { text?: string; done?: boolean }) => void;
   deleteSubtask: (id: string) => void;

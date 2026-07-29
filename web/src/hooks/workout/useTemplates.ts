@@ -191,6 +191,24 @@ export function useTemplates(userId: string | null, exercises: Exercise[]) {
     []
   );
 
+  /**
+   * Create a template and fill in its exercises in one step — used to turn a
+   * finished (usually freestyle) workout into a repeatable template.
+   */
+  const createTemplateFrom = useCallback(
+    async (
+      name: string,
+      notes: string | null,
+      items: TemplateItemInput[]
+    ): Promise<WorkoutTemplate | null> => {
+      const tpl = await createTemplate(name);
+      if (!tpl) return null;
+      await saveTemplate(tpl.id, { name: tpl.name, notes, items });
+      return tpl;
+    },
+    [createTemplate, saveTemplate]
+  );
+
   const deleteTemplate = useCallback(async (id: string) => {
     setTemplates((prev) => prev.filter((t) => t.id !== id));
     setTemplateExercises((prev) => prev.filter((te) => te.template_id !== id));
@@ -203,6 +221,7 @@ export function useTemplates(userId: string | null, exercises: Exercise[]) {
     loading,
     reload,
     createTemplate,
+    createTemplateFrom,
     saveTemplate,
     deleteTemplate,
   };

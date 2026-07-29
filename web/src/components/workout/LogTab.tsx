@@ -1,6 +1,7 @@
 import {
   type Exercise,
   type MuscleGroup,
+  type SessionExercise,
   type TemplateWithExercises,
 } from '../../types/workout';
 import type { UseWorkoutSession } from '../../hooks/workout/useWorkoutSession';
@@ -14,6 +15,7 @@ interface Props {
   createCustom: (name: string, groups: MuscleGroup[]) => Promise<Exercise | null>;
   deleteExercise: (id: string) => void;
   onWorkoutFinished: () => void;
+  onSaveAsTemplate: (name: string, exercises: SessionExercise[]) => Promise<string | null>;
   showRpe: boolean;
 }
 
@@ -25,6 +27,7 @@ export default function LogTab({
   createCustom,
   deleteExercise,
   onWorkoutFinished,
+  onSaveAsTemplate,
   showRpe,
 }: Props) {
   // Active session takes over the whole tab.
@@ -36,6 +39,7 @@ export default function LogTab({
         onCreateCustom={createCustom}
         onDeleteExercise={deleteExercise}
         onFinished={onWorkoutFinished}
+        onSaveAsTemplate={onSaveAsTemplate}
         showRpe={showRpe}
       />
     );
@@ -50,17 +54,19 @@ export default function LogTab({
 
       <button
         type="button"
-        onClick={sessionApi.startFreestyle}
-        className="flex w-full items-center gap-3 rounded-2xl bg-gray-800 px-4 py-4 text-left text-white transition-colors hover:bg-gray-700"
+        onClick={() => sessionApi.startFreestyle()}
+        className="btn-accent flex w-full items-center gap-3 rounded-2xl px-4 py-4 text-left"
       >
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/20">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
         </span>
         <span>
           <span className="block text-sm font-semibold">Freestyle workout</span>
-          <span className="block text-xs text-white/70">Start with a blank session</span>
+          <span className="block text-xs text-white/80">
+            Blank session — save it as a template when you're done
+          </span>
         </span>
       </button>
 
@@ -86,7 +92,7 @@ export default function LogTab({
                 key={t.id}
                 type="button"
                 onClick={() => sessionApi.startFromTemplate(t)}
-                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
+                className="surface flex w-full items-center justify-between gap-3 p-4 text-left transition-[transform,background-color] hover:bg-gray-50 active:scale-[0.99] dark:hover:bg-gray-800"
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">{t.name}</span>

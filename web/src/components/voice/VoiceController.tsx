@@ -37,7 +37,6 @@ import {
 } from '../../lib/claudeActions';
 import SettingsDrawer from '../SettingsDrawer';
 import VoicePopup from './VoicePopup';
-import MicFab from './MicFab';
 
 const DRAFT_KEY = 'voiceDraft';
 const VALID_PRIORITIES: Priority[] = ['high', 'med', 'low'];
@@ -579,17 +578,9 @@ export default function VoiceController({
         />
       )}
 
-      {/* Mobile-only voice side tab (no always-on listener on mobile). Anchored to
-          the right edge at 55%; it starts recording and, since it no longer sits
-          on top of the bottom-right VoicePopup, also toggles stop while recording.
-          Hidden only while the Claude review card is up (Fix 3). */}
-      {voiceEnabled && supported && isMobile && !reviewing && (
-        <MicFab
-          recording={speech.recording}
-          onStart={speech.startRecordingManual}
-          onStop={speech.stopRecordingManual}
-        />
-      )}
+      {/* No floating mic on mobile — voice is started from the Voice tab, which
+          keeps the screen edges clear. (The always-on keyword listener stays
+          desktop-only.) */}
 
       <SettingsDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 

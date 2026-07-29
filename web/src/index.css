@@ -20,13 +20,14 @@ body {
   max-width: 100%;
 }
 
-/* Mobile bottom clearance: keeps a tab's scrollable content from being hidden
-   behind the fixed floating buttons (mic + menu FABs) and any bottom bar. Only
-   on phones (<640px); desktop is unaffected. Defined after @tailwind utilities
-   so it wins over Tailwind's own padding utilities on the same element. */
+/* Mobile bottom clearance so a tab's scrollable content isn't hidden behind any
+   fixed bottom bar / home indicator. Only on phones (<640px); desktop is
+   unaffected. Defined after @tailwind utilities so it wins over Tailwind's own
+   padding utilities on the same element. (Trimmed from 120px now that the
+   floating mic button is gone and the menu tab sits at the left edge.) */
 @media (max-width: 639px) {
   .pb-fab {
-    padding-bottom: calc(env(safe-area-inset-bottom) + 120px) !important;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 72px) !important;
   }
 }
 
@@ -34,8 +35,120 @@ body {
   @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', ui-sans-serif,
+    system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  /* Soft ambient wash behind the page — a faint lavender bloom in the top-left
+     and a cooler one bottom-right. Fixed so it never scrolls with content. */
+  background-image:
+    radial-gradient(1200px 600px at 0% -10%, rgba(184, 169, 245, 0.14), transparent 60%),
+    radial-gradient(900px 500px at 100% 110%, rgba(124, 111, 176, 0.1), transparent 60%);
+  background-attachment: fixed;
+}
+.dark body {
+  background-image:
+    radial-gradient(1100px 560px at 0% -10%, rgba(124, 111, 176, 0.16), transparent 62%),
+    radial-gradient(900px 520px at 100% 108%, rgba(90, 82, 140, 0.14), transparent 60%);
+}
+/* Custom user colors take over completely — drop the ambient wash. */
+html[data-theme-custom] body {
+  background-image: none !important;
+}
+
+/* Headings sit tighter than Tailwind's defaults for a more designed feel. */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
+}
+
+/* Accent focus ring on every text control, replacing the browser default. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid rgba(124, 111, 176, 0.55);
+  outline-offset: 1px;
+}
+
+/* Native form controls (checkboxes, range, date pickers) pick up the accent. */
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'],
+input[type='date'],
+input[type='time'] {
+  accent-color: #7c6fb0;
+}
+.dark input[type='checkbox'],
+.dark input[type='radio'],
+.dark input[type='range'],
+.dark input[type='date'],
+.dark input[type='time'] {
+  accent-color: #b8a9f5;
+}
+
+/* Slim, unobtrusive scrollbars (desktop). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 140, 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(120, 120, 140, 0.32);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(120, 120, 140, 0.5);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   Shared surface / control classes. Kept in a components layer so any Tailwind
+   utility written on the element still wins.
+--------------------------------------------------------------------------- */
+@layer components {
+  /* Frosted chrome: sticky headers, nav rails, floating buttons. */
+  .glass {
+    @apply border-gray-200/80 bg-white/70 backdrop-blur-xl dark:border-gray-800/80 dark:bg-gray-900/70;
+  }
+
+  /* Standard elevated card. */
+  .surface {
+    @apply rounded-2xl border border-gray-200 bg-white shadow-card dark:border-gray-800 dark:bg-gray-900;
+  }
+
+  /* Primary action — accent gradient with a soft glow. */
+  .btn-accent {
+    @apply rounded-xl bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-glow transition-[transform,box-shadow,filter] hover:brightness-105 active:scale-[0.98];
+  }
+
+  /* Segmented control shell + its pills. */
+  .seg {
+    @apply inline-flex rounded-full border border-gray-200 bg-gray-100/70 p-1 dark:border-gray-800 dark:bg-gray-900/70;
+  }
+  .seg-item {
+    @apply rounded-full px-3 py-1.5 text-xs font-semibold transition-all;
+  }
+  .seg-item-on {
+    @apply bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white;
+  }
+  .seg-item-off {
+    @apply text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100;
+  }
+}
+
+/* Every modal scrim in the app uses bg-black/40 — frost the page behind them
+   instead of only dimming it, so dialogs read as floating glass. */
+[class~='bg-black/40'] {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  background-color: rgba(16, 16, 23, 0.45);
 }
 
 /* Loading skeleton shimmer */
@@ -197,6 +310,26 @@ html[data-theme-custom] [class~='dark:text-gray-400'] {
   color: var(--c-muted) !important;
 }
 
+/* The shared surface/chrome classes above are compiled utilities, so the
+   class-name matching used elsewhere in this block can't see them — map them
+   onto the custom variables explicitly. */
+html[data-theme-custom] .surface {
+  background-color: var(--c-surface) !important;
+  border-color: var(--c-border) !important;
+}
+html[data-theme-custom] .glass {
+  background-color: color-mix(in srgb, var(--c-surface) 78%, transparent) !important;
+  border-color: var(--c-border) !important;
+}
+html[data-theme-custom] .seg {
+  background-color: color-mix(in srgb, var(--c-surface) 70%, transparent) !important;
+  border-color: var(--c-border) !important;
+}
+html[data-theme-custom] .seg-item-on {
+  background-color: var(--c-accent) !important;
+  color: var(--c-accent-text) !important;
+}
+
 /* Borders & dividers */
 html[data-theme-custom] [class~='border-gray-100'],
 html[data-theme-custom] [class~='border-gray-200'],
@@ -215,42 +348,42 @@ html[data-theme-custom] [class~='dark:border-gray-800'] {
    mode, light button in dark mode) with `--color-accent-text` for label color.
 --------------------------------------------------------------------------- */
 .budget-scope {
-  --color-bg-base: #030712; /* gray-950 */
-  --color-bg-elevated: #111827; /* gray-900 */
-  --color-bg-surface: #1f2937; /* gray-800 */
-  --color-bg-overlay: #1f2937; /* gray-800 */
-  --color-accent: #e5e7eb; /* gray-200 */
-  --color-accent-text: #111827; /* gray-900 */
-  --color-accent-muted: #6b7280; /* gray-500 */
-  --color-accent-subtle: #374151; /* gray-700 */
-  --color-text-primary: #f3f4f6; /* gray-100 */
-  --color-text-secondary: #9ca3af; /* gray-400 */
-  --color-text-tertiary: #6b7280; /* gray-500 */
-  --color-border: #1f2937; /* gray-800 */
-  --color-border-strong: #374151; /* gray-700 */
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-info: #6366f1;
+  --color-bg-base: #101017; /* gray-950 */
+  --color-bg-elevated: #191924; /* gray-900 */
+  --color-bg-surface: #2a2a3a; /* gray-800 */
+  --color-bg-overlay: #2a2a3a; /* gray-800 */
+  --color-accent: #b8a9f5; /* accent-400 */
+  --color-accent-text: #191924; /* gray-900 */
+  --color-accent-muted: #707086; /* gray-500 */
+  --color-accent-subtle: #414155; /* gray-700 */
+  --color-text-primary: #f1f1f6; /* gray-100 */
+  --color-text-secondary: #9898ad; /* gray-400 */
+  --color-text-tertiary: #707086; /* gray-500 */
+  --color-border: #2a2a3a; /* gray-800 */
+  --color-border-strong: #414155; /* gray-700 */
+  --color-success: #4caf82;
+  --color-warning: #f0a04b;
+  --color-danger: #e05c5c;
+  --color-info: #5c9eff;
 }
 html:not(.dark) .budget-scope {
-  --color-bg-base: #f9fafb; /* gray-50 */
+  --color-bg-base: #f8f8fb; /* gray-50 */
   --color-bg-elevated: #ffffff;
-  --color-bg-surface: #f3f4f6; /* gray-100 */
-  --color-bg-overlay: #f3f4f6; /* gray-100 */
-  --color-accent: #1f2937; /* gray-800 */
+  --color-bg-surface: #f1f1f6; /* gray-100 */
+  --color-bg-overlay: #f1f1f6; /* gray-100 */
+  --color-accent: #7c6fb0; /* accent-600 */
   --color-accent-text: #ffffff;
-  --color-accent-muted: #9ca3af; /* gray-400 */
-  --color-accent-subtle: #e5e7eb; /* gray-200 */
-  --color-text-primary: #111827; /* gray-900 */
-  --color-text-secondary: #4b5563; /* gray-600 */
-  --color-text-tertiary: #9ca3af; /* gray-400 */
-  --color-border: #e5e7eb; /* gray-200 */
-  --color-border-strong: #d1d5db; /* gray-300 */
+  --color-accent-muted: #9898ad; /* gray-400 */
+  --color-accent-subtle: #e4e4ee; /* gray-200 */
+  --color-text-primary: #191924; /* gray-900 */
+  --color-text-secondary: #56566b; /* gray-600 */
+  --color-text-tertiary: #9898ad; /* gray-400 */
+  --color-border: #e4e4ee; /* gray-200 */
+  --color-border-strong: #ccccdb; /* gray-300 */
   --color-success: #16a34a;
   --color-warning: #d97706;
   --color-danger: #dc2626;
-  --color-info: #4f46e5;
+  --color-info: #5b52a8;
 }
 /* When custom colors are enabled, drive the Budget tab from the same --c-*
    variables the rest of the app uses, so it recolors together with every other

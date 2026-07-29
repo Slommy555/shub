@@ -41,7 +41,8 @@ export default function TaskCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
 
-  const { categories, openEditTask } = useApp();
+  const { categories, openEditTask, copyTask, cutTask, duplicateTask, pasteTask, hasClipboard } =
+    useApp();
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draftText, setDraftText] = useState(task.text);
@@ -88,8 +89,8 @@ export default function TaskCard({
         setMenu({ x: e.clientX, y: e.clientY });
       }}
       className={[
-        'rounded-2xl border bg-white shadow-sm transition-[opacity,box-shadow] dark:bg-gray-900',
-        isDragging ? 'border-gray-400 shadow-lg' : 'border-gray-200 dark:border-gray-800',
+        'surface transition-[opacity,box-shadow]',
+        isDragging ? 'shadow-pop ring-1 ring-accent-400/60' : '',
         task.done ? 'opacity-50' : 'opacity-100',
       ].join(' ')}
     >
@@ -104,6 +105,17 @@ export default function TaskCard({
               label: task.done ? 'Mark as not done' : 'Mark as done',
               onClick: () => onUpdate(task.id, { done: !task.done }),
             },
+            { label: 'Copy', onClick: () => copyTask(task) },
+            { label: 'Cut', onClick: () => cutTask(task) },
+            { label: 'Duplicate', onClick: () => duplicateTask(task) },
+            ...(hasClipboard
+              ? [
+                  {
+                    label: 'Paste',
+                    onClick: () => pasteTask(task.scheduled_date ?? task.due_date),
+                  },
+                ]
+              : []),
             { label: 'Delete', danger: true, onClick: () => onDelete(task.id) },
           ]}
         />

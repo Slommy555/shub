@@ -8,6 +8,8 @@ import { useWorkScheduleSync } from './hooks/useWorkScheduleSync';
 import { useTasks } from './hooks/useTasks';
 import { useCategories } from './hooks/useCategories';
 import { useReminders } from './hooks/useReminders';
+import { useTaskClipboard } from './hooks/useTaskClipboard';
+import { listDate } from './lib/taskOrder';
 import { AppProvider } from './context/AppContext';
 import type { Task } from './types';
 
@@ -41,7 +43,31 @@ function Shell({ userId }: { userId: string }) {
   useWorkScheduleSync(userId);
   const api = useTasks(userId);
   const categories = useCategories(userId);
+  const clipboard = useTaskClipboard();
   const { dueTasks, upcomingEvents, permission, requestPermission } = useReminders(api.tasks);
+
+  // Clipboard actions. The hook owns the payload; creating/deleting rows stays
+  // here where the task API lives.
+  function pasteTask(day: string | null) {
+    const res = clipboard.paste(day);
+    if (!res) return;
+    api.addTask(res.input);
+    if (res.removeId) api.deleteTask(res.removeId);
+  }
+
+  function duplicateTask(task: Task, day?: string | null) {
+    api.addTask({
+      text: task.text,
+      category: task.category,
+      priority: task.priority,
+      due_date: task.due_date,
+      scheduled_date: day === undefined ? listDate(task) : day,
+      start_time: task.start_time,
+      end_time: task.end_time,
+      recurrence: task.recurrence,
+      subtasks: task.subtasks.map((s) => s.text),
+    });
+  }
 
   // Keep the open editor in sync with the latest task data (realtime edits).
   const editingTask = editing ? api.tasks.find((t) => t.id === editing.id) ?? editing : null;
@@ -75,6 +101,12 @@ function Shell({ userId }: { userId: string }) {
         addTasks: api.addTasks,
         updateTask: api.updateTask,
         deleteTask: api.deleteTask,
+        reorderTasks: api.reorderTasks,
+        hasClipboard: clipboard.hasCopy,
+        copyTask: clipboard.copy,
+        cutTask: clipboard.cut,
+        duplicateTask,
+        pasteTask,
         addSubtask: api.addSubtask,
         updateSubtask: api.updateSubtask,
         deleteSubtask: api.deleteSubtask,
@@ -89,16 +121,15 @@ function Shell({ userId }: { userId: string }) {
             onClose={() => setMenuOpen(false)}
           />
 
-          {/* Mobile-only menu side tab: a small pill anchored to the RIGHT edge at
-              45% from the top (the voice tab sits just below at 55%). Clears page
-              content and never overlaps the nav/footers (Fix 3). */}
+          {/* Mobile-only menu side tab, anchored to the LEFT edge at 45% from the
+              top — the same side the drawer slides in from. */}
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
             aria-expanded={menuOpen}
-            className="fixed right-0 top-[45%] z-40 flex h-14 w-8 items-center justify-center rounded-l-xl border border-r-0 border-gray-200 bg-white/90 text-gray-700 shadow-lg shadow-gray-900/20 backdrop-blur transition-colors hover:bg-gray-100 sm:hidden dark:border-gray-700 dark:bg-gray-900/90 dark:text-gray-200"
-            style={{ right: 'env(safe-area-inset-right)' }}
+            className="glass fixed left-0 top-[45%] z-40 flex h-14 w-9 items-center justify-center rounded-r-2xl border border-l-0 text-gray-700 shadow-pop transition-[background-color,transform] active:scale-95 sm:hidden dark:text-gray-200"
+            style={{ left: 'env(safe-area-inset-left)' }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 6h16M4 12h16M4 18h16" />
@@ -113,14 +144,14 @@ function Shell({ userId }: { userId: string }) {
               setBriefOpen(true);
             }}
             aria-label="Daily brief"
-            className="fixed right-3 top-3 z-40 grid h-10 w-10 place-items-center rounded-full border border-gray-200 bg-white/90 text-gray-600 shadow-lg shadow-gray-900/10 backdrop-blur transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900/90 dark:text-gray-300"
+            className="glass fixed right-3 top-3 z-40 grid h-10 w-10 place-items-center rounded-full border text-gray-600 shadow-card transition-transform active:scale-95 dark:text-gray-300"
             style={{ marginRight: 'env(safe-area-inset-right)', marginTop: 'env(safe-area-inset-top)' }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
             {latestBrief && (
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-indigo-500" />
+              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent-500 ring-2 ring-white/70 dark:ring-gray-900/70" />
             )}
           </button>
 

@@ -4,17 +4,21 @@ import { useTemplates } from '../../hooks/workout/useTemplates';
 import { useWorkoutSession } from '../../hooks/workout/useWorkoutSession';
 import { rankMatches } from '../../lib/fuzzy';
 import { clearPendingWorkout, readPendingWorkout } from '../../lib/workoutHandoff';
+import { templateItemsFromSession } from '../../lib/workoutFromLog';
+import type { SessionExercise } from '../../types/workout';
 import LogTab from './LogTab';
 import TemplatesTab from './TemplatesTab';
+import HistoryTab from './HistoryTab';
 import MetricsTab from './MetricsTab';
 import WeightTab from './WeightTab';
 import WorkoutScheduleSettings from './WorkoutScheduleSettings';
 
-type SubTab = 'log' | 'templates' | 'metrics' | 'weight';
+type SubTab = 'log' | 'templates' | 'history' | 'metrics' | 'weight';
 
 const SUBTABS: { id: SubTab; label: string }[] = [
   { id: 'log', label: 'Log' },
   { id: 'templates', label: 'Templates' },
+  { id: 'history', label: 'History' },
   { id: 'metrics', label: 'Metrics' },
   { id: 'weight', label: 'Weight' },
 ];
@@ -31,6 +35,16 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
   function onWorkoutFinished() {
     setVersion((v) => v + 1);
     templatesApi.reload(); // refresh "last used" dates
+  }
+
+  /** "Save as template" from the post-workout summary (freestyle → repeatable). */
+  async function saveSessionAsTemplate(name: string, exercises: SessionExercise[]) {
+    const tpl = await templatesApi.createTemplateFrom(
+      name,
+      null,
+      templateItemsFromSession(exercises)
+    );
+    return tpl?.name ?? null;
   }
 
   // Honor a workout the voice assistant asked to start (set via workoutHandoff,
@@ -60,17 +74,17 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
   return (
     <div className="flex min-h-screen flex-col">
       {/* sub-navigation */}
-      <nav className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 px-3 py-2 backdrop-blur dark:border-gray-800 dark:bg-gray-950/90">
-        <div className="mx-auto flex max-w-app gap-1">
+      <nav className="glass sticky top-0 z-30 border-b px-3 py-2">
+        <div className="mx-auto flex max-w-app gap-1 overflow-x-auto no-scrollbar">
           {SUBTABS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setSub(t.id)}
               aria-current={sub === t.id ? 'page' : undefined}
-              className={`flex-1 rounded-lg px-2 py-2 text-sm font-medium transition-colors ${
+              className={`flex-1 whitespace-nowrap rounded-full px-3 py-2 text-sm font-semibold transition-all ${
                 sub === t.id
-                  ? 'bg-gray-800 text-white'
+                  ? 'bg-gray-800 text-white shadow-card dark:bg-gray-100 dark:text-gray-900'
                   : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
               }`}
             >
@@ -91,6 +105,7 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
             createCustom={exercisesApi.createCustom}
             deleteExercise={exercisesApi.deleteExercise}
             onWorkoutFinished={onWorkoutFinished}
+            onSaveAsTemplate={saveSessionAsTemplate}
             showRpe={showRpe}
           />
         )}
@@ -109,6 +124,16 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
               deleteExercise={exercisesApi.deleteExercise}
             />
           </>
+        )}
+        {sub === 'history' && (
+          <HistoryTab
+            userId={userId}
+            exercises={exercisesApi.exercises}
+            version={version}
+            templatesApi={templatesApi}
+            sessionApi={sessionApi}
+            onStarted={() => setSub('log')}
+          />
         )}
         {sub === 'metrics' && (
           <MetricsTab userId={userId} exercises={exercisesApi.exercises} version={version} />

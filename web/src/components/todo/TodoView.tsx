@@ -50,7 +50,7 @@ export default function TodoView({ api }: { api: UseTasks }) {
 
   return (
     <div className="pb-fab w-full px-4 py-6 sm:px-6">
-      <h1 className="mb-4 text-xl font-bold tracking-tight">To-Do List</h1>
+      <h1 className="mb-4 text-2xl font-bold tracking-tight">To-Do List</h1>
 
       {/* Toolbar: date nav + add + view switch. Sits in its own stacking context
           above the sticky Tasks/Schedule toggle (z-30) so the header buttons and
@@ -117,18 +117,13 @@ export default function TodoView({ api }: { api: UseTasks }) {
         </div>
 
         {/* Day / Week / Month switcher — desktop only (Fix 4). */}
-        <div className="hidden rounded-lg border border-gray-200 p-0.5 sm:inline-flex dark:border-gray-700">
+        <div className="seg hidden sm:inline-flex">
           {MODES.map((m) => (
             <button
               key={m.id}
               type="button"
               onClick={() => setMode(m.id)}
-              className={[
-                'rounded-md px-3 py-1 text-xs font-medium transition-colors',
-                mode === m.id
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800',
-              ].join(' ')}
+              className={`seg-item ${mode === m.id ? 'seg-item-on' : 'seg-item-off'}`}
             >
               {m.label}
             </button>
@@ -145,20 +140,17 @@ export default function TodoView({ api }: { api: UseTasks }) {
       {/* Mobile-only Tasks / Schedule segmented toggle, sticky to the top so it
           stays reachable while scrolling (Fix 6). */}
       {isMobile && (
-        <div className="sticky top-0 z-30 -mx-4 mt-4 bg-gray-50/95 px-4 py-2 backdrop-blur dark:bg-gray-950/95">
-          <div className="flex rounded-lg border border-gray-200 p-0.5 dark:border-gray-700">
+        <div className="sticky top-0 z-30 -mx-4 mt-4 bg-gray-50/85 px-4 py-2 backdrop-blur-xl dark:bg-gray-950/85">
+          <div className="seg flex w-full">
             {(['tasks', 'schedule'] as const).map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => setMobilePane(p)}
                 aria-pressed={mobilePane === p}
-                className={[
-                  'flex-1 rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition-colors',
-                  mobilePane === p
-                    ? 'bg-gray-800 text-white'
-                    : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800',
-                ].join(' ')}
+                className={`seg-item flex-1 capitalize ${
+                  mobilePane === p ? 'seg-item-on' : 'seg-item-off'
+                }`}
               >
                 {p}
               </button>

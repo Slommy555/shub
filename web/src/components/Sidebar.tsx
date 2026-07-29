@@ -27,13 +27,19 @@ function NavButton({
       aria-label={label}
       aria-current={active ? 'page' : undefined}
       className={[
-        'flex w-full flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-medium transition-colors',
+        'group relative flex w-full flex-col items-center gap-1 rounded-2xl py-2.5 text-[10px] font-semibold transition-all duration-200',
         active
-          ? 'bg-gray-800 text-white shadow-sm shadow-gray-500/30'
-          : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800',
+          ? 'bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-glow'
+          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100',
       ].join(' ')}
     >
-      <span className="grid h-6 w-6 place-items-center">{children}</span>
+      <span
+        className={`grid h-6 w-6 place-items-center transition-transform duration-200 ${
+          active ? '' : 'group-hover:-translate-y-0.5'
+        }`}
+      >
+        {children}
+      </span>
       {label}
     </button>
   );
@@ -67,7 +73,7 @@ export default function Sidebar({ active, onSelect, open = false, onClose }: Pro
 
       <aside
         className={[
-          'flex h-screen w-20 shrink-0 flex-col gap-1.5 border-r border-gray-200 bg-white px-2 py-4 dark:border-gray-800 dark:bg-gray-950',
+          'glass flex h-screen w-20 shrink-0 flex-col gap-1.5 border-r px-2 py-4',
           // Mobile: off-canvas fixed drawer that slides in over the content.
           'fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out',
           open ? 'translate-x-0' : '-translate-x-full',

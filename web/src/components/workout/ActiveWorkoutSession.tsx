@@ -37,6 +37,8 @@ interface Props {
   onCreateCustom: (name: string, groups: MuscleGroup[]) => Promise<Exercise | null>;
   onDeleteExercise: (id: string) => void;
   onFinished: (summary: WorkoutSummary) => void;
+  /** Save the just-finished session as a reusable template; resolves to its name. */
+  onSaveAsTemplate: (name: string, exercises: SessionExercise[]) => Promise<string | null>;
   /** Whether to show the RPE column in the set logger (Settings → Workout). */
   showRpe: boolean;
 }
@@ -412,15 +414,26 @@ export default function ActiveWorkoutSession({
   onCreateCustom,
   onDeleteExercise,
   onFinished,
+  onSaveAsTemplate,
   showRpe,
 }: Props) {
   const session = api.session!;
   const [now, setNow] = useState(Date.now());
   const [modalOpen, setModalOpen] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState(session.name);
   const [notes, setNotes] = useState('');
   const [saved, setSaved] = useState<WorkoutSummary | null>(null);
   const [saving, setSaving] = useState(false);
+  // The session is cleared from the store on finish, so hold onto what was in it
+  // for the summary screen's "Save as template" action.
+  const [finished, setFinished] = useState<{ name: string; exercises: SessionExercise[] } | null>(
+    null
+  );
+  const [tplName, setTplName] = useState('');
+  const [tplSaving, setTplSaving] = useState(false);
+  const [tplSaved, setTplSaved] = useState<string | null>(null);
   // Rest timer between sets — starts when a set is checked off.
   const [rest, setRest] = useState<{ endsAt: number } | null>(null);
 
@@ -474,9 +487,28 @@ export default function ActiveWorkoutSession({
   async function confirmFinish() {
     if (saving) return;
     setSaving(true);
+    const snapshot = { name: session.name, exercises: session.exercises };
     const summary = await api.finish(notes);
     setSaving(false);
-    if (summary) setSaved(summary);
+    if (summary) {
+      setFinished(snapshot);
+      setTplName(snapshot.name === 'Freestyle Workout' ? '' : snapshot.name);
+      setSaved(summary);
+    }
+  }
+
+  async function saveTemplateFromFinished() {
+    if (!finished || tplSaving) return;
+    const name = tplName.trim() || finished.name;
+    setTplSaving(true);
+    const created = await onSaveAsTemplate(name, finished.exercises);
+    setTplSaving(false);
+    if (created) setTplSaved(created);
+  }
+
+  function commitRename() {
+    setRenaming(false);
+    api.rename(nameDraft);
   }
 
   function handleDiscard() {
@@ -496,7 +528,7 @@ export default function ActiveWorkoutSession({
             </svg>
           </div>
           <h2 className="text-lg font-bold">Workout complete</h2>
-          <p className="mt-1 text-sm text-gray-500">{session.name}</p>
+          <p className="mt-1 text-sm text-gray-500">{finished?.name ?? session.name}</p>
           <div className="mt-4 grid grid-cols-2 gap-3 text-left">
             <Stat label="Total volume" value={`${Math.round(saved.totalVolume).toLocaleString()} lbs`} />
             <Stat label="Duration" value={formatTimer(saved.durationMs)} />
@@ -510,13 +542,54 @@ export default function ActiveWorkoutSession({
               </span>
             ))}
           </div>
+          {/* Turn what you just did into a repeatable template — the main way a
+              freestyle session becomes something you can run again. */}
+          {finished && finished.exercises.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-gray-200 p-3 text-left dark:border-gray-800">
+              {tplSaved ? (
+                <p className="text-center text-xs font-medium text-green-600 dark:text-green-400">
+                  Saved as template “{tplSaved}”.
+                </p>
+              ) : (
+                <>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                    Save as template
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    Keep this exact set-up so you can repeat it in one tap.
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={tplName}
+                      onChange={(e) => setTplName(e.target.value)}
+                      placeholder={finished.name}
+                      className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent-500 dark:border-gray-700 dark:bg-gray-950"
+                      aria-label="Template name"
+                    />
+                    <button
+                      type="button"
+                      onClick={saveTemplateFromFinished}
+                      disabled={tplSaving}
+                      className="btn-accent shrink-0 px-3 py-2 text-xs font-semibold disabled:opacity-60"
+                    >
+                      {tplSaving ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => onFinished(saved)}
-            className="mt-5 w-full rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white hover:bg-gray-700"
+            className="mt-4 w-full rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
           >
             Done
           </button>
+          <p className="mt-2 text-[11px] text-gray-400">
+            This session is saved — find it any time under Workout → History.
+          </p>
         </div>
       </div>
     );
@@ -525,9 +598,41 @@ export default function ActiveWorkoutSession({
   return (
     <div className="pb-fab mx-auto max-w-app p-4 pb-28">
       {/* header */}
-      <div className="sticky top-0 z-10 -mx-4 mb-3 flex items-center justify-between border-b border-gray-200 bg-gray-50/90 px-4 py-3 backdrop-blur dark:border-gray-800 dark:bg-gray-950/90">
-        <div>
-          <h1 className="text-base font-bold">{session.name}</h1>
+      <div className="glass sticky top-0 z-10 -mx-4 mb-3 flex items-center justify-between gap-3 border-b px-4 py-3">
+        <div className="min-w-0">
+          {renaming ? (
+            <input
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename();
+                if (e.key === 'Escape') {
+                  setNameDraft(session.name);
+                  setRenaming(false);
+                }
+              }}
+              autoFocus
+              aria-label="Workout name"
+              className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-base font-bold outline-none focus:border-accent-500 dark:border-gray-600 dark:bg-gray-900"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setNameDraft(session.name);
+                setRenaming(true);
+              }}
+              title="Tap to rename this workout"
+              className="flex items-center gap-1.5 text-left"
+            >
+              <h1 className="truncate text-base font-bold">{session.name}</h1>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-400">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </button>
+          )}
           <p className="text-xs text-gray-500">{preview.totalSets} sets logged</p>
         </div>
         <div className="font-mono text-lg tabular-nums">{formatTimer(elapsed)}</div>

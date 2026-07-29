@@ -7,6 +7,7 @@ interface NewTaskInput {
   category: Category;
   priority: Priority;
   due_date: string | null;
+  notes?: string | null;
   scheduled_date?: string | null;
   start_time?: string | null;
   end_time?: string | null;
@@ -185,7 +186,7 @@ export function useTasks(userId: string | null) {
         id,
         user_id: userId,
         text: input.text,
-        notes: null,
+        notes: input.notes ?? null,
         category: input.category,
         priority: input.priority,
         done: false,
@@ -207,6 +208,7 @@ export function useTasks(userId: string | null) {
         id,
         user_id: userId,
         text: newTask.text,
+        notes: newTask.notes,
         category: newTask.category,
         priority: newTask.priority,
         due_date: newTask.due_date,

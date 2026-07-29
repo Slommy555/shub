@@ -3,6 +3,7 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  closestCenter,
   useDraggable,
   useSensor,
   useSensors,
@@ -21,12 +22,13 @@ import {
   todayISO,
   weekdayShort,
 } from '../../lib/dates';
-import { groupByDay, listDate } from '../../lib/taskOrder';
+import { groupByDay, listDate, reorderWithinVisible } from '../../lib/taskOrder';
 import { titleCase } from '../../lib/text';
 import { useApp } from '../../context/AppContext';
 import { useVoiceSettings } from '../../hooks/useVoiceSettings';
 import { useWindowSize } from '../../hooks/useWindowSize';
 import WorkShiftDialog from '../WorkShiftDialog';
+import MobileTaskList from './MobileTaskList';
 import { Droppable, ScheduleCard } from './ScheduleParts';
 
 const DEFAULT_START_HOUR = 6;
@@ -164,7 +166,7 @@ export default function WeeklyView({
   onAnchorChange,
   mobilePane = 'tasks',
 }: Props) {
-  const { categories, openEditTask } = useApp();
+  const { categories, openEditTask, reorderTasks } = useApp();
   const { settings } = useVoiceSettings();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [editWorkDow, setEditWorkDow] = useState<number | null>(null);
@@ -264,12 +266,29 @@ export default function WeeklyView({
     const { active: a, over } = e;
     if (!over) return;
     const overId = String(over.id);
+    const task = tasks.find((t) => t.id === String(a.id));
+
+    // Dropped on another task (the sortable mobile list): same day → reorder,
+    // different day → move onto that task's day.
+    const overTask = tasks.find((t) => t.id === overId);
+    if (task && overTask) {
+      if (task.id === overTask.id) return;
+      const target = listDate(overTask);
+      if (listDate(task) !== target) {
+        onMove(task.id, target);
+        return;
+      }
+      const visibleIds = (byDay.get(target ?? 'none') ?? []).map((t) => t.id);
+      reorderTasks(reorderWithinVisible(tasks, visibleIds, task.id, overTask.id));
+      return;
+    }
+
     let target: string | null;
     if (overId.startsWith('track:')) target = overId.slice(6);
     else if (overId.startsWith('any:')) target = overId.slice(4);
+    else if (overId.startsWith('list:')) target = overId.slice(5);
     else if (overId === 'day:none') target = null;
     else return;
-    const task = tasks.find((t) => t.id === String(a.id));
     if (task && listDate(task) !== target) onMove(String(a.id), target);
   }
 
@@ -286,6 +305,9 @@ export default function WeeklyView({
   return (
     <DndContext
       sensors={sensors}
+      // The phone Tasks pane is a sortable list — closest-center reads much
+      // better there than the default rect intersection.
+      collisionDetection={showTaskList ? closestCenter : undefined}
       onDragStart={(e: DragStartEvent) => setActiveId(String(e.active.id))}
       onDragEnd={handleEnd}
       onDragCancel={() => setActiveId(null)}
@@ -298,7 +320,7 @@ export default function WeeklyView({
               type="button"
               onClick={() => stepDay(-1)}
               aria-label="Previous day"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-gray-800"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-gray-200 text-gray-500 transition-[background-color,transform] hover:bg-gray-100 active:scale-95 dark:border-gray-700 dark:hover:bg-gray-800"
             >
               <Chevron dir="left" />
             </button>
@@ -309,37 +331,44 @@ export default function WeeklyView({
               type="button"
               onClick={() => stepDay(1)}
               aria-label="Next day"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-gray-800"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-gray-200 text-gray-500 transition-[background-color,transform] hover:bg-gray-100 active:scale-95 dark:border-gray-700 dark:hover:bg-gray-800"
             >
               <Chevron dir="right" />
             </button>
           </div>
 
-          {/* Mini week navigator (phone only): tap a day to jump to it. */}
+          {/* Mini week navigator (phone only): tap a day to jump to it — and a
+              drop target, so a task can be dragged straight onto another day. */}
           {cols === 1 && (
             <div className="mt-2 grid grid-cols-7 gap-1">
               {mondayWeekDates(focus).map((iso) => {
                 const sel = iso === focus;
                 const today = isToday(iso);
                 return (
-                  <button
+                  <Droppable
                     key={iso}
+                    id={`any:${iso}`}
+                    className="rounded-xl ring-inset transition-shadow"
+                    overClassName="ring-2 ring-accent-500"
+                  >
+                  <button
                     type="button"
                     onClick={() => focusDay(iso)}
                     aria-label={formatDayLong(iso)}
                     aria-current={sel ? 'date' : undefined}
                     className={[
-                      'flex h-11 flex-col items-center justify-center rounded-lg text-[11px] font-semibold uppercase transition-colors',
+                      'flex h-12 w-full flex-col items-center justify-center rounded-xl text-[11px] font-semibold uppercase transition-all',
                       sel
-                        ? 'bg-gray-800 text-white'
+                        ? 'bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-glow'
                         : today
-                          ? 'text-gray-800 ring-1 ring-inset ring-gray-300 dark:text-gray-100 dark:ring-gray-600'
+                          ? 'text-accent-700 ring-1 ring-inset ring-accent-400/70 dark:text-accent-200'
                           : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800',
                     ].join(' ')}
                   >
                     <span>{weekdayShort(iso)[0]}</span>
                     <span className="text-[13px]">{dayOfMonth(iso)}</span>
                   </button>
+                  </Droppable>
                 );
               })}
             </div>
@@ -369,19 +398,17 @@ export default function WeeklyView({
         </Droppable>
       )}
 
-      {/* Mobile "Tasks" pane: the focused day's tasks as a flat list, no timeline. */}
+      {/* Mobile "Tasks" pane: the focused day's tasks as a sortable, editable
+          list (drag to reorder, pencil to edit, ⋯ to copy / cut / paste). The
+          wrapper is also a drop target so an unscheduled card can be dragged in. */}
       {showTaskList && (
-        <div className="flex flex-col gap-2">
-          {focusTasks.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400 dark:border-gray-800">
-              No tasks for this day.
-            </p>
-          ) : (
-            focusTasks.map((t) => (
-              <ScheduleCard key={t.id} task={t} onToggle={onToggle} showSubtasks />
-            ))
-          )}
-        </div>
+        <Droppable
+          id={`list:${focus}`}
+          className="rounded-2xl transition-colors"
+          overClassName="bg-accent-100/40 dark:bg-accent-500/10"
+        >
+          <MobileTaskList tasks={focusTasks} day={focus} onToggle={onToggle} />
+        </Droppable>
       )}
 
       {/* Schedule board (weekday header + timeline). On mobile it's the
@@ -415,7 +442,7 @@ export default function WeeklyView({
       </div>
 
       {/* Timeline grid: hour gutter + 7 day tracks. */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+      <div className="surface overflow-hidden">
         {/* Anytime band: untimed tasks per day (drag between days). On top. The
             bottom divider is on the day-columns container only (not the hour
             gutter) so it never crosses the 6am / hour labels below it.
@@ -540,8 +567,12 @@ export default function WeeklyView({
         </>
       )}
 
+      {/* The mobile list is sortable: its rows follow the pointer themselves, so
+          an overlay card on top would double-render the task being dragged. */}
       <DragOverlay dropAnimation={null}>
-        {active ? <ScheduleCard task={active} onToggle={onToggle} overlay /> : null}
+        {active && !(showTaskList && focusTasks.some((t) => t.id === active.id)) ? (
+          <ScheduleCard task={active} onToggle={onToggle} overlay />
+        ) : null}
       </DragOverlay>
 
       {editWorkDow != null && (

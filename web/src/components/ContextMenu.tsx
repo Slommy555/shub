@@ -25,11 +25,11 @@ export default function ContextMenu({
   const [pos, setPos] = useState({ x, y });
 
   useEffect(() => {
-    const menuW = 180;
-    const menuH = items.length * 38 + 8;
+    const menuW = 200;
+    const menuH = items.length * 42 + 10;
     setPos({
-      x: Math.min(x, window.innerWidth - menuW - 8),
-      y: Math.min(y, window.innerHeight - menuH - 8),
+      x: Math.max(8, Math.min(x, window.innerWidth - menuW - 8)),
+      y: Math.max(8, Math.min(y, window.innerHeight - menuH - 8)),
     });
   }, [x, y, items.length]);
 
@@ -44,7 +44,7 @@ export default function ContextMenu({
   return (
     <div className="fixed inset-0 z-50" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }}>
       <div
-        className="absolute min-w-[10rem] overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        className="absolute min-w-[11.5rem] animate-pop-in overflow-hidden rounded-2xl border border-gray-200 bg-white/95 py-1.5 shadow-pop backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900/95"
         style={{ left: pos.x, top: pos.y }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -57,10 +57,10 @@ export default function ContextMenu({
               onClose();
             }}
             className={[
-              'block w-full px-3 py-2 text-left text-sm transition-colors',
+              'block w-full px-3.5 py-2.5 text-left text-sm font-medium transition-colors',
               item.danger
                 ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10'
-                : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800',
+                : 'text-gray-700 hover:bg-accent-50 hover:text-accent-800 dark:text-gray-200 dark:hover:bg-accent-500/15 dark:hover:text-accent-100',
             ].join(' ')}
           >
             {item.label}
