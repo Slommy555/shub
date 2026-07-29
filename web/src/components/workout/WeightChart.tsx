@@ -34,21 +34,21 @@ export default function WeightChart({ data }: Props) {
     <div className="rounded-2xl border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900">
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={chartData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#9ca3af" strokeOpacity={0.2} />
-          <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9ca3af' }} minTickGap={24} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#a1a1a1" strokeOpacity={0.2} />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#a1a1a1' }} minTickGap={24} />
           <YAxis
-            tick={{ fontSize: 11, fill: '#9ca3af' }}
+            tick={{ fontSize: 11, fill: '#a1a1a1' }}
             width={48}
             domain={['dataMin - 3', 'dataMax + 3']}
           />
           <Tooltip
-            contentStyle={{ borderRadius: 12, border: '1px solid #6b728033', fontSize: 12 }}
+            contentStyle={{ borderRadius: 12, border: '1px solid #73737333', fontSize: 12 }}
             formatter={(v, name) => [`${v} lbs`, name === 'trend' ? 'Trend' : 'Weight']}
           />
           <Line
             type="monotone"
             dataKey="trend"
-            stroke="#9ca3af"
+            stroke="#a1a1a1"
             strokeWidth={1.5}
             strokeDasharray="5 4"
             dot={false}

@@ -123,7 +123,7 @@ function luminance(triple: string): number {
  * accent would leave every primary button's white label unreadable.
  */
 export function foregroundFor(ramp: Record<number, string>): string {
-  return luminance(ramp[600]) > 0.4 ? '17 17 23' : '255 255 255';
+  return luminance(ramp[600]) > 0.4 ? '10 10 10' : '255 255 255';
 }
 
 /** Write (or clear) the ramp on <html>. Clearing falls back to index.css. */
@@ -142,7 +142,7 @@ export function applyAccent(baseHex: string | null) {
 
 /** Readable check-mark color to draw on top of a swatch of this color. */
 export function onColorFor(baseHex: string): string {
-  return foregroundFor(makeRamp(baseHex)) === '255 255 255' ? '#ffffff' : '#111117';
+  return foregroundFor(makeRamp(baseHex)) === '255 255 255' ? '#ffffff' : '#0a0a0a';
 }
 
 /** The swatch color to show for a preset/custom value in the picker. */

@@ -15,12 +15,12 @@ export interface Appearance {
 
 /** Sensible defaults that mirror the built-in light theme. */
 export const DEFAULT_APPEARANCE: Appearance = {
-  bg: '#f9fafb',
+  bg: '#fafafa',
   surface: '#ffffff',
-  text: '#111827',
-  muted: '#6b7280',
-  border: '#e5e7eb',
-  accent: '#1f2937',
+  text: '#171717',
+  muted: '#737373',
+  border: '#e6e6e6',
+  accent: '#272727',
   accentText: '#ffffff',
 };
 

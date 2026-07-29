@@ -75,13 +75,13 @@ export default function VolumeChart({ series, range, onRange }: Props) {
           <div className="rounded-2xl border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={series.data} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#9ca3af" strokeOpacity={0.2} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} width={48} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#a1a1a1" strokeOpacity={0.2} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#a1a1a1' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#a1a1a1' }} width={48} />
                 <Tooltip
                   contentStyle={{
                     borderRadius: 12,
-                    border: '1px solid #6b728033',
+                    border: '1px solid #73737333',
                     fontSize: 12,
                   }}
                 />

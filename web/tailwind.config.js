@@ -8,22 +8,23 @@ export default {
         app: '640px',
       },
       colors: {
-        // Refined neutral ramp — cool graphite with a faint violet undertone.
+        // A true neutral ramp — pure greys through to near-black, no color cast.
         // The whole app is built on `gray-*` utilities, so redefining the ramp
         // re-skins every screen at once (and keeps the custom-color remap in
-        // index.css working, since that matches on class names).
+        // index.css working, since that matches on class names). The only color
+        // in the UI is the accent.
         gray: {
-          50: '#f8f8fb',
-          100: '#f1f1f6',
-          200: '#e4e4ee',
-          300: '#ccccdb',
-          400: '#9898ad',
-          500: '#707086',
-          600: '#56566b',
-          700: '#414155',
-          800: '#2a2a3a',
-          900: '#191924',
-          950: '#101017',
+          50: '#fafafa',
+          100: '#f4f4f5',
+          200: '#e6e6e6',
+          300: '#d4d4d4',
+          400: '#a1a1a1',
+          500: '#737373',
+          600: '#525252',
+          700: '#3f3f3f',
+          800: '#272727',
+          900: '#171717',
+          950: '#0b0b0b',
         },
         // The single accent, used for active states, focus rings and primary
         // highlights. Every shade reads from a CSS variable holding an "R G B"
@@ -46,8 +47,8 @@ export default {
         accentfg: 'rgb(var(--accent-fg) / <alpha-value>)',
       },
       boxShadow: {
-        card: '0 1px 2px rgba(16, 16, 23, 0.04), 0 8px 24px -12px rgba(16, 16, 23, 0.12)',
-        pop: '0 12px 40px -12px rgba(16, 16, 23, 0.35)',
+        card: '0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px -12px rgba(0, 0, 0, 0.14)',
+        pop: '0 12px 40px -12px rgba(0, 0, 0, 0.38)',
         glow: '0 6px 20px -6px rgb(var(--accent-600) / 0.55)',
       },
       keyframes: {

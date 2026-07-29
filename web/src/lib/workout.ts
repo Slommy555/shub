@@ -134,9 +134,9 @@ export function formatClock(totalSeconds: number): string {
 }
 
 /** A single accent color used across the workout charts/heat map. */
-export const ACCENT = '#374151'; // gray-700 — matches the app's grayscale accent
+export const ACCENT = '#3f3f3f'; // gray-700 — matches the app's grayscale accent
 export const MUSCLE_PALETTE = [
-  '#374151', '#6b7280', '#9ca3af', '#111827', '#4b5563', '#d1d5db',
-  '#1f2937', '#52525b', '#71717a', '#3f3f46', '#18181b', '#a1a1aa',
+  '#3f3f3f', '#737373', '#a1a1a1', '#171717', '#525252', '#d4d4d4',
+  '#272727', '#52525b', '#71717a', '#3f3f46', '#18181b', '#a1a1aa',
   '#27272a', '#52525b', '#737373', '#404040',
 ];
