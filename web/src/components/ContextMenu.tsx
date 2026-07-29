@@ -42,7 +42,7 @@ export default function ContextMenu({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }}>
+    <div data-no-swipe className="fixed inset-0 z-50" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }}>
       <div
         className="absolute min-w-[11.5rem] animate-pop-in overflow-hidden rounded-2xl border border-gray-200 bg-white/95 py-1.5 shadow-pop backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900/95"
         style={{ left: pos.x, top: pos.y }}

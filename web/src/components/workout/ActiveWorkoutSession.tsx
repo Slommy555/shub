@@ -153,6 +153,9 @@ function SetRow({
         Delete
       </div>
       <div
+        // Owns its own horizontal gesture (swipe left to delete), so the
+        // app-level swipe navigation must keep its hands off this row.
+        data-no-swipe
         className={`relative grid ${gridCls} items-center gap-1 bg-white py-1 dark:bg-gray-900`}
         style={{ transform: `translateX(${dx}px)`, transition: startX.current === null ? 'transform 0.15s' : 'none' }}
         onTouchStart={(e) => {
@@ -699,7 +702,7 @@ export default function ActiveWorkoutSession({
       )}
 
       {/* footer actions */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-800 dark:bg-gray-950/95">
+      <div className="above-dock fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-800 dark:bg-gray-950/95">
         <div className="mx-auto max-w-app">
           {rest && (
             <div className="mb-2 flex items-center gap-2 rounded-xl bg-gray-800 px-3 py-2 text-white dark:bg-gray-200 dark:text-gray-900">
@@ -764,7 +767,7 @@ export default function ActiveWorkoutSession({
 
       {/* finish review */}
       {reviewing && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => !saving && setReviewing(false)}>
+        <div data-no-swipe className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => !saving && setReviewing(false)}>
           <div
             className="w-full max-w-app rounded-t-3xl bg-white p-5 shadow-xl animate-slide-up dark:bg-gray-900 sm:rounded-3xl"
             onClick={(e) => e.stopPropagation()}

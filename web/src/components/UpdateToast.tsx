@@ -18,7 +18,7 @@ export default function UpdateToast() {
   return (
     <div
       role="status"
-      className="fixed inset-x-0 bottom-4 z-50 flex animate-slide-up justify-center px-4"
+      className="above-dock fixed inset-x-0 bottom-4 z-50 flex animate-slide-up justify-center px-4"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-4 py-2 shadow-lg dark:border-gray-700 dark:bg-gray-900">

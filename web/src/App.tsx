@@ -9,12 +9,16 @@ import { useTasks } from './hooks/useTasks';
 import { useCategories } from './hooks/useCategories';
 import { useReminders } from './hooks/useReminders';
 import { useTaskClipboard } from './hooks/useTaskClipboard';
+import { useIsMobile } from './hooks/useIsMobile';
+import { useSwipeNav } from './hooks/useSwipeNav';
 import { listDate } from './lib/taskOrder';
 import { AppProvider } from './context/AppContext';
 import type { Task } from './types';
 
 import LoginScreen from './components/LoginScreen';
-import Sidebar, { type Tab } from './components/Sidebar';
+import Sidebar from './components/Sidebar';
+import MobileDock from './components/MobileDock';
+import { TAB_IDS, type Tab } from './components/nav/tabs';
 import TodoView from './components/todo/TodoView';
 import VoiceTab from './components/VoiceTab';
 import VoiceController from './components/voice/VoiceController';
@@ -31,7 +35,6 @@ import { useDailyBriefs } from './hooks/useDailyBriefs';
 function Shell({ userId }: { userId: string }) {
   const [tab, setTab] = useState<Tab>('todo');
   const [editing, setEditing] = useState<Task | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [briefText, setBriefText] = useState<string | null>(null);
   const [briefOpen, setBriefOpen] = useState(false);
   const { latest: latestBrief } = useDailyBriefs(userId);
@@ -44,6 +47,15 @@ function Shell({ userId }: { userId: string }) {
   const api = useTasks(userId);
   const categories = useCategories(userId);
   const clipboard = useTaskClipboard();
+  const isMobile = useIsMobile();
+
+  // Phones navigate by swiping the page left/right through the dock's tab order.
+  const swipe = useSwipeNav({
+    enabled: isMobile,
+    index: TAB_IDS.indexOf(tab),
+    count: TAB_IDS.length,
+    onChange: (i) => setTab(TAB_IDS[i]),
+  });
   const { dueTasks, upcomingEvents, permission, requestPermission } = useReminders(api.tasks);
 
   // Clipboard actions. The hook owns the payload; creating/deleting rows stays
@@ -68,6 +80,12 @@ function Shell({ userId }: { userId: string }) {
       subtasks: task.subtasks.map((s) => s.text),
     });
   }
+
+  // Land at the top of whichever tab you just moved to (tap or swipe) instead of
+  // inheriting the previous tab's scroll offset.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [tab]);
 
   // Keep the open editor in sync with the latest task data (realtime edits).
   const editingTask = editing ? api.tasks.find((t) => t.id === editing.id) ?? editing : null;
@@ -114,27 +132,7 @@ function Shell({ userId }: { userId: string }) {
     >
       <VoiceController userId={userId} onNavigate={setTab}>
         <div className="flex min-h-screen">
-          <Sidebar
-            active={tab}
-            onSelect={setTab}
-            open={menuOpen}
-            onClose={() => setMenuOpen(false)}
-          />
-
-          {/* Mobile-only menu side tab, anchored to the LEFT edge at 45% from the
-              top — the same side the drawer slides in from. */}
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            aria-label="Open menu"
-            aria-expanded={menuOpen}
-            className="glass fixed left-0 top-[45%] z-40 flex h-14 w-9 items-center justify-center rounded-r-2xl border border-l-0 text-gray-700 shadow-pop transition-[background-color,transform] active:scale-95 sm:hidden dark:text-gray-200"
-            style={{ left: 'env(safe-area-inset-left)' }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+          <Sidebar active={tab} onSelect={setTab} />
 
           {/* Daily-brief bell (top-right). Opens the most recent brief. */}
           <button
@@ -155,22 +153,30 @@ function Shell({ userId }: { userId: string }) {
             )}
           </button>
 
-          <main className="min-w-0 flex-1">
-            {tab === 'todo' && <TodoView api={api} />}
-            {tab === 'voice' && <VoiceTab />}
-            {tab === 'workout' && <WorkoutTab userId={userId} showRpe={workoutPrefs.showRpe} />}
-            {tab === 'budget' && <BudgetTab userId={userId} />}
-            {tab === 'productivity' && <ProductivityView userId={userId} />}
-            {tab === 'notes' && <NotesTab userId={userId} />}
-            {tab === 'settings' && (
-              <SettingsView
-                theme={resolvedTheme}
-                onToggleTheme={toggleTheme}
-                appearance={appearance}
-                workoutPrefs={workoutPrefs}
-              />
-            )}
+          <main
+            className="min-w-0 flex-1"
+            ref={swipe.ref}
+            {...swipe.handlers}
+          >
+            <div key={tab} className="animate-fade-in">
+              {tab === 'todo' && <TodoView api={api} />}
+              {tab === 'voice' && <VoiceTab />}
+              {tab === 'workout' && <WorkoutTab userId={userId} showRpe={workoutPrefs.showRpe} />}
+              {tab === 'budget' && <BudgetTab userId={userId} />}
+              {tab === 'productivity' && <ProductivityView userId={userId} />}
+              {tab === 'notes' && <NotesTab userId={userId} />}
+              {tab === 'settings' && (
+                <SettingsView
+                  theme={resolvedTheme}
+                  onToggleTheme={toggleTheme}
+                  appearance={appearance}
+                  workoutPrefs={workoutPrefs}
+                />
+              )}
+            </div>
           </main>
+
+          <MobileDock active={tab} onSelect={setTab} />
 
           <DueDateReminder
             dueTasks={dueTasks}

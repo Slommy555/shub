@@ -93,6 +93,7 @@ export default function BudgetSwitcher({ budgets, activeId, onSelect, onCreate, 
 
       {open && (
         <div
+          data-no-swipe
           className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
           style={{ background: 'rgba(0,0,0,0.5)' }}
           onClick={() => {

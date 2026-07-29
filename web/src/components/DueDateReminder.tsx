@@ -40,7 +40,7 @@ export default function DueDateReminder({
   const overflow = dueTasks.length - 3;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex flex-col items-center gap-2 p-4">
+    <div className="above-dock pointer-events-none fixed inset-x-0 bottom-0 z-40 flex flex-col items-center gap-2 p-4">
       {/* Upcoming event reminders (one per event). */}
       {upcomingEvents.map(({ task, minutesUntil }) => (
         <div

@@ -585,7 +585,7 @@ export default function VoiceController({
       <SettingsDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 animate-slide-up rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-lg dark:bg-gray-100 dark:text-gray-900">
+        <div className="above-dock fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 animate-slide-up rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-lg dark:bg-gray-100 dark:text-gray-900">
           {toast}
         </div>
       )}

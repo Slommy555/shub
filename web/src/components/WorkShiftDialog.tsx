@@ -29,6 +29,7 @@ export default function WorkShiftDialog({ dow, onClose }: { dow: number; onClose
 
   return (
     <div
+      data-no-swipe
       className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4 animate-fade-in"
       onClick={onClose}
     >

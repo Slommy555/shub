@@ -69,7 +69,7 @@ export default function VoicePopup(props: Props) {
     !reviewHasContent(extras);
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[min(26rem,calc(100vw-2rem))] animate-slide-up">
+    <div className="above-dock fixed bottom-4 right-4 z-50 w-[min(26rem,calc(100vw-2rem))] animate-slide-up">
       <div className="flex max-h-[80vh] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900">
         {/* Header */}
         <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-800">

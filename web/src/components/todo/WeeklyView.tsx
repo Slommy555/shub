@@ -137,7 +137,7 @@ function TimedBlock({
       onClick={onClick}
       {...listeners}
       {...attributes}
-      className={`absolute z-10 overflow-hidden rounded-md border px-1 py-0.5 text-left shadow-sm transition-shadow hover:shadow ${className} ${
+      className={`absolute z-10 touch-none overflow-hidden rounded-md border px-1 py-0.5 text-left shadow-sm transition-shadow hover:shadow ${className} ${
         isDragging ? 'opacity-30' : ''
       } ${ev.task.done ? 'opacity-50' : ''}`}
       style={{

@@ -20,14 +20,18 @@ body {
   max-width: 100%;
 }
 
-/* Mobile bottom clearance so a tab's scrollable content isn't hidden behind any
-   fixed bottom bar / home indicator. Only on phones (<640px); desktop is
-   unaffected. Defined after @tailwind utilities so it wins over Tailwind's own
-   padding utilities on the same element. (Trimmed from 120px now that the
-   floating mic button is gone and the menu tab sits at the left edge.) */
+/* Mobile bottom clearance so a tab's scrollable content isn't hidden behind the
+   navigation dock. Only on phones (<640px); desktop is unaffected. Defined after
+   @tailwind utilities so it wins over Tailwind's own padding utilities on the
+   same element.
+   `.above-dock` lifts anything else pinned to the bottom (toasts, the active
+   workout's action bar, the voice popup) to sit just above the dock. */
 @media (max-width: 639px) {
   .pb-fab {
-    padding-bottom: calc(env(safe-area-inset-bottom) + 72px) !important;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 92px) !important;
+  }
+  .above-dock {
+    bottom: calc(env(safe-area-inset-bottom) + 76px) !important;
   }
 }
 

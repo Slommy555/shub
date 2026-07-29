@@ -117,7 +117,7 @@ export function ScheduleCard({
         <button
           type="button"
           onClick={() => !overlay && setExpanded((v) => !v)}
-          className="min-w-0 flex-1 cursor-grab break-words text-left leading-tight active:cursor-grabbing"
+          className="min-w-0 flex-1 cursor-grab touch-none break-words text-left leading-tight active:cursor-grabbing"
           {...listeners}
           {...attributes}
           title={overlay ? task.text : expanded ? 'Click to collapse' : 'Click to expand'}
