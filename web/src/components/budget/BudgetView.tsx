@@ -19,6 +19,9 @@ import { useSavingsPool } from '../../hooks/budget/useSavingsPool';
 import { useSavingsAccount } from '../../hooks/budget/useSavingsAccount';
 import { useSavingsWithdrawnBefore } from '../../hooks/budget/useSavingsWithdrawnBefore';
 import { useSavingsDeposits } from '../../hooks/budget/useSavingsDeposits';
+import { useSavingsAdjustments } from '../../hooks/budget/useSavingsAdjustments';
+import { useSavingsFlows } from '../../hooks/budget/useSavingsFlows';
+import { buildSavingsBuckets, type SavingsBucket, type SavingsGranularity } from '../../lib/savingsSeries';
 import { useCreditCards } from '../../hooks/budget/useCreditCards';
 import { useCardPayments } from '../../hooks/budget/useCardPayments';
 import { useGroupPayments } from '../../hooks/budget/useGroupPayments';
@@ -29,11 +32,15 @@ import PaycheckList from './PaycheckList';
 import CreditCardSection from './CreditCardSection';
 import ScheduledExpensesSection from './ScheduledExpensesSection';
 import SavingsPoolSection from './SavingsPoolSection';
+import SavingsTrend from './SavingsTrend';
 import BudgetCalendar, { type CalEvent } from './BudgetCalendar';
 import BudgetSnapshot from './BudgetSnapshot';
 import { useBudgetHistory } from '../../hooks/budget/useBudgetHistory';
 
 export type BudgetViewMode = 'snapshot' | 'overview' | 'paycheck' | 'calendar';
+
+/** Remembers whether the savings trend was last read by day, week or month. */
+const TREND_KEY = 'budget.savingsTrendGranularity';
 
 /**
  * Shared data layer for the two budget views (Round 2 model).
@@ -58,6 +65,9 @@ export default function BudgetView({
 }) {
   const [monthCursor, setMonthCursor] = useState<Date>(() => new Date());
   const monthBounds = useMemo(() => periodForCursor('monthly', monthCursor), [monthCursor]);
+  const [granularity, setGranularity] = useState<SavingsGranularity>(
+    () => (localStorage.getItem(TREND_KEY) as SavingsGranularity | null) ?? 'monthly'
+  );
 
   const groupsApi = useBudgetGroups(userId, budgetId);
   const { payDays, monthlyIncome, setIncome } = usePayDayIncomes(userId, budgetId, monthBounds.start_date);
@@ -67,6 +77,8 @@ export default function BudgetView({
   const account = useSavingsAccount(userId, budgetId);
   const withdrawnBefore = useSavingsWithdrawnBefore(userId, budgetId, account.startMonth, monthBounds.start_date);
   const deposits = useSavingsDeposits(userId, budgetId, monthBounds.start_date, account.startMonth);
+  const adjustments = useSavingsAdjustments(userId, budgetId);
+  const flowEvents = useSavingsFlows(userId, budgetId, account.startMonth, monthBounds.start_date);
   const creditCards = useCreditCards(userId, budgetId);
   const cardPayments = useCardPayments(userId);
   const groupPayments = useGroupPayments(userId);
@@ -292,8 +304,34 @@ export default function BudgetView({
   const monthlyRemaining = monthlyIncome - monthlyAllocated;
   const weeklyRemaining = weeklyIncome - weeklyAllocated;
 
-  const savingsAvailable = account.startingBalance + deposits.contributionsThrough - withdrawnBefore;
+  // Hand adjustments are real movements of the balance, so they count toward what
+  // savings can cover — both the earmark cap and every balance read-out.
+  const adjustmentsThrough = adjustments.totalThrough(monthBounds.end_date);
+  const adjustedThisMonth = adjustments.adjustments
+    .filter((a) => a.adj_date >= monthBounds.start_date && a.adj_date <= monthBounds.end_date)
+    .reduce((s, a) => s + a.amount, 0);
+  const savingsAvailable =
+    account.startingBalance + deposits.contributionsThrough - withdrawnBefore + adjustmentsThrough;
   const earmarkTargets = recurringGroups.filter((g) => g.id !== savingsGroup?.id);
+
+  // The savings balance as a running series: the tracker's own flows (deposits in,
+  // earmarks out) plus anything entered by hand, bucketed by day/week/month.
+  const trendEvents = [...flowEvents, ...adjustments.events].sort((a, b) => a.date.localeCompare(b.date));
+  const trendBuckets = buildSavingsBuckets(
+    trendEvents,
+    account.startingBalance,
+    granularity,
+    monthBounds.start_date,
+    account.startMonth,
+    toISODate(new Date())
+  );
+  const selectGranularity = (g: SavingsGranularity) => {
+    setGranularity(g);
+    localStorage.setItem(TREND_KEY, g);
+  };
+  /** Editing a bucket's balance stores the difference as an adjustment on its last day. */
+  const setTrendBalance = (bucket: SavingsBucket, target: number) =>
+    void adjustments.adjustBalanceAt(bucket.end, target - bucket.balance);
 
   if (view === 'snapshot') {
     // Unlike the Overview's summary strip, the snapshot counts the card payoff
@@ -326,8 +364,26 @@ export default function BudgetView({
         startMonthLabel={monthLabelOf(account.startMonth)}
         savedThisMonth={deposits.monthTotal}
         earmarkedThisMonth={savings.allocated}
+        adjustedThisMonth={adjustedThisMonth}
         history={history}
         upcoming={upcoming}
+        savingsTrend={
+          <SavingsTrend
+            granularity={granularity}
+            onGranularityChange={selectGranularity}
+            buckets={trendBuckets}
+            events={trendEvents}
+            onSetBalance={setTrendBalance}
+            adjustments={adjustments.adjustments.filter(
+              (a) =>
+                trendBuckets.length > 0 &&
+                a.adj_date >= trendBuckets[0].start &&
+                a.adj_date <= trendBuckets[trendBuckets.length - 1].end
+            )}
+            onAddAdjustment={(date, amount, note) => void adjustments.addAdjustment(date, amount, note)}
+            onDeleteAdjustment={(id) => void adjustments.deleteAdjustment(id)}
+          />
+        }
       />
     );
   }
@@ -386,6 +442,7 @@ export default function BudgetView({
         startMonthLabel={monthLabelOf(account.startMonth)}
         startingBalance={account.startingBalance}
         onSetStartingBalance={account.setStartingBalance}
+        adjustmentsTotal={adjustmentsThrough}
         available={savingsAvailable}
         allocated={savings.allocated}
         earmarkAmounts={savings.earmarkAmounts}

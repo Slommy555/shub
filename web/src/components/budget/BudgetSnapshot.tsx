@@ -34,10 +34,14 @@ interface Props {
   startMonthLabel: string;
   savedThisMonth: number;
   earmarkedThisMonth: number;
+  /** Net of this month's hand adjustments — money the tracker never saw. */
+  adjustedThisMonth: number;
 
   history: HistoryMonth[];
   /** The next few dated events from today forward. */
   upcoming: UpcomingItem[];
+  /** The savings balance chart + its editors (see SavingsTrend). */
+  savingsTrend?: React.ReactNode;
 }
 
 /** "Thu, Jul 30" from YYYY-MM-DD. */
@@ -124,12 +128,14 @@ export default function BudgetSnapshot({
   startMonthLabel,
   savedThisMonth,
   earmarkedThisMonth,
+  adjustedThisMonth,
   history,
   upcoming,
+  savingsTrend,
 }: Props) {
   const committedPct = monthlyIncome > 0 ? Math.min(100, (monthlyAllocated / monthlyIncome) * 100) : 0;
   const savingsRate = monthlyIncome > 0 ? (savedThisMonth / monthlyIncome) * 100 : 0;
-  const netSavings = savedThisMonth - earmarkedThisMonth;
+  const netSavings = savedThisMonth - earmarkedThisMonth + adjustedThisMonth;
   const peak = Math.max(1, ...history.map((h) => Math.max(h.income, h.saved)));
   const avgSaved = history.length > 0 ? history.reduce((s, h) => s + h.saved, 0) / history.length : 0;
 
@@ -209,11 +215,24 @@ export default function BudgetSnapshot({
         <Line label="Added this month" value={savedThisMonth} note={`${Math.round(savingsRate)}% of income`} tone="good" />
         <div style={{ borderTop: '1px solid var(--color-border)' }} />
         <Line label="Earmarked out" value={earmarkedThisMonth} note="spent from the pool" tone="muted" />
+        {adjustedThisMonth !== 0 && (
+          <>
+            <div style={{ borderTop: '1px solid var(--color-border)' }} />
+            <Line
+              label="Adjustments"
+              value={adjustedThisMonth}
+              note="off the tracker"
+              tone={adjustedThisMonth < 0 ? 'bad' : 'good'}
+            />
+          </>
+        )}
         <div style={{ borderTop: '1px solid var(--color-border)' }} />
         <Line label="Net change" value={netSavings} tone={netSavings < 0 ? 'bad' : 'good'} />
         <div style={{ borderTop: '1px solid var(--color-border)' }} />
         <Line label="Balance" value={savingsBalance} note={`from ${formatMoney(startingBalance)} in ${startMonthLabel}`} />
       </Card>
+
+      {savingsTrend}
 
       {/* Six-month income vs saved */}
       {history.length > 0 && (

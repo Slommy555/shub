@@ -1,52 +1,7 @@
 import { useState } from 'react';
-import { formatMoney, parseMoney, type BudgetGroup } from '../../types/budget';
+import { formatMoney, type BudgetGroup } from '../../types/budget';
 import type { SavingsDeposit } from '../../hooks/budget/useSavingsDeposits';
-
-/** A compact money input that shows the raw number while editing, formats on blur. */
-function MoneyInput({
-  value,
-  onSave,
-  placeholder = '$0',
-  fullWidth = false,
-}: {
-  value: number;
-  onSave: (n: number) => void;
-  placeholder?: string;
-  fullWidth?: boolean;
-}) {
-  const [focused, setFocused] = useState(false);
-  const [text, setText] = useState('');
-  const display = focused ? text : value ? formatMoney(value) : '';
-
-  return (
-    <input
-      inputMode="decimal"
-      placeholder={placeholder}
-      value={display}
-      onFocus={(e) => {
-        setFocused(true);
-        setText(value ? String(value) : '');
-        requestAnimationFrame(() => e.target.select());
-      }}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={() => {
-        setFocused(false);
-        const n = parseMoney(text);
-        if (n !== value) onSave(n);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-      }}
-      className={`${fullWidth ? 'w-full' : 'w-32'} rounded-xl border px-3 text-right text-base tabular-nums outline-none`}
-      style={{
-        height: '44px',
-        background: 'var(--color-bg-surface)',
-        borderColor: focused ? 'var(--color-accent-muted)' : 'var(--color-border)',
-        color: 'var(--color-text-primary)',
-      }}
-    />
-  );
-}
+import MoneyInput from './MoneyInput';
 
 interface Props {
   /** Groups you can earmark savings toward (excludes the Savings category). */
@@ -62,6 +17,8 @@ interface Props {
   startMonthLabel: string;
   startingBalance: number;
   onSetStartingBalance: (n: number) => void;
+  /** Net hand adjustments through this month (Snapshot → Savings trend). */
+  adjustmentsTotal: number;
   /** starting + contributions − allocations from previous months. */
   available: number;
   /** This month's earmarks (drawn from `available`). */
@@ -89,6 +46,7 @@ export default function SavingsPoolSection({
   startMonthLabel,
   startingBalance,
   onSetStartingBalance,
+  adjustmentsTotal,
   available,
   allocated,
   earmarkAmounts,
@@ -203,7 +161,16 @@ export default function SavingsPoolSection({
           <div className="mb-4 flex flex-col gap-2 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-surface)' }}>
             <Line label="Starting balance" value={formatMoney(startingBalance)} />
             <Line label="+ Deposits to date" value={formatMoney(contributions)} />
-            <Line label="− Allocated to date" value={formatMoney(startingBalance + contributions - balance)} />
+            {adjustmentsTotal !== 0 && (
+              <Line
+                label={`${adjustmentsTotal < 0 ? '−' : '+'} Adjustments`}
+                value={formatMoney(Math.abs(adjustmentsTotal))}
+              />
+            )}
+            <Line
+              label="− Allocated to date"
+              value={formatMoney(startingBalance + contributions + adjustmentsTotal - balance)}
+            />
             <div className="mt-1 border-t pt-2" style={{ borderColor: 'var(--color-border)' }}>
               <Line label="Balance" value={formatMoney(balance)} strong />
             </div>
