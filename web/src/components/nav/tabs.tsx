@@ -1,6 +1,7 @@
 export type Tab =
   | 'todo'
   | 'workout'
+  | 'nutrition'
   | 'budget'
   | 'productivity'
   | 'notes'
@@ -44,6 +45,18 @@ export const TABS: TabItem[] = [
         <path d="M6.5 6.5 17.5 17.5M4 8l-1 1 2 2M20 16l1-1-2-2" />
         <path d="m7 4-1 1 4 4M17 20l1-1-4-4" />
         <path d="M3.5 14.5 9.5 8.5M14.5 15.5 20.5 9.5" />
+      </svg>
+    ),
+  },
+  {
+    id: 'nutrition',
+    label: 'Nutrition',
+    // Lucide "scan-line": four viewfinder corners with a scanning line through
+    // the middle — drawn inline to match the rest of the rail's stroke icons.
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" {...stroke}>
+        <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
+        <path d="M7 12h10" />
       </svg>
     ),
   },
