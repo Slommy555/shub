@@ -1,7 +1,7 @@
 # Session Progress
 
 ## Nutrition Scanner Tab
-- [ ] Supabase schema + migration
+- [x] Supabase schema + migration — 052_nutrition_scanner.sql applied (nutrition_logs, nutrition_goals, RLS, realtime)
 - [ ] New tab added to navigation
 - [ ] Camera/image upload UI
 - [ ] Claude vision API call (via anthropic-proxy Edge Function)
