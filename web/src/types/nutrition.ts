@@ -31,9 +31,19 @@ export interface Macros {
   fat_g: number;
 }
 
-/** What the vision call returns for one scanned label. */
-export interface ScanResult extends Macros {
+/** One label within a scan, already scaled to the amount eaten of THAT label. */
+export interface ScanItem extends Macros {
   food_name: string;
+  /** The free text the user typed under this image. */
+  amount: string;
+}
+
+/** What the vision call returns for a scan of one or more labels. */
+export interface ScanResult extends Macros {
+  /** A short name for the combined meal. */
+  food_name: string;
+  /** Per-label breakdown, in the order the images were sent. */
+  items: ScanItem[];
   confidence: 'high' | 'medium' | 'low';
   /** A caveat worth surfacing ("label partially obscured"), or null. */
   note: string | null;

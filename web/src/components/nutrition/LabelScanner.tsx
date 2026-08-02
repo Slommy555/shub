@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import MacroResultCard, { type MacroDraft } from './MacroResultCard';
-import { prepareImage, scanLabel, type PreparedImage } from '../../lib/nutritionScan';
-import type { Macros } from '../../types/nutrition';
+import { MAX_IMAGES, prepareImage, scanLabels, type PreparedImage } from '../../lib/nutritionScan';
+import type { Macros, ScanItem } from '../../types/nutrition';
 
 type Stage = 'idle' | 'selected' | 'scanning' | 'result' | 'error';
+
+/** A picked label: the prepared image plus what the user ate of THAT one. */
+interface Shot extends PreparedImage {
+  id: string;
+  amount: string;
+}
 
 const stroke = {
   fill: 'none',
@@ -13,24 +19,32 @@ const stroke = {
   strokeLinejoin: 'round',
 } as const;
 
-const CameraIcon = (
-  <svg width="28" height="28" viewBox="0 0 24 24" {...stroke}>
+const CameraIcon = ({ size }: { size: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...stroke}>
     <path d="M14.5 4h-5L8 6.5H5a2 2 0 0 0-2 2V18a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5a2 2 0 0 0-2-2h-3z" />
     <circle cx="12" cy="13" r="3.5" />
   </svg>
 );
 
-const UploadIcon = (
-  <svg width="28" height="28" viewBox="0 0 24 24" {...stroke}>
+const UploadIcon = ({ size }: { size: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...stroke}>
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
     <path d="M12 16V3M7.5 7.5 12 3l4.5 4.5" />
   </svg>
 );
 
+const CloseIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+    <path d="M18 6 6 18M6 6l12 12" />
+  </svg>
+);
+
+const round = (n: number) => Math.round(n);
+
 /**
- * The scan flow: pick a photo → describe how much you ate → Claude reads the
- * label and does the serving-size math → edit anything that looks off → add it
- * to the day. The photo is never uploaded anywhere but the one Claude call.
+ * The scan flow: add one or more label photos, say how much you ate of each,
+ * then Claude scales every label to its own amount and the totals are summed.
+ * Photos are never uploaded anywhere but the one Claude call.
  */
 export default function LabelScanner({
   onAdd,
@@ -38,34 +52,52 @@ export default function LabelScanner({
   onAdd: (entry: Macros & { food_name: string; serving_size: string | null }) => void;
 }) {
   const [stage, setStage] = useState<Stage>('idle');
-  const [image, setImage] = useState<PreparedImage | null>(null);
-  const [amount, setAmount] = useState('');
+  const [shots, setShots] = useState<Shot[]>([]);
   const [draft, setDraft] = useState<MacroDraft | null>(null);
+  const [items, setItems] = useState<ScanItem[]>([]);
   const [warning, setWarning] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
-  /** The serving text at scan time — the input keeps living behind the card. */
-  const [scannedAmount, setScannedAmount] = useState('');
+  /** The serving text at scan time — the inputs are gone by the result stage. */
+  const [scannedServing, setScannedServing] = useState<string | null>(null);
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
 
-  // One place owns the preview's object URL: React runs this cleanup with the
-  // previous image whenever it changes, and once more on unmount.
+  // Object URLs stay valid until revoked. Removing a shot revokes its own; this
+  // catches whatever is still open when the tab unmounts.
+  const shotsRef = useRef<Shot[]>([]);
+  shotsRef.current = shots;
   useEffect(
     () => () => {
-      if (image) URL.revokeObjectURL(image.previewUrl);
+      shotsRef.current.forEach((s) => URL.revokeObjectURL(s.previewUrl));
     },
-    [image]
+    []
   );
 
-  function reset(keepAmount = false) {
-    setImage(null);
+  function clearShots() {
+    shots.forEach((s) => URL.revokeObjectURL(s.previewUrl));
+    setShots([]);
+  }
+
+  function reset(keepShots = false) {
+    if (!keepShots) clearShots();
     setDraft(null);
+    setItems([]);
     setWarning(null);
     setErrorText(null);
-    if (!keepAmount) setAmount('');
-    setStage('idle');
+    setScannedServing(null);
+    setStage(keepShots && shots.length > 0 ? 'selected' : 'idle');
+  }
+
+  function removeShot(id: string) {
+    setShots((prev) => {
+      const gone = prev.find((s) => s.id === id);
+      if (gone) URL.revokeObjectURL(gone.previewUrl);
+      const next = prev.filter((s) => s.id !== id);
+      if (next.length === 0) setStage('idle');
+      return next;
+    });
   }
 
   async function pick(file: File | undefined) {
@@ -73,7 +105,7 @@ export default function LabelScanner({
     setErrorText(null);
     try {
       const prepared = await prepareImage(file, () => setPreparing(true));
-      setImage(prepared);
+      setShots((prev) => [...prev, { ...prepared, id: crypto.randomUUID(), amount: '' }]);
       setStage('selected');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : 'Could not read that image.');
@@ -84,12 +116,15 @@ export default function LabelScanner({
   }
 
   async function scan() {
-    if (!image) return;
-    const serving = amount.trim();
-    setScannedAmount(serving);
+    if (shots.length === 0) return;
+    const serving = shots
+      .map((s) => s.amount.trim())
+      .filter(Boolean)
+      .join(' · ');
+    setScannedServing(serving || null);
     setStage('scanning');
     try {
-      const res = await scanLabel(image, serving);
+      const res = await scanLabels(shots.map((s) => ({ image: s, amount: s.amount })));
       setDraft({
         food_name: res.food_name,
         calories: res.calories,
@@ -97,41 +132,71 @@ export default function LabelScanner({
         carbs_g: res.carbs_g,
         fat_g: res.fat_g,
       });
+      setItems(res.items);
       setWarning(
         res.note ?? (res.confidence === 'low' ? 'Low confidence — double-check these numbers.' : null)
       );
       setStage('result');
     } catch {
-      setErrorText("Couldn't read this label — try a clearer photo or better lighting");
+      setErrorText(
+        shots.length === 1
+          ? "Couldn't read this label — try a clearer photo or better lighting"
+          : "Couldn't read these labels — try clearer photos or better lighting"
+      );
       setStage('error');
     }
   }
 
   function add() {
     if (!draft) return;
-    onAdd({ ...draft, serving_size: scannedAmount || null });
+    onAdd({ ...draft, serving_size: scannedServing });
     reset();
   }
 
-  const amountInput = (
-    <input
-      value={amount}
-      onChange={(e) => setAmount(e.target.value)}
-      placeholder="e.g. 1 cup, 100g, 2 slices, half the bag"
-      aria-label="Amount eaten"
-      className="w-full rounded-xl border px-4 text-[15px] outline-none"
-      style={{
-        background: 'var(--color-bg-surface)',
-        borderColor: 'var(--color-border)',
-        color: 'var(--color-text-primary)',
-        height: 48,
-      }}
-    />
-  );
+  const atCap = shots.length >= MAX_IMAGES;
+
+  /**
+   * `large` is the empty-state pair of 140px cards; `small` is the "add another
+   * label" row that sits under the shots once at least one is picked.
+   */
+  const pickButton = (kind: 'camera' | 'upload', variant: 'large' | 'small') => {
+    const isCamera = kind === 'camera';
+    const Icon = isCamera ? CameraIcon : UploadIcon;
+    const ref = isCamera ? cameraRef : uploadRef;
+    const big = variant === 'large';
+    return (
+      <button
+        key={kind}
+        type="button"
+        onClick={() => ref.current?.click()}
+        disabled={atCap}
+        className={[
+          'flex items-center justify-center gap-2 border transition-transform active:scale-[0.98] disabled:opacity-50',
+          big ? 'flex-col rounded-2xl' : 'flex-1 rounded-xl text-[13px] font-semibold',
+        ].join(' ')}
+        style={{
+          background: 'var(--color-bg-elevated)',
+          borderColor: 'var(--color-border)',
+          height: big ? 140 : 48,
+        }}
+      >
+        <span style={{ color: 'var(--color-text-secondary)' }}>
+          <Icon size={big ? 28 : 18} />
+        </span>
+        <span
+          className={big ? 'text-[15px] font-semibold' : ''}
+          style={{ color: 'var(--color-text-primary)' }}
+        >
+          {isCamera ? (big ? 'Take Photo' : 'Add Photo') : big ? 'Upload Image' : 'Upload'}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <section className="mt-4">
-      {/* Both inputs stay mounted so the hidden file pickers keep their refs. */}
+      {/* Both inputs stay mounted so the hidden file pickers keep their refs.
+          `multiple` lets the picker add several labels in one go. */}
       <input
         ref={cameraRef}
         type="file"
@@ -147,74 +212,94 @@ export default function LabelScanner({
         ref={uploadRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
-        onChange={(e) => {
-          void pick(e.target.files?.[0]);
+        onChange={async (e) => {
+          const files = Array.from(e.target.files ?? []).slice(0, MAX_IMAGES - shots.length);
           e.target.value = '';
+          for (const f of files) await pick(f);
         }}
       />
 
       {stage === 'idle' && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {[
-              { icon: CameraIcon, label: 'Take Photo', ref: cameraRef },
-              { icon: UploadIcon, label: 'Upload Image', ref: uploadRef },
-            ].map((opt) => (
-              <button
-                key={opt.label}
-                type="button"
-                onClick={() => opt.ref.current?.click()}
-                className="flex flex-col items-center justify-center gap-2 rounded-2xl border transition-transform active:scale-[0.98]"
-                style={{
-                  background: 'var(--color-bg-elevated)',
-                  borderColor: 'var(--color-border)',
-                  color: 'var(--color-text-secondary)',
-                  height: 140,
-                }}
-              >
-                {opt.icon}
-                <span className="text-[15px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-                  {opt.label}
-                </span>
-              </button>
-            ))}
-          </div>
-          {amountInput}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {pickButton('camera', 'large')}
+          {pickButton('upload', 'large')}
         </div>
       )}
 
-      {stage === 'selected' && image && (
+      {stage === 'selected' && (
         <div className="space-y-3">
-          <div
-            className="relative overflow-hidden rounded-2xl border"
-            style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
-          >
-            <img
-              src={image.previewUrl}
-              alt="Selected nutrition label"
-              className="mx-auto block max-h-[250px] w-full object-contain sm:max-h-[300px]"
-            />
-            <button
-              type="button"
-              onClick={() => reset(true)}
-              aria-label="Remove image"
-              className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full"
-              style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }}
+          {shots.map((shot, i) => (
+            <div
+              key={shot.id}
+              className="overflow-hidden rounded-2xl border"
+              style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          {amountInput}
+              <div className="relative">
+                <img
+                  src={shot.previewUrl}
+                  alt={`Nutrition label ${i + 1}`}
+                  className="mx-auto block max-h-[250px] w-full object-contain sm:max-h-[300px]"
+                />
+                {shots.length > 1 && (
+                  <span
+                    className="absolute left-2 top-2 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                    style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }}
+                  >
+                    Label {i + 1}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removeShot(shot.id)}
+                  aria-label={`Remove label ${i + 1}`}
+                  className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full"
+                  style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }}
+                >
+                  {CloseIcon}
+                </button>
+              </div>
+              <div className="p-3">
+                <input
+                  value={shot.amount}
+                  onChange={(e) =>
+                    setShots((prev) =>
+                      prev.map((s) => (s.id === shot.id ? { ...s, amount: e.target.value } : s))
+                    )
+                  }
+                  placeholder="Amount eaten — e.g. 1 cup, 100g, 1/5th of this"
+                  aria-label={`Amount eaten of label ${i + 1}`}
+                  className="w-full rounded-xl border px-4 text-[15px] outline-none"
+                  style={{
+                    background: 'var(--color-bg-surface)',
+                    borderColor: 'var(--color-border)',
+                    color: 'var(--color-text-primary)',
+                    height: 48,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+
+          {atCap ? (
+            <p className="text-center text-[13px]" style={{ color: 'var(--color-text-tertiary)' }}>
+              {MAX_IMAGES} labels is the limit for one scan.
+            </p>
+          ) : (
+            <div className="flex gap-2">
+              {pickButton('camera', 'small')}
+              {pickButton('upload', 'small')}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => void scan()}
             className="w-full rounded-full text-[15px] font-semibold transition-transform active:scale-[0.98]"
             style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)', height: 52 }}
           >
-            Scan Label
+            {shots.length === 1 ? 'Scan Label' : `Scan ${shots.length} Labels`}
           </button>
         </div>
       )}
@@ -225,7 +310,7 @@ export default function LabelScanner({
           style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}
         >
           <p className="text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
-            Reading label…
+            {shots.length === 1 ? 'Reading label…' : `Reading ${shots.length} labels…`}
           </p>
           <div className="skeleton mt-3 h-11 w-full rounded-xl" />
           <div className="mt-4 space-y-2">
@@ -244,11 +329,40 @@ export default function LabelScanner({
           <MacroResultCard
             draft={draft}
             onChange={setDraft}
-            serving={scannedAmount || null}
+            serving={scannedServing}
             primaryLabel="Add to my day"
             onPrimary={add}
             warning={warning}
             showEdit
+            breakdown={
+              items.length > 1 ? (
+                <div
+                  className="mt-3 space-y-1.5 rounded-xl p-3"
+                  style={{ background: 'var(--color-bg-surface)' }}
+                >
+                  {items.map((it, i) => (
+                    <div key={i} className="flex items-baseline justify-between gap-3">
+                      <span
+                        className="min-w-0 flex-1 truncate text-[13px]"
+                        style={{ color: 'var(--color-text-secondary)' }}
+                      >
+                        {it.food_name}
+                        {it.amount && (
+                          <span style={{ color: 'var(--color-text-tertiary)' }}> · {it.amount}</span>
+                        )}
+                      </span>
+                      <span
+                        className="shrink-0 text-[13px] tabular-nums"
+                        style={{ color: 'var(--color-text-secondary)' }}
+                      >
+                        {round(it.calories).toLocaleString()} cal · {round(it.protein_g)}p ·{' '}
+                        {round(it.carbs_g)}c · {round(it.fat_g)}f
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null
+            }
           />
           <button
             type="button"

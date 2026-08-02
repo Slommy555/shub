@@ -10,3 +10,8 @@
 - [x] Daily total strip — DailyTotalStrip + GoalSheet (nutrition_goals upsert, progress bars when goals set)
 - [x] Log history (today's entries) — TodayLog with swipe-left + trash delete, tap to edit in a bottom sheet
 - [x] Build passing + git pushed
+
+## Follow-up — multi-label scans
+- [x] Multiple images per scan (cap 6), each with its own "Amount eaten" input
+- [x] Fraction-of-container math ("1/5th of this" = whole container ÷ 5, via servings per container)
+- [x] Per-label macros summed in code, not by the model; breakdown shown on the result card

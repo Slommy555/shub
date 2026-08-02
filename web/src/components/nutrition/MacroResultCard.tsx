@@ -28,6 +28,8 @@ interface Props {
    * editable — this just advertises that, and jumps focus to the food name.
    */
   showEdit?: boolean;
+  /** Per-label rundown shown under the serving line when several were scanned. */
+  breakdown?: ReactNode;
 }
 
 /**
@@ -45,6 +47,7 @@ export default function MacroResultCard({
   warning,
   secondary,
   showEdit,
+  breakdown,
 }: Props) {
   const uid = useId();
   const nameRef = useRef<HTMLInputElement>(null);
@@ -80,6 +83,8 @@ export default function MacroResultCard({
             Serving: {serving}
           </p>
         )}
+
+        {breakdown}
 
         <div className="mt-4 space-y-2">
           {FIELDS.map((f) => (

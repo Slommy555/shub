@@ -6,10 +6,13 @@
 // come back the image is dropped.
 
 import { supabase } from './supabase';
-import type { ScanResult } from '../types/nutrition';
+import type { Macros, ScanItem, ScanResult } from '../types/nutrition';
 
 const MODEL = 'claude-sonnet-4-6';
-const MAX_TOKENS = 1000;
+const MAX_TOKENS = 1500;
+
+/** Ceiling on labels per scan — keeps the request payload and cost sane. */
+export const MAX_IMAGES = 6;
 
 /** Above this we re-encode; below it the original bytes go straight through. */
 const MAX_BYTES = 1_000_000;
@@ -96,29 +99,51 @@ export async function prepareImage(file: File, onSlow?: () => void): Promise<Pre
   }
 }
 
-function buildPrompt(amountEaten: string): string {
-  const amount = amountEaten.trim() || 'one serving as listed on the label';
+function buildPrompt(count: number): string {
   return [
-    'This is a photo of a nutrition label.',
-    `The person ate: ${amount}.`,
+    count === 1
+      ? 'The photo above is a nutrition label, with the amount that person ate stated above it.'
+      : `The ${count} photos above are nutrition labels. Above each one is the amount that person ate of THAT item.`,
     '',
-    'Read the nutrition label and calculate the macros for the amount they ate.',
-    'Account for the serving size on the label vs how much they actually ate.',
+    'For EACH label, work out the macros for the amount stated for that label:',
     '',
-    'For example: if the label says 200 calories per 100g and they ate 150g, the',
-    'answer is 300 calories.',
+    '1. Read the serving size, the per-serving macros, and the servings per',
+    '   container if the label shows one.',
+    '2. If the amount is a plain quantity ("100g", "2 slices", "1 cup"), scale from',
+    '   the label\'s serving size. Example: the label says 200 calories per 100g and',
+    '   they ate 150g, so the answer is 300 calories.',
+    '3. If the amount is a FRACTION OF THE WHOLE product, package, container or bag',
+    '   ("1/5th of this", "half the bag", "a third of the box", "the whole thing"),',
+    '   first work out the macros for the ENTIRE container — per-serving macros',
+    '   multiplied by the servings per container — and then apply the fraction to',
+    '   that. Example: 200 calories per serving, 5 servings per container, and they',
+    '   ate "1/5th of this", so the whole container is 1000 calories and their share',
+    '   is 200 calories. Do NOT apply the fraction to a single serving.',
+    '   If the label gives no servings per container, say so in "note" and fall back',
+    '   to treating the fraction as a fraction of one serving.',
+    '4. If no amount was stated for a label, assume exactly one serving as listed.',
     '',
     'Return ONLY a JSON object with no other text:',
     '{',
-    '  "food_name": string (your best guess at what this food is from the label,',
-    "    or 'Unknown Food'),",
-    '  "calories": number,',
-    '  "protein_g": number,',
-    '  "carbs_g": number,',
-    '  "fat_g": number,',
+    '  "items": [',
+    '    {',
+    '      "food_name": string (your best guess at what this food is, or "Unknown Food"),',
+    '      "calories": number,',
+    '      "protein_g": number,',
+    '      "carbs_g": number,',
+    '      "fat_g": number',
+    '    }',
+    `    // exactly ${count} object${count === 1 ? '' : 's'}, in the same order as the photos`,
+    '  ],',
+    count === 1
+      ? '  "food_name": string (a short name for the food),'
+      : '  "food_name": string (a short name for the combined meal, e.g. "Chicken & rice bowl"),',
     '  "confidence": "high" | "medium" | "low",',
     '  "note": string or null (any caveat, e.g. "Label was partially obscured", or null)',
     '}',
+    '',
+    'Every number in "items" is what the person ACTUALLY ate for that label — already',
+    'scaled. Do not return a combined total; the totals are added up separately.',
   ].join('\n');
 }
 
@@ -151,42 +176,80 @@ function extractJsonObject(raw: string): Record<string, unknown> {
   throw new Error('Truncated JSON in response.');
 }
 
+function str(v: unknown, fallback: string): string {
+  return typeof v === 'string' && v.trim() ? v.trim() : fallback;
+}
+
+/** One label the user picked, paired with what they said they ate of it. */
+export interface ScanInput {
+  image: PreparedImage;
+  amount: string;
+}
+
 /**
- * Send the label photo to Claude and get back macros for what was eaten.
+ * Send every label photo to Claude in one call and get back the macros for what
+ * was eaten. Claude scales each label to its own stated amount; the per-label
+ * numbers are then summed here rather than by the model, so the total is exact
+ * arithmetic over whatever it read.
+ *
  * Throws when the reply isn't usable — the caller shows the error state.
  */
-export async function scanLabel(image: PreparedImage, amountEaten: string): Promise<ScanResult> {
-  const { data, error } = await supabase.functions.invoke('anthropic-proxy', {
-    body: {
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: image.mediaType, data: image.data },
-            },
-            { type: 'text', text: buildPrompt(amountEaten) },
-          ],
-        },
-      ],
+export async function scanLabels(inputs: ScanInput[]): Promise<ScanResult> {
+  if (inputs.length === 0) throw new Error('No images to scan.');
+
+  // Each image is introduced by the amount eaten of it, so the model can never
+  // mis-pair an amount with the wrong label.
+  const content = inputs.flatMap((input, i) => [
+    {
+      type: 'text',
+      text:
+        `Label ${i + 1} of ${inputs.length}. The person ate: ` +
+        `${input.amount.trim() || 'one serving as listed on the label'}.`,
     },
+    {
+      type: 'image',
+      source: { type: 'base64', media_type: input.image.mediaType, data: input.image.data },
+    },
+  ]);
+  content.push({ type: 'text', text: buildPrompt(inputs.length) });
+
+  const { data, error } = await supabase.functions.invoke('anthropic-proxy', {
+    body: { model: MODEL, max_tokens: MAX_TOKENS, messages: [{ role: 'user', content }] },
   });
   if (error) throw new Error(`Scan request failed: ${error.message}`);
 
   const text = (data as { content?: { text?: string }[] })?.content?.[0]?.text ?? '';
   const obj = extractJsonObject(text);
+
+  // Prefer the per-label breakdown. A model that ignored the schema and returned
+  // flat macros still gives us a usable single item.
+  const raw = Array.isArray(obj.items) && obj.items.length ? (obj.items as Record<string, unknown>[]) : [obj];
+  const items: ScanItem[] = raw.map((it, i) => ({
+    food_name: str(it.food_name, 'Unknown Food'),
+    amount: inputs[i]?.amount.trim() ?? '',
+    calories: num(it.calories),
+    protein_g: num(it.protein_g),
+    carbs_g: num(it.carbs_g),
+    fat_g: num(it.fat_g),
+  }));
+
+  const total = items.reduce<Macros>(
+    (acc, it) => ({
+      calories: acc.calories + it.calories,
+      protein_g: acc.protein_g + it.protein_g,
+      carbs_g: acc.carbs_g + it.carbs_g,
+      fat_g: acc.fat_g + it.fat_g,
+    }),
+    { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
+  );
+
   const confidence = obj.confidence;
-  const note = obj.note;
   return {
-    food_name: typeof obj.food_name === 'string' && obj.food_name.trim() ? obj.food_name.trim() : 'Unknown Food',
-    calories: num(obj.calories),
-    protein_g: num(obj.protein_g),
-    carbs_g: num(obj.carbs_g),
-    fat_g: num(obj.fat_g),
-    confidence: confidence === 'high' || confidence === 'medium' || confidence === 'low' ? confidence : 'medium',
-    note: typeof note === 'string' && note.trim() ? note.trim() : null,
+    ...total,
+    items,
+    food_name: str(obj.food_name, items.length === 1 ? items[0].food_name : 'Meal'),
+    confidence:
+      confidence === 'high' || confidence === 'medium' || confidence === 'low' ? confidence : 'medium',
+    note: str(obj.note, '') || null,
   };
 }
