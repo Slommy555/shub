@@ -61,6 +61,14 @@ export default function LabelScanner({
   /** The serving text at scan time — the inputs are gone by the result stage. */
   const [scannedServing, setScannedServing] = useState<string | null>(null);
 
+  // Meal prep: the amounts describe a whole batch, and only one portion of it
+  // gets logged. `makes` / `eating` are the divisor and numerator of that share.
+  const [mealPrep, setMealPrep] = useState(false);
+  const [makes, setMakes] = useState(5);
+  const [eating, setEating] = useState(1);
+  /** Snapshot of the batch at scan time, so the result card can show the math. */
+  const [batch, setBatch] = useState<{ total: Macros; makes: number; eating: number } | null>(null);
+
   const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
 
@@ -87,6 +95,8 @@ export default function LabelScanner({
     setWarning(null);
     setErrorText(null);
     setScannedServing(null);
+    setBatch(null);
+    if (!keepShots) setMealPrep(false);
     setStage(keepShots && shots.length > 0 ? 'selected' : 'idle');
   }
 
@@ -96,6 +106,8 @@ export default function LabelScanner({
       if (gone) URL.revokeObjectURL(gone.previewUrl);
       const next = prev.filter((s) => s.id !== id);
       if (next.length === 0) setStage('idle');
+      // Meal prep only makes sense for a multi-ingredient batch.
+      if (next.length < 2) setMealPrep(false);
       return next;
     });
   }
@@ -117,21 +129,49 @@ export default function LabelScanner({
 
   async function scan() {
     if (shots.length === 0) return;
-    const serving = shots
+    // Freeze the batch split now so later edits to the inputs can't retroactively
+    // disagree with the numbers already on the card.
+    const prep = mealPrep && shots.length > 1;
+    const nMakes = Math.max(1, Math.round(makes) || 1);
+    const nEating = Math.max(1, Math.round(eating) || 1);
+    const share = prep ? nEating / nMakes : 1;
+
+    const amounts = shots
       .map((s) => s.amount.trim())
       .filter(Boolean)
       .join(' · ');
-    setScannedServing(serving || null);
+    setScannedServing(
+      prep
+        ? `${nEating} of ${nMakes} servings${amounts ? ` — ${amounts}` : ''}`
+        : amounts || null
+    );
     setStage('scanning');
     try {
-      const res = await scanLabels(shots.map((s) => ({ image: s, amount: s.amount })));
+      const res = await scanLabels(
+        shots.map((s) => ({ image: s, amount: s.amount })),
+        { mealPrep: prep }
+      );
       setDraft({
         food_name: res.food_name,
-        calories: res.calories,
-        protein_g: res.protein_g,
-        carbs_g: res.carbs_g,
-        fat_g: res.fat_g,
+        calories: round(res.calories * share),
+        protein_g: round(res.protein_g * share),
+        carbs_g: round(res.carbs_g * share),
+        fat_g: round(res.fat_g * share),
       });
+      setBatch(
+        prep
+          ? {
+              total: {
+                calories: res.calories,
+                protein_g: res.protein_g,
+                carbs_g: res.carbs_g,
+                fat_g: res.fat_g,
+              },
+              makes: nMakes,
+              eating: nEating,
+            }
+          : null
+      );
       setItems(res.items);
       setWarning(
         res.note ?? (res.confidence === 'low' ? 'Low confidence — double-check these numbers.' : null)
@@ -268,8 +308,16 @@ export default function LabelScanner({
                       prev.map((s) => (s.id === shot.id ? { ...s, amount: e.target.value } : s))
                     )
                   }
-                  placeholder="Amount eaten — e.g. 1 cup, 100g, 1/5th of this"
-                  aria-label={`Amount eaten of label ${i + 1}`}
+                  placeholder={
+                    mealPrep
+                      ? 'Amount in the batch — e.g. 500g, 2 cups, the whole bag'
+                      : 'Amount eaten — e.g. 1 cup, 100g, 1/5th of this'
+                  }
+                  aria-label={
+                    mealPrep
+                      ? `Amount of ingredient ${i + 1} in the batch`
+                      : `Amount eaten of label ${i + 1}`
+                  }
                   className="w-full rounded-xl border px-4 text-[15px] outline-none"
                   style={{
                     background: 'var(--color-bg-surface)',
@@ -290,6 +338,93 @@ export default function LabelScanner({
             <div className="flex gap-2">
               {pickButton('camera', 'small')}
               {pickButton('upload', 'small')}
+            </div>
+          )}
+
+          {shots.length > 1 && (
+            <div
+              className="rounded-2xl border p-3"
+              style={{
+                background: mealPrep ? 'var(--color-accent-subtle)' : 'var(--color-bg-elevated)',
+                borderColor: mealPrep ? 'var(--color-accent-muted)' : 'var(--color-border)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setMealPrep((v) => !v)}
+                aria-pressed={mealPrep}
+                className="flex w-full items-center gap-3 text-left"
+              >
+                <span
+                  className="grid h-6 w-10 shrink-0 items-center rounded-full px-0.5 transition-colors"
+                  style={{
+                    background: mealPrep ? 'var(--color-accent)' : 'var(--color-border-strong)',
+                  }}
+                >
+                  <span
+                    className="h-5 w-5 rounded-full bg-white transition-transform"
+                    style={{ transform: mealPrep ? 'translateX(16px)' : 'translateX(0)' }}
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span
+                    className="block text-[15px] font-semibold"
+                    style={{ color: 'var(--color-text-primary)' }}
+                  >
+                    Meal prep
+                  </span>
+                  <span className="block text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
+                    Log one portion of a batch you cooked
+                  </span>
+                </span>
+              </button>
+
+              {mealPrep && (
+                <div className="mt-3 space-y-2">
+                  {[
+                    { label: 'Batch makes', value: makes, set: setMakes, unit: 'servings' },
+                    { label: "You're eating", value: eating, set: setEating, unit: 'servings' },
+                  ].map((row) => (
+                    <label key={row.label} className="flex items-center gap-3">
+                      <span
+                        className="flex-1 text-[15px]"
+                        style={{ color: 'var(--color-text-secondary)' }}
+                      >
+                        {row.label}
+                      </span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        step={1}
+                        value={String(row.value)}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value, 10);
+                          row.set(Number.isFinite(n) && n > 0 ? n : 1);
+                        }}
+                        onFocus={(e) => e.currentTarget.select()}
+                        className="w-20 shrink-0 rounded-xl border px-3 text-right text-[15px] font-semibold tabular-nums outline-none"
+                        style={{
+                          background: 'var(--color-bg-surface)',
+                          borderColor: 'var(--color-border)',
+                          color: 'var(--color-text-primary)',
+                          height: 44,
+                        }}
+                      />
+                      <span
+                        className="w-16 shrink-0 text-[13px]"
+                        style={{ color: 'var(--color-text-tertiary)' }}
+                      >
+                        {row.unit}
+                      </span>
+                    </label>
+                  ))}
+                  <p className="text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
+                    Enter each label as the amount that went into the whole batch. You'll be logged{' '}
+                    {eating === makes ? 'all of it' : `${eating}/${makes} of the total`}.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -340,6 +475,14 @@ export default function LabelScanner({
                   className="mt-3 space-y-1.5 rounded-xl p-3"
                   style={{ background: 'var(--color-bg-surface)' }}
                 >
+                  {batch && (
+                    <p
+                      className="pb-1 text-[11px] font-semibold uppercase"
+                      style={{ color: 'var(--color-text-tertiary)', letterSpacing: '0.04em' }}
+                    >
+                      Whole batch
+                    </p>
+                  )}
                   {items.map((it, i) => (
                     <div key={i} className="flex items-baseline justify-between gap-3">
                       <span
@@ -360,6 +503,41 @@ export default function LabelScanner({
                       </span>
                     </div>
                   ))}
+
+                  {batch && (
+                    <div
+                      className="mt-1 space-y-1.5 border-t pt-2"
+                      style={{ borderColor: 'var(--color-border)' }}
+                    >
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
+                          Batch total
+                        </span>
+                        <span
+                          className="shrink-0 text-[13px] tabular-nums"
+                          style={{ color: 'var(--color-text-secondary)' }}
+                        >
+                          {round(batch.total.calories).toLocaleString()} cal ·{' '}
+                          {round(batch.total.protein_g)}p · {round(batch.total.carbs_g)}c ·{' '}
+                          {round(batch.total.fat_g)}f
+                        </span>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span
+                          className="text-[13px] font-semibold"
+                          style={{ color: 'var(--color-text-primary)' }}
+                        >
+                          Your share
+                        </span>
+                        <span
+                          className="shrink-0 text-[13px] font-semibold tabular-nums"
+                          style={{ color: 'var(--color-text-primary)' }}
+                        >
+                          {batch.eating} of {batch.makes} servings
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : null
             }

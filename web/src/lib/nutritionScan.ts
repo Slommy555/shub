@@ -99,13 +99,23 @@ export async function prepareImage(file: File, onSlow?: () => void): Promise<Pre
   }
 }
 
-function buildPrompt(count: number): string {
+function buildPrompt(count: number, mealPrep: boolean): string {
   return [
-    count === 1
-      ? 'The photo above is a nutrition label, with the amount that person ate stated above it.'
-      : `The ${count} photos above are nutrition labels. Above each one is the amount that person ate of THAT item.`,
-    '',
-    'For EACH label, work out the macros for the amount stated for that label:',
+    ...(mealPrep
+      ? [
+          `The ${count} photos above are the nutrition labels of the ingredients in ONE`,
+          'batch of a meal-prepped recipe. Above each label is the amount of that',
+          'ingredient that went into the WHOLE batch.',
+          '',
+          'For EACH ingredient, work out the macros for the amount that went into the batch:',
+        ]
+      : [
+          count === 1
+            ? 'The photo above is a nutrition label, with the amount that person ate stated above it.'
+            : `The ${count} photos above are nutrition labels. Above each one is the amount that person ate of THAT item.`,
+          '',
+          'For EACH label, work out the macros for the amount stated for that label:',
+        ]),
     '',
     '1. Read the serving size, the per-serving macros, and the servings per',
     '   container if the label shows one.',
@@ -121,8 +131,15 @@ function buildPrompt(count: number): string {
     '   is 200 calories. Do NOT apply the fraction to a single serving.',
     '   If the label gives no servings per container, say so in "note" and fall back',
     '   to treating the fraction as a fraction of one serving.',
-    '4. If no amount was stated for a label, assume exactly one serving as listed.',
+    `4. If no amount was stated for ${mealPrep ? 'an ingredient' : 'a label'}, assume exactly one serving as listed.`,
     '',
+    ...(mealPrep
+      ? [
+          'Do NOT divide anything by the number of portions the batch makes — the batch',
+          'is split up separately. Every number you return is for the WHOLE batch.',
+          '',
+        ]
+      : []),
     'Return ONLY a JSON object with no other text:',
     '{',
     '  "items": [',
@@ -135,15 +152,21 @@ function buildPrompt(count: number): string {
     '    }',
     `    // exactly ${count} object${count === 1 ? '' : 's'}, in the same order as the photos`,
     '  ],',
-    count === 1
-      ? '  "food_name": string (a short name for the food),'
-      : '  "food_name": string (a short name for the combined meal, e.g. "Chicken & rice bowl"),',
+    mealPrep
+      ? '  "food_name": string (a short name for the finished dish, e.g. "Chicken & rice bowl"),'
+      : count === 1
+        ? '  "food_name": string (a short name for the food),'
+        : '  "food_name": string (a short name for the combined meal, e.g. "Chicken & rice bowl"),',
     '  "confidence": "high" | "medium" | "low",',
     '  "note": string or null (any caveat, e.g. "Label was partially obscured", or null)',
     '}',
     '',
-    'Every number in "items" is what the person ACTUALLY ate for that label — already',
-    'scaled. Do not return a combined total; the totals are added up separately.',
+    mealPrep
+      ? 'Every number in "items" is that ingredient\'s contribution to the WHOLE batch —'
+      : 'Every number in "items" is what the person ACTUALLY ate for that label — already',
+    mealPrep
+      ? 'already scaled. Do not return a combined total; the totals are added up separately.'
+      : 'scaled. Do not return a combined total; the totals are added up separately.',
   ].join('\n');
 }
 
@@ -192,26 +215,35 @@ export interface ScanInput {
  * numbers are then summed here rather than by the model, so the total is exact
  * arithmetic over whatever it read.
  *
+ * In `mealPrep` mode the amounts describe what went into a whole batch, so the
+ * returned total is the batch total — the caller divides it by the portions.
+ *
  * Throws when the reply isn't usable — the caller shows the error state.
  */
-export async function scanLabels(inputs: ScanInput[]): Promise<ScanResult> {
+export async function scanLabels(
+  inputs: ScanInput[],
+  opts: { mealPrep?: boolean } = {}
+): Promise<ScanResult> {
   if (inputs.length === 0) throw new Error('No images to scan.');
+  const mealPrep = opts.mealPrep === true;
 
-  // Each image is introduced by the amount eaten of it, so the model can never
-  // mis-pair an amount with the wrong label.
+  // Each image is introduced by its own amount, so the model can never mis-pair
+  // an amount with the wrong label.
   const content = inputs.flatMap((input, i) => [
     {
       type: 'text',
-      text:
-        `Label ${i + 1} of ${inputs.length}. The person ate: ` +
-        `${input.amount.trim() || 'one serving as listed on the label'}.`,
+      text: mealPrep
+        ? `Ingredient ${i + 1} of ${inputs.length}. The batch uses: ` +
+          `${input.amount.trim() || 'one serving as listed on the label'}.`
+        : `Label ${i + 1} of ${inputs.length}. The person ate: ` +
+          `${input.amount.trim() || 'one serving as listed on the label'}.`,
     },
     {
       type: 'image',
       source: { type: 'base64', media_type: input.image.mediaType, data: input.image.data },
     },
   ]);
-  content.push({ type: 'text', text: buildPrompt(inputs.length) });
+  content.push({ type: 'text', text: buildPrompt(inputs.length, mealPrep) });
 
   const { data, error } = await supabase.functions.invoke('anthropic-proxy', {
     body: { model: MODEL, max_tokens: MAX_TOKENS, messages: [{ role: 'user', content }] },

@@ -15,3 +15,4 @@
 - [x] Multiple images per scan (cap 6), each with its own "Amount eaten" input
 - [x] Fraction-of-container math ("1/5th of this" = whole container ÷ 5, via servings per container)
 - [x] Per-label macros summed in code, not by the model; breakdown shown on the result card
+- [x] Meal prep toggle (2+ labels): amounts describe the whole batch, logs `eating/makes` of the total
