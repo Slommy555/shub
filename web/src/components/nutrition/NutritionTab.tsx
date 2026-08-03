@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import DailyTotalStrip from './DailyTotalStrip';
 import GoalSheet from './GoalSheet';
 import LabelScanner from './LabelScanner';
-import MealDescriber from './MealDescriber';
 import TodayLog from './TodayLog';
 import EditLogSheet from './EditLogSheet';
 import { useNutritionLogs } from '../../hooks/nutrition/useNutritionLogs';
@@ -11,14 +10,13 @@ import { toISODate } from '../../lib/dates';
 import type { NutritionLog } from '../../types/nutrition';
 
 /**
- * Nutrition tab: today's macro totals on top, the two ways of logging a meal in
- * the middle — scan a label, or describe it in plain language — and today's log
- * at the bottom. `.nutrition-scope` injects the UI_SKILL.md color tokens (shared
- * with the Budget tab) scoped to this tab only.
+ * Nutrition tab: today's macro totals on top, the label scanner in the middle,
+ * and today's log at the bottom. `.nutrition-scope` injects the UI_SKILL.md
+ * color tokens (shared with the Budget tab) scoped to this tab only.
  */
 export default function NutritionTab({ userId }: { userId: string }) {
   const today = useMemo(() => toISODate(new Date()), []);
-  const { logs, totals, addLog, addLogs, updateLog, deleteLog } = useNutritionLogs(userId, today);
+  const { logs, totals, addLog, updateLog, deleteLog } = useNutritionLogs(userId, today);
   const { goals, saveGoals } = useNutritionGoals(userId);
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [editing, setEditing] = useState<NutritionLog | null>(null);
@@ -46,8 +44,6 @@ export default function NutritionTab({ userId }: { userId: string }) {
         <DailyTotalStrip totals={totals} goals={goals} onOpenGoals={() => setGoalsOpen(true)} />
 
         <LabelScanner onAdd={addLog} />
-
-        <MealDescriber onAddAll={addLogs} />
 
         <TodayLog logs={logs} dateLabel={dateLabel} onEdit={setEditing} onDelete={deleteLog} />
       </div>

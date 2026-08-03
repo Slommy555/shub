@@ -1,23 +1,18 @@
 # Session Progress
 
-## Describe Your Meal Feature
-- [x] USDA proxy updated to support natural language search — **created**, not updated: the old USDA proxy was removed 2026-06-29, so `supabase/functions/usda-proxy/` is new. `type: "describe"` searches Foundation + SR Legacy, drops branded and nutrient-less rows, ranks Foundation first, returns top 3 per-100g. `USDA_API_KEY` secret was still set. Deployed.
-- [x] Open Food Facts proxy Edge Function created — `cgi/search.pl` first, falling back to Search-a-licious (`search.openfoodfacts.org`) because `world.openfoodfacts.org` now answers anonymous text search with a 503 interstitial. Deployed.
-- [x] Claude meal parser (identifies foods from description) — `lib/mealDescribe.ts` `parseMeal()`; returns items with quantity, unit, `quantity_grams`, `is_branded`, `search_query`. Empty/invalid JSON throws `MealParseError` → the "be more specific" message.
-- [x] Multi-source lookup logic (USDA → Open Food Facts → Claude estimate) — `resolve()` per item, all items via one `Promise.all`. Generic: USDA → OFF → estimate. Branded: OFF → USDA → estimate.
-- [x] Meal breakdown result UI — `MealDescriber.tsx`; OR divider, textarea, per-item rows with green/blue/amber source badges, TOTAL row, loading card with cross-fading status text.
-- [x] Edit and add to daily total flow — rows expand to editable quantity + 4 macros; "Add all to my day" writes one `nutrition_logs` row per item via the new optimistic `addLogs()` in `useNutritionLogs`.
-- [x] Build passing + git pushed
+## Remove "Describe Your Meal" Feature — complete
+- [x] Frontend removed — `MealDescriber.tsx` deleted (input, Analyze Meal button, OR divider, breakdown card, source badges, loading + error states); `NutritionTab.tsx` import and usage removed
+- [x] Lib/hooks removed — `lib/mealDescribe.ts` deleted; `MacroSource` / `ParsedFoodItem` / `MealItem` dropped from `types/nutrition.ts`; `addLogs()` dropped from `useNutritionLogs`; textarea placeholder rule dropped from `index.css`
+- [x] Edge functions removed — `open-food-facts-proxy/` and `usda-proxy/` deleted from the repo and from Supabase (`functions delete`); `config.toml` back to the single `anthropic-proxy` entry
+- [x] Verified — `web/` and `supabase/` are byte-identical to pre-feature commit `9261b94` (`git diff --stat 9261b94` is empty); label scanner, daily total strip, goals and today's log all bit-for-bit unchanged
+- [x] Build passing (852 modules, was 854) + zero references to Open Food Facts / meal description in source *or* the built bundle + git pushed
 
-### Notes / deviations
-- The prompt said to UPDATE `usda-proxy`; it did not exist (removed 2026-06-29), so it was created.
-- `world.openfoodfacts.org` intermittently 503s anonymous text search (both `cgi/search.pl` and `api/v2/search`). The proxy tries `cgi/search.pl` first and falls back to Search-a-licious. Search-a-licious does not index `serving_size`/`serving_quantity`, so those come back null on the fallback path — display-only, the macro math uses grams from the parse step.
-- Added a relevance guard to the OFF proxy (not in the prompt): a product must share a whole word with the query. Without it OFF answered "Big Mac" with "Original macaroni & cheese dinner" (substring hit on "mac"), which would have been logged under a blue verified badge.
-- Branded items fall through to USDA before the Claude estimate — a real SR Legacy row beats a guess.
+> `usda-proxy` was deleted rather than reverted: it never existed before this
+> feature. See PROMPT.md → Outcome.
 
 ---
 
-## Nutrition Scanner Tab (previous session — complete)
+## Nutrition Scanner Tab (still live)
 - [x] Supabase schema + migration — 052_nutrition_scanner.sql applied (nutrition_logs, nutrition_goals, RLS, realtime)
 - [x] New tab added to navigation — "Nutrition" (scan-line icon) between Workout and Budget; rail, dock and swipe order all read from TABS
 - [x] Camera/image upload UI — LabelScanner states 1–4; `capture="environment"` for camera, plain picker for upload
