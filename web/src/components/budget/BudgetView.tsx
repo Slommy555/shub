@@ -5,7 +5,6 @@ import {
   periodForCursor,
   savingsOffset,
   shiftCursor,
-  thursdaysInMonth,
   toISODate,
   toView,
   weeklyFromMonthly,
@@ -39,10 +38,8 @@ import SavingsPoolSection from './SavingsPoolSection';
 import SavingsTrend from './SavingsTrend';
 import BudgetCalendar, { type CalEvent } from './BudgetCalendar';
 import BudgetSnapshot from './BudgetSnapshot';
-import SetAsideSnapshot from './SetAsideSnapshot';
 import { useBudgetHistory } from '../../hooks/budget/useBudgetHistory';
 import { useGroupOverrides } from '../../hooks/budget/useGroupOverrides';
-import { useAmountSetAside } from '../../hooks/budget/useAmountSetAside';
 
 export type BudgetViewMode = 'snapshot' | 'overview' | 'paycheck' | 'calendar';
 
@@ -93,7 +90,6 @@ export default function BudgetView({
   const scheduled = useScheduledExpenses(userId, budgetId);
   const history = useBudgetHistory(userId, budgetId, monthBounds.start_date);
   const overrides = useGroupOverrides(userId, budgetId, monthBounds.start_date);
-  const setAside = useAmountSetAside(monthPeriodId);
 
   /** Thursdays in the month in view — the ONLY divisor for weekly set-asides. */
   const weeks = weeksInMonth(monthBounds.start_date);
@@ -321,15 +317,10 @@ export default function BudgetView({
     );
   }
 
-  // --- summary --------------------------------------------------------------
-  const recurringNetMonthly = recurringGroups.reduce(
-    (s, g) => s + savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net,
-    0
-  );
+  // --- shared derived state -------------------------------------------------
+  // Scheduled expenses dated to this month, and how much of them savings has
+  // already earmarked (the Savings Pool section and the snapshot both read it).
   const scheduledThisMonth = scheduled.expenses.filter((e) => e.due_month === monthBounds.start_date);
-  const scheduledGross = scheduledThisMonth.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  const scheduledCovered = scheduledThisMonth.reduce((s, e) => s + savedForExpense(e), 0);
-  const scheduledTotal = Math.max(0, scheduledGross - scheduledCovered); // net income must cover
 
   // Card obligation: for cards with a due date, the suggested weekly pace to
   // clear the remaining balance from this month's first payday through the due
@@ -342,38 +333,7 @@ export default function BudgetView({
     return remaining > 0 ? s + remaining / payDatesThrough(firstPayday, c.due_date) : s;
   }, 0);
 
-  const monthlyAllocated = recurringNetMonthly + scheduledTotal;
-
-  // --- set-aside snapshot ---------------------------------------------------
-  // What the month must fund from income: every recurring group's RESOLVED
-  // amount (overrides applied) plus this month's scheduled expenses, both
-  // already net of the savings earmarked against them.
-  const totalNeeded = monthlyAllocated;
-  const monthThursdays = thursdaysInMonth(monthBounds.start_date);
   const todayISO = toISODate(new Date());
-  const isCurrentMonth = todayISO.slice(0, 7) === monthBounds.start_date.slice(0, 7);
-  /** 1-based week of the month containing today; days before the first Thursday
-   *  still count as week 1. */
-  const currentWeek = (() => {
-    if (!isCurrentMonth) return 1;
-    let idx = 0;
-    monthThursdays.forEach((t, i) => {
-      if (t <= todayISO) idx = i;
-    });
-    return idx + 1;
-  })();
-
-  const setAsideCard = (
-    <SetAsideSnapshot
-      monthLabel={monthBounds.label}
-      totalNeeded={totalNeeded}
-      setAside={setAside.amount}
-      onSetAside={(n) => void setAside.save(n)}
-      weeks={weeks}
-      currentWeek={currentWeek}
-      isCurrentMonth={isCurrentMonth}
-    />
-  );
 
   // Hand adjustments are real movements of the balance, so they count toward what
   // savings can cover — both the earmark cap and every balance read-out.
@@ -412,9 +372,7 @@ export default function BudgetView({
       .slice(0, 5);
 
     return (
-      <>
-        {setAsideCard}
-        <BudgetSnapshot
+      <BudgetSnapshot
         monthLabel={monthBounds.label}
         onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
         onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
@@ -446,15 +404,12 @@ export default function BudgetView({
             onDeleteAdjustment={(id) => void adjustments.deleteAdjustment(id)}
           />
         }
-        />
-      </>
+      />
     );
   }
 
   return (
     <>
-      {setAsideCard}
-
       <OverviewTable
         groups={recurringGroups}
         title="Recurring Fixed Costs"

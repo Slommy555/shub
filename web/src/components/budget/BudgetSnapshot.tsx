@@ -78,8 +78,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 /**
  * How savings is actually tracking for the month in view — added vs pulled back
- * out, the running balance, and the last six months of income vs saved. The
- * month's funding progress lives above this in SetAsideSnapshot.
+ * out, the running balance, and the last six months of income vs saved.
  */
 export default function BudgetSnapshot({
   monthLabel,
