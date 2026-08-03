@@ -394,7 +394,13 @@ export default function OverviewTable({
               const groupOverride = overrideFor?.(g.id) ?? null;
               const hasOverride = !!groupOverride;
               return (
-                <div key={g.id} className="relative select-none border-t" style={{ borderColor: 'var(--color-border)' }}>
+                <div key={g.id} className="select-none border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  {/* The swipe action and the row it sits behind share their own
+                      positioning context. Without this wrapper the action's
+                      inset-y-0 stretches over the expanded panel below and, being
+                      positioned, paints on top of it — covering the panel's
+                      controls and eating their clicks. */}
+                  <div className="relative">
                   {/* Delete action behind the row */}
                   <div className="absolute inset-y-0 right-0 flex items-center">
                     <button
@@ -446,7 +452,10 @@ export default function OverviewTable({
                             data-no-drag
                             type="button"
                             aria-expanded={isExpanded}
-                            onClick={() => setExpanded(isExpanded ? null : g.id)}
+                            onClick={() => {
+                              setSwipe(null);
+                              setExpanded(isExpanded ? null : g.id);
+                            }}
                             className="mt-0.5 flex items-center gap-1 self-start text-[11px] active:opacity-70"
                             style={{
                               color: hasOverride
@@ -531,8 +540,10 @@ export default function OverviewTable({
                       </button>
                     </div>
                   </div>
+                  </div>
 
                   {isExpanded && onSetDueDay && (
+                    <div className="sticky left-0" style={{ maxWidth: '100vw' }}>
                     <GroupEditPanel
                       group={g}
                       defaultMonthly={defaultMonthlyOf?.(g) ?? grossMonthlyOf(g)}
@@ -543,6 +554,7 @@ export default function OverviewTable({
                       onSetOverride={(amt, note) => onSetOverride?.(g.id, amt, note)}
                       onClearOverride={() => onClearOverride?.(g.id)}
                     />
+                    </div>
                   )}
                 </div>
               );

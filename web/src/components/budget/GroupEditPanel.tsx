@@ -49,14 +49,14 @@ export default function GroupEditPanel({
       style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-surface)' }}
     >
       {/* Charge day */}
-      <label className="flex items-center gap-3">
-        <span className="flex-1 text-[15px]" style={{ color: 'var(--color-text-secondary)' }}>
+      <label className="block">
+        <span className="mb-1.5 block text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
           Charge day
         </span>
         <select
           value={group.due_day ?? ''}
           onChange={(e) => onSetDueDay(e.target.value === '' ? null : Number(e.target.value))}
-          className="w-36 shrink-0 rounded-xl border px-3 text-[15px] outline-none"
+          className="w-full rounded-xl border px-3 text-[15px] outline-none"
           style={{
             height: 44,
             background: 'var(--color-bg-elevated)',
@@ -127,8 +127,8 @@ export default function GroupEditPanel({
             </span>
           )}
         </div>
-        <label className="flex items-center gap-3">
-          <span className="flex-1 text-[15px]" style={{ color: 'var(--color-text-secondary)' }}>
+        <label className="block">
+          <span className="mb-1.5 block text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
             This month
           </span>
           <OverrideField
@@ -198,7 +198,7 @@ function OverrideField({
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
       }}
-      className="w-36 shrink-0 rounded-xl border px-3 text-right text-[15px] font-semibold tabular-nums outline-none"
+      className="w-full rounded-xl border px-3 text-right text-[15px] font-semibold tabular-nums outline-none"
       style={{
         height: 44,
         background: 'var(--color-bg-elevated)',
