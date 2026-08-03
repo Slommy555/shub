@@ -47,6 +47,9 @@ export interface CardPayoff {
   /** Float Savings is on AND this pay week contains the charge day. Display
    *  only — the set-aside amount is unaffected. */
   chargesThisWeek?: boolean;
+  /** `paid` is the assumed flat amount (Float Savings), not a recorded entry.
+   *  Typing over it, or pressing "Use", records an explicit amount instead. */
+  autoUsed?: boolean;
 }
 
 export interface ScheduledPayoff {
@@ -428,8 +431,16 @@ function CardPayoffRow({
       </div>
       <div className="flex items-end gap-2">
         <label className="flex-1">
-          <span className="mb-1 block text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+          <span className="mb-1 flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
             {inputLabel}
+            {payoff.autoUsed && (
+              <span
+                className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase"
+                style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)', letterSpacing: '0.04em' }}
+              >
+                Auto
+              </span>
+            )}
           </span>
           <input
             inputMode="decimal"

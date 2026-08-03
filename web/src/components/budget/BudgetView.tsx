@@ -208,9 +208,22 @@ export default function BudgetView({
   const groupPayoffFor = (g: BudgetGroup, payDate: string) => {
     const net = savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net;
     const suggested = weeklyFromMonthly(net, monthBounds.start_date);
+
+    // With Float Savings on, the flat amount is assumed set aside on every pay
+    // day without the user confirming it — there's nothing to decide when the
+    // split is even. An explicitly recorded amount always wins over the
+    // assumption, and "Use $X" writes the suggestion back over a custom one.
+    const autoUse = g.float_savings === true;
+    const recordedOn = (d: string) => groupPayments.paymentOn(g.id, d);
+    const setAsideOn = (d: string) => recordedOn(d) ?? (autoUse ? suggested : 0);
+
     // The funding cycle is the calendar month, matching where the amount comes
     // from — set-asides earlier in the month count against this month's bill.
-    const paidBefore = groupPayments.paidInRange(g.id, monthBounds.start_date, payDate);
+    // pay days come from thursdaysInMonth, the same source as `weeks`, so an
+    // untouched float month lands exactly on `net` by the final pay day.
+    const paidBefore = payDays
+      .filter((p) => p.date >= monthBounds.start_date && p.date < payDate)
+      .reduce((s, p) => s + setAsideOn(p.date), 0);
     const remaining = Math.max(0, net - paidBefore);
     const [cy, cm] = monthBounds.start_date.split('-').map(Number);
     const chargeISO = g.due_day != null ? toISODate(chargeDateOn(g.due_day, cy, cm - 1)) : null;
@@ -221,8 +234,10 @@ export default function BudgetView({
       due_date: chargeISO,
       remaining,
       suggested,
-      paid: groupPayments.paymentOn(g.id, payDate),
-      // Float Savings is purely a marker: it never touches `suggested`.
+      paid: autoUse ? setAsideOn(payDate) : recordedOn(payDate),
+      /** The shown amount is the assumed one, not something the user entered. */
+      autoUsed: autoUse && recordedOn(payDate) === undefined,
+      // Float Savings never changes `suggested` — only whether it's assumed.
       chargesThisWeek:
         g.float_savings === true && g.due_day != null && weekContainsChargeDay(payDate, g.due_day),
     };
