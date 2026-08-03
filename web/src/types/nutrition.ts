@@ -38,6 +38,37 @@ export interface ScanItem extends Macros {
   amount: string;
 }
 
+/** Where a described item's macros came from, in descending trustworthiness. */
+export type MacroSource = 'usda' | 'open_food_facts' | 'estimate';
+
+/** One food Claude pulled out of a free-text meal description, before lookup. */
+export interface ParsedFoodItem {
+  /** Clean food name — "grilled chicken breast", not "some chicken". */
+  item: string;
+  quantity: number;
+  /** g, oz, cup, piece, slice, tbsp … */
+  unit: string;
+  /** Claude's conversion of quantity+unit to grams — what the macros scale by. */
+  quantity_grams: number;
+  /** Branded/restaurant items go to Open Food Facts; generic ones to USDA. */
+  is_branded: boolean;
+  /** Simplified 2–4 word term for the database lookup. */
+  search_query: string;
+}
+
+/** A parsed item resolved against a source and scaled to the amount eaten. */
+export interface MealItem extends Macros {
+  /** Stable across edits so React keys and row expansion survive a re-render. */
+  id: string;
+  name: string;
+  /** "200g", "1 cup", "1 piece" — for display only. */
+  quantity_display: string;
+  quantity_grams: number;
+  source: MacroSource;
+  /** What the database called the match, when it differs from `name`. */
+  matched_name: string | null;
+}
+
 /** What the vision call returns for a scan of one or more labels. */
 export interface ScanResult extends Macros {
   /** A short name for the combined meal. */

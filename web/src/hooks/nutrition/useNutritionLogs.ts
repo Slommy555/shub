@@ -87,6 +87,39 @@ export function useNutritionLogs(userId: string | null, day: string) {
     [userId, day]
   );
 
+  /**
+   * Insert several foods as separate rows in one round-trip — what "Add all to
+   * my day" does with a described meal's breakdown. Optimistic like `addLog`,
+   * and all-or-nothing: a failed insert rolls the whole batch back out of the
+   * list rather than leaving a partial meal on screen.
+   */
+  const addLogs = useCallback(
+    async (entries: (Macros & { food_name: string; serving_size: string | null })[]) => {
+      if (!userId || entries.length === 0) return;
+      const stamp = new Date().toISOString();
+      const rows: NutritionLog[] = entries.map((entry) => ({
+        id: crypto.randomUUID(),
+        user_id: userId,
+        food_name: entry.food_name.trim() || 'Unknown Food',
+        calories: entry.calories,
+        protein_g: entry.protein_g,
+        carbs_g: entry.carbs_g,
+        fat_g: entry.fat_g,
+        serving_size: entry.serving_size,
+        logged_at: day,
+        created_at: stamp,
+      }));
+      setLogs((prev) => [...prev, ...rows]);
+      const { error } = await supabase.from('nutrition_logs').insert(rows);
+      if (error) {
+        console.error('addLogs failed:', error.message);
+        const ids = new Set(rows.map((r) => r.id));
+        setLogs((prev) => prev.filter((l) => !ids.has(l.id)));
+      }
+    },
+    [userId, day]
+  );
+
   const updateLog = useCallback(
     async (id: string, patch: Partial<Omit<NutritionLog, 'id' | 'user_id'>>) => {
       setLogs((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
@@ -116,7 +149,7 @@ export function useNutritionLogs(userId: string | null, day: string) {
     [logs]
   );
 
-  return { logs, totals, loading, addLog, updateLog, deleteLog };
+  return { logs, totals, loading, addLog, addLogs, updateLog, deleteLog };
 }
 
 export type UseNutritionLogs = ReturnType<typeof useNutritionLogs>;

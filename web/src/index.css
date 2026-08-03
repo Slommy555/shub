@@ -426,6 +426,7 @@ html[data-theme-custom] .nutrition-scope {
   --color-border-strong: var(--c-border);
 }
 .budget-scope input::placeholder,
-.nutrition-scope input::placeholder {
+.nutrition-scope input::placeholder,
+.nutrition-scope textarea::placeholder {
   color: var(--color-text-tertiary);
 }

@@ -113,6 +113,26 @@ function toFood(p: OffProduct): OffFood | null {
   };
 }
 
+/**
+ * OFF's text search is recall-first and will happily answer "Big Mac" with
+ * "Original macaroni & cheese dinner" — a substring hit on "mac". Logging that
+ * under a blue "Open Food Facts" badge is worse than admitting we don't know,
+ * so a product must share at least one whole word with the query to survive,
+ * and the best-overlapping product wins. Matching is word-for-word rather than
+ * by substring, which is exactly what lets the macaroni case through.
+ */
+function tokenize(s: string): string[] {
+  return s
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3);
+}
+
+function overlap(query: string[], food: OffFood): number {
+  const words = new Set(tokenize(food.name));
+  return query.filter((q) => words.has(q)).length;
+}
+
 /** A search that returns null (rather than []) means "upstream failed, try the next one". */
 async function fetchProducts(url: URL, key: 'products' | 'hits'): Promise<OffProduct[] | null> {
   try {
@@ -173,6 +193,18 @@ Deno.serve(async (req: Request) => {
   // Both upstreams unreachable — the caller falls through to a Claude estimate.
   if (products === null) return json(req, { results: [], unavailable: true }, 200);
 
-  const results = products.map(toFood).filter((f): f is OffFood => f !== null);
+  const foods = products.map(toFood).filter((f): f is OffFood => f !== null);
+
+  // A query of only short words ("egg", "ham") tokenizes to something usable;
+  // one that tokenizes to nothing at all can't be scored, so trust OFF's order.
+  const qTokens = tokenize(query);
+  const results = qTokens.length
+    ? foods
+        .map((f) => ({ f, score: overlap(qTokens, f) }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map((x) => x.f)
+    : foods;
+
   return json(req, { results }, 200);
 });
