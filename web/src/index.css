@@ -353,16 +353,15 @@ html[data-theme-custom] [class~='dark:border-gray-800'] {
 }
 
 /* ---------------------------------------------------------------------------
-   UI_SKILL.md design tokens. Scoped to `.budget-scope` / `.nutrition-scope`;
-   those tabs' components all read these variables, so remapping them onto the
-   app's standard gray Tailwind palette makes them match the rest of the site
-   without changing any component. Dark values are the default; light-mode
+   UI_SKILL.md design tokens. Scoped to `.budget-scope`; that tab's components
+   all read these variables, so remapping them onto the app's standard gray
+   Tailwind palette makes it match the rest of the site without changing any
+   component. Dark values are the default; light-mode
    values apply when <html> lacks `.dark`. Accent is the app's monochrome invert
    (dark button in light mode, light button in dark mode) with
    `--color-accent-text` for label color.
 --------------------------------------------------------------------------- */
-.budget-scope,
-.nutrition-scope {
+.budget-scope {
   --color-bg-base: #0b0b0b; /* gray-950 */
   --color-bg-elevated: #171717; /* gray-900 */
   --color-bg-surface: #272727; /* gray-800 */
@@ -384,8 +383,7 @@ html[data-theme-custom] [class~='dark:border-gray-800'] {
   --color-danger: #e05c5c;
   --color-info: #5c9eff;
 }
-html:not(.dark) .budget-scope,
-html:not(.dark) .nutrition-scope {
+html:not(.dark) .budget-scope {
   --color-bg-base: #fafafa; /* gray-50 */
   --color-bg-elevated: #ffffff;
   --color-bg-surface: #f4f4f5; /* gray-100 */
@@ -409,8 +407,7 @@ html:not(.dark) .nutrition-scope {
 /* When custom colors are enabled, drive the Budget tab from the same --c-*
    variables the rest of the app uses, so it recolors together with every other
    tab. Placed after the default/light blocks so it wins in both modes. */
-html[data-theme-custom] .budget-scope,
-html[data-theme-custom] .nutrition-scope {
+html[data-theme-custom] .budget-scope {
   --color-bg-base: var(--c-bg);
   --color-bg-elevated: var(--c-surface);
   --color-bg-surface: var(--c-surface);
@@ -425,7 +422,6 @@ html[data-theme-custom] .nutrition-scope {
   --color-border: var(--c-border);
   --color-border-strong: var(--c-border);
 }
-.budget-scope input::placeholder,
-.nutrition-scope input::placeholder {
+.budget-scope input::placeholder {
   color: var(--color-text-tertiary);
 }

@@ -24,7 +24,6 @@ import TodoView from './components/todo/TodoView';
 import VoiceTab from './components/VoiceTab';
 import VoiceController from './components/voice/VoiceController';
 import WorkoutTab from './components/workout/WorkoutTab';
-import NutritionTab from './components/nutrition/NutritionTab';
 import BudgetTab from './components/budget/BudgetTab';
 import ProductivityView from './components/ProductivityView';
 import NotesTab from './components/notes/NotesTab';
@@ -122,7 +121,6 @@ function Shell({ userId }: { userId: string }) {
               {tab === 'todo' && <TodoView api={api} />}
               {tab === 'voice' && <VoiceTab />}
               {tab === 'workout' && <WorkoutTab userId={userId} showRpe={workoutPrefs.showRpe} />}
-              {tab === 'nutrition' && <NutritionTab userId={userId} />}
               {tab === 'budget' && <BudgetTab userId={userId} />}
               {tab === 'productivity' && <ProductivityView userId={userId} />}
               {tab === 'notes' && <NotesTab userId={userId} />}
