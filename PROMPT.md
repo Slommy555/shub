@@ -1,6 +1,6 @@
-# Nutrition Label Scanner Tab — Claude Code Prompt
+# "Describe Your Meal" — Claude Code Prompt
 
-> Supersedes the previous PROMPT.md (Budget Fixes Round 2 — complete).
+> Supersedes the previous PROMPT.md (Nutrition Label Scanner Tab — complete).
 
 ## FIRST THING TO DO — SESSION MANAGEMENT
 
@@ -15,15 +15,13 @@ Before doing anything else:
 PROGRESS.md format:
 # Session Progress
 
-## Nutrition Scanner Tab
-- [ ] Supabase schema + migration
-- [ ] New tab added to navigation
-- [ ] Camera/image upload UI
-- [ ] Claude vision API call (via anthropic-proxy Edge Function)
-- [ ] Macro result card with edit fields
-- [ ] Add to daily total flow
-- [ ] Daily total strip
-- [ ] Log history (today's entries)
+## Describe Your Meal Feature
+- [ ] USDA proxy updated to support natural language search
+- [ ] Open Food Facts proxy Edge Function created
+- [ ] Claude meal parser (identifies foods from description)
+- [ ] Multi-source lookup logic (USDA → Open Food Facts → Claude estimate)
+- [ ] Meal breakdown result UI
+- [ ] Edit and add to daily total flow
 - [ ] Build passing + git pushed
 
 After completing each item:
@@ -33,270 +31,259 @@ To resume: "Read PROMPT.md and PROGRESS.md and resume where you left off."
 
 ---
 
-Add a Nutrition Scanner tab to the app. The user takes or
-uploads a photo of a nutrition label, inputs how much they
-ate, and Claude reads the label and calculates the macros
-for that serving. They can edit the result then add it to
-a simple daily running total. Follow UI_SKILL.md for all
-visual decisions.
+Add a "Describe your meal" feature to the existing Nutrition
+Scanner tab. This is a second input method alongside the
+existing label scanner — the user types a natural language
+meal description, Claude identifies each food item, looks
+them up in USDA and Open Food Facts for verified macro data,
+and returns an accurate per-item breakdown. No new tab needed —
+add it to the existing Nutrition tab. Follow UI_SKILL.md.
 
 ===========================
-SUPABASE SCHEMA
+APIs BEING USED
 ===========================
 
-New migration file 00X_nutrition_scanner.sql:
+1. USDA FoodData Central (already in project)
+   Best for: whole foods, generic ingredients, raw produce
+   Base: https://api.nal.usda.gov/fdc/v1
+   Auth: USDA_API_KEY Supabase secret (already set)
+   Key endpoint: GET /foods/search?query={q}&api_key={key}&dataType=Foundation,SR Legacy&pageSize=5
 
-nutrition_logs:
-  id: uuid primary key default gen_random_uuid()
-  user_id: uuid references auth.users
-  food_name: text nullable (Claude's best guess at the food name)
-  calories: numeric not null default 0
-  protein_g: numeric not null default 0
-  carbs_g: numeric not null default 0
-  fat_g: numeric not null default 0
-  serving_size: text nullable (e.g. "1 cup", "100g", "2 slices")
-  logged_at: date not null default current_date
-  created_at: timestamptz default now()
-
-nutrition_goals:
-  id: uuid primary key default gen_random_uuid()
-  user_id: uuid references auth.users unique
-  calories: numeric default 2000
-  protein_g: numeric default 150
-  carbs_g: numeric default 200
-  fat_g: numeric default 65
-
-Enable RLS on both tables.
+2. Open Food Facts (no API key needed)
+   Best for: packaged foods, branded items, anything with a barcode
+   Base: https://world.openfoodfacts.org
+   Key endpoint: GET /cgi/search.pl?search_terms={q}&json=true&page_size=5&fields=product_name,nutriments,serving_size,brands
+   No auth required — just hit the URL
 
 ===========================
-TAB
+BACKEND — EDGE FUNCTIONS
 ===========================
 
-Add a new "Nutrition" tab to the main navigation.
-Icon: use a Lucide "scan-line" or "camera" icon.
-Place it between existing tabs in whatever position
-makes sense in the current nav order.
+UPDATE existing usda-proxy Edge Function:
+  Add support for a new request type: "describe"
+  When type = "describe":
+    query is a single food item name (not a full meal)
+    Search USDA with: dataType=Foundation,SR Legacy (generic foods only)
+    Return top 3 results with: fdcId, description,
+    nutrients (calories, protein, carbs, fat per 100g),
+    foodPortions array
+    Prefer Foundation Food > SR Legacy data types
+    Filter out any result with brandOwner populated
+    (keep USDA strictly for generic/whole foods)
+
+CREATE new open-food-facts-proxy Edge Function:
+  supabase/functions/open-food-facts-proxy/index.ts
+
+  Accepts POST: { query: string }
+  Requires valid Supabase auth JWT — return 401 if missing
+
+  Fetches:
+    https://world.openfoodfacts.org/cgi/search.pl
+    ?search_terms={query}
+    &json=true
+    &page_size=5
+    &fields=product_name,nutriments,serving_size,
+      serving_quantity,brands,image_front_small_url
+
+  From each result, extract and return:
+    name: product_name + (brands if present)
+    calories_100g: nutriments['energy-kcal_100g']
+    protein_100g: nutriments['proteins_100g']
+    carbs_100g: nutriments['carbohydrates_100g']
+    fat_100g: nutriments['fat_100g']
+    serving_size: serving_size (string label)
+    serving_quantity_g: serving_quantity (numeric grams)
+
+  Filter out results where calories_100g is null or 0
+  (incomplete entries are useless)
+
+  Handle CORS correctly.
+  Handle network errors gracefully — if Open Food Facts
+  is unreachable, return empty array with a flag:
+  { results: [], unavailable: true }
 
 ===========================
-TAB LAYOUT — THREE SECTIONS
+FRONTEND — UI ADDITION
 ===========================
 
-SECTION 1 — DAILY TOTAL STRIP (top, always visible)
-  A horizontal strip at the top of the tab showing
-  today's running totals:
+In the existing Nutrition tab, add a second input method
+above or below the existing camera/upload scanner section.
+Separate the two methods with a clear visual divider and
+a small label:
 
-  Calories    Protein    Carbs      Fat
-  1,240       87g        143g       32g
+  ── OR ─────────────────────────────────────────────
 
-  - Pull from sum of all nutrition_logs for today
-    (logged_at = today)
-  - Four values, equal width columns
-  - Large bold numbers (text-2xl weight 700)
-  - Small muted labels below (text-xs --color-text-secondary)
-  - Tap the strip to open a simple goal-setting sheet:
-      Four inputs: Calorie goal, Protein goal (g),
-      Carbs goal (g), Fat goal (g)
-      Saves to nutrition_goals table
-      If goals are set, show progress under each number:
-      e.g. "1,240 / 2,000" with a thin progress bar
-  - Updates in real time as entries are added
+DESCRIBE YOUR MEAL INPUT:
+  A multiline text input with placeholder:
+  "Describe what you ate...
+   e.g. 'a Big Mac and medium fries' or
+   '200g grilled chicken with a cup of white rice
+   and some broccoli'"
 
-SECTION 2 — SCANNER (middle, main interaction)
-
-  STATE 1 — IDLE:
-    Large centered area with two options:
-
-    [Camera icon]          [Upload icon]
-    Take Photo             Upload Image
-
-    Both are large tappable cards (~140px tall each),
-    side by side on desktop, stacked on mobile.
-    Subtle border, --color-bg-elevated background.
-
-    Below the two options, a text input:
-    "Amount eaten" — placeholder: "e.g. 1 cup, 100g,
-    2 slices, half the bag"
-    This is free text — the user describes how much
-    they ate in natural language.
-
-    Camera button: opens device camera
-    (use input type="file" accept="image/*" capture="environment"
-    for PWA/mobile compatibility — do NOT use any Capacitor
-    camera plugin since this is a web PWA)
-
-    Upload button: opens file picker for images
-    (input type="file" accept="image/*")
-
-  STATE 2 — IMAGE SELECTED:
-    Show a preview of the selected image
-    (fit within the scanner area, max height 300px,
-    object-fit: contain, rounded corners --radius-lg)
-
-    The "Amount eaten" input remains visible below
-    the preview.
-
-    A "Scan Label" button below the input — prominent,
-    primary style (full width, lavender, pill shape).
-
-    An "X" button top right of the image preview
-    to clear and go back to STATE 1.
-
-  STATE 3 — SCANNING:
-    Show a skeleton loader in place of the result card.
-    Scanning status text: "Reading label..." in
-    --color-text-secondary.
-    Do not show the image or inputs while scanning.
-
-  STATE 4 — RESULT:
-    Show a result card with editable fields:
-
-    - All four macro values are editable number inputs
-    - Food name is an editable text input at the top
-    - Serving size shown as static text (what user typed)
-    - "Edit" button: makes all fields editable if not
-      already (they should be editable by default —
-      the Edit button just makes it visually clear
-      they can be changed)
-    - "Add to my day" button: saves current values
-      to nutrition_logs, clears the scanner back to
-      STATE 1, updates the daily total strip instantly
-    - "Scan another" link below the card: goes back
-      to STATE 1 without adding
-
-    If Claude could not read the label (bad photo,
-    not a nutrition label, etc): show an error state:
-    "Couldn't read this label — try a clearer photo
-    or better lighting"
-    with a "Try again" button that goes back to STATE 1
-
-SECTION 3 — TODAY'S LOG (bottom, scrollable)
-  Header: "Today" with the current date on the right
-
-  A simple list of everything logged today:
-
-  [Food name]              [Calories]
-  [P: Xg  C: Xg  F: Xg]
-
-  - Each entry has a delete button (trash icon, right side)
-  - Swipe left on mobile to delete
-  - Deleting an entry updates the daily total strip
-    instantly
-  - If nothing logged yet: "Nothing logged yet today"
-    in --color-text-tertiary, centered, no emoji
-  - Tap an entry to edit it (opens same result card
-    layout in a bottom sheet with current values
-    pre-filled, "Save changes" button)
+  Below the input:
+  "Analyze Meal" button — primary style, full width
 
 ===========================
-CLAUDE VISION API CALL
+MEAL ANALYSIS FLOW
 ===========================
 
-When "Scan Label" is tapped:
+When "Analyze Meal" is tapped:
 
-1. Convert the selected image to base64
-2. Call the existing anthropic-proxy Supabase Edge Function
-   with the following:
+STEP 1 — CLAUDE IDENTIFIES FOOD ITEMS
+Send the meal description to Claude via anthropic-proxy:
 
-   Model: claude-sonnet-4-6
-   Max tokens: 1000
+  System prompt:
+  "You are a food identification assistant. Parse the
+  user's meal description into individual food items
+  with quantities. Return ONLY a JSON array with no
+  other text:
+  [
+    {
+      item: string (clean food name for database lookup,
+        e.g. 'grilled chicken breast' not 'some chicken'),
+      quantity: number (numeric amount),
+      unit: string (g, oz, cup, piece, slice, tbsp etc),
+      quantity_grams: number (your best conversion to grams —
+        e.g. 1 cup rice = 186g, 1 Big Mac = 214g),
+      is_branded: boolean (true if this is a specific
+        branded/restaurant item like Big Mac, Chobani,
+        Doritos — false for generic items like chicken, rice),
+      search_query: string (optimized search term for
+        database lookup — keep it simple, 2-4 words)
+    }
+  ]"
 
-   Messages:
-   [
-     {
-       role: "user",
-       content: [
-         {
-           type: "image",
-           source: {
-             type: "base64",
-             media_type: "[image/jpeg or image/png etc]",
-             data: "[base64 string]"
-           }
-         },
-         {
-           type: "text",
-           text: "This is a photo of a nutrition label.
-           The person ate: [amount eaten text from input].
+  User message: the meal description text
 
-           Read the nutrition label and calculate the
-           macros for the amount they ate. Account for
-           the serving size on the label vs how much
-           they actually ate.
+STEP 2 — LOOK UP EACH FOOD ITEM
+For each item in Claude's response, run a lookup
+in this priority order:
 
-           For example: if the label says 200 calories
-           per 100g and they ate 150g, the answer is
-           300 calories.
+  IF is_branded = false (generic whole food):
+    → Search USDA via usda-proxy (type: "describe",
+      query: item.search_query)
+    → If USDA returns results: use the top result
+    → If no USDA results: fall through to Open Food Facts
 
-           Return ONLY a JSON object with no other text:
-           {
-             food_name: string (your best guess at what
-               this food is from the label, or 'Unknown Food'),
-             calories: number,
-             protein_g: number,
-             carbs_g: number,
-             fat_g: number,
-             confidence: 'high' | 'medium' | 'low',
-             note: string or null (any caveat, e.g.
-               'Label was partially obscured' or null)
-           }"
-         }
-       ]
-     }
-   ]
+  IF is_branded = true (branded/restaurant item):
+    → Search Open Food Facts via open-food-facts-proxy
+      (query: item.search_query)
+    → If Open Food Facts returns results: use the top result
+    → If no results: use Claude's own estimate (see below)
 
-3. Parse the JSON response
-4. If confidence is 'low' or note is not null:
-   show the note as a small amber warning below
-   the result card so the user knows to double-check
-5. If JSON parsing fails or response is not valid:
-   show the error state
+  FALLBACK — Claude estimate:
+    If neither database has the item, use a third
+    Claude call to estimate macros:
+    "Estimate the macros per 100g for [item name].
+    Return only JSON: { calories: N, protein_g: N,
+    carbs_g: N, fat_g: N, confidence: 'estimate' }"
+    Mark this item with source: 'estimate' for display
 
-NOTE: The anthropic-proxy Edge Function must support
-image content in the messages array. If it currently
-only handles text messages, update it to pass through
-the full messages array as-is to the Anthropic API
-without stripping image content blocks. The Anthropic
-API already supports vision — just make sure the proxy
-isn't filtering out non-text content types.
+Run all lookups in parallel (Promise.all) for speed.
+
+STEP 3 — CALCULATE MACROS FOR EACH ITEM
+For each item, calculate macros for the actual quantity:
+
+  macro_value = (per_100g_value / 100) * quantity_grams
+
+  Use item.quantity_grams from Claude's parsing step.
+
+  Result per item:
+  {
+    name: string,
+    quantity_display: string (e.g. "200g", "1 cup", "1 piece"),
+    calories: number (rounded to nearest whole number),
+    protein_g: number (rounded to 1 decimal),
+    carbs_g: number (rounded to 1 decimal),
+    fat_g: number (rounded to 1 decimal),
+    source: 'usda' | 'open_food_facts' | 'estimate',
+    editable: true
+  }
+
+STEP 4 — SHOW RESULTS
+Display a breakdown card for the full meal:
+
+  YOUR MEAL BREAKDOWN
+  ─────────────────────────────────────────
+
+  For each food item, one row:
+  [Item name + quantity]        [Cal: XXX]
+  P: Xg  C: Xg  F: Xg         [source badge]
+
+  Source badge:
+    "USDA" — small green badge
+    "Open Food Facts" — small blue badge
+    "Estimated" — small amber badge
+      (with tooltip: "Claude estimate —
+      verify if accuracy matters")
+
+  ─────────────────────────────────────────
+  TOTAL
+  Calories: XXX  P: Xg  C: Xg  F: Xg
+  ─────────────────────────────────────────
+
+  Each item row is tappable — tapping expands it
+  to show editable inputs for all four macro values
+  and the quantity, so the user can correct anything
+  before adding.
+
+  Two buttons at the bottom:
+  [Try again]          [Add all to my day]
+
+  "Add all to my day": saves each food item as a
+  separate nutrition_log entry (one row per item),
+  updates the daily total strip instantly, clears
+  the input and result.
+
+  "Try again": clears result, returns to input state.
 
 ===========================
-IMAGE HANDLING
+LOADING STATE
 ===========================
 
-Before sending to Claude:
-  - Resize/compress the image client-side if it exceeds
-    1MB — use the Canvas API to resize to max 1200px
-    on the longest side at 85% JPEG quality
-  - This keeps API calls fast and within size limits
-  - Show a brief "Preparing image..." toast if
-    compression takes more than 500ms
+While analysis is running (Steps 1-3):
+  Show a loading card in place of results:
 
-Do NOT store images in Supabase Storage — only store
-the extracted macro numbers in nutrition_logs. Images
-are ephemeral and only used for the Claude call.
+  Skeleton rows for 3-4 estimated items
+  Status text that updates as work progresses:
+    "Identifying foods..." (during Step 1)
+    "Looking up nutrition data..." (during Step 2)
+    "Calculating macros..." (during Step 3)
+
+  Each status text fades in/out with a 200ms transition.
 
 ===========================
-MOBILE SPECIFIC
+ERROR STATES
 ===========================
 
-On mobile (below 640px):
-  - Camera and Upload options stack vertically,
-    full width each
-  - Image preview: max height 250px
-  - Result card: full width, inputs large enough
-    to tap easily (min 44px height)
-  - Today's log: full width cards
-  - Daily total strip: numbers slightly smaller
-    (text-xl instead of text-2xl) to fit 4 columns
+If Claude can't parse the description into food items
+(returns empty array or invalid JSON):
+  "Couldn't identify foods in that description.
+  Try being more specific — e.g. '200g chicken breast
+  and 1 cup white rice' instead of 'my lunch'"
+
+If all lookups fail and Claude estimates are also
+unavailable:
+  "Having trouble looking up these items. Check your
+  connection and try again."
+
+===========================
+EDGE FUNCTION DEPLOYMENT
+===========================
+
+After creating the new Edge Function:
+  npx supabase functions deploy open-food-facts-proxy
+
+The usda-proxy update deploys with:
+  npx supabase functions deploy usda-proxy
 
 ===========================
 SUPABASE MIGRATIONS
 ===========================
 
-After creating migration file:
+No new tables needed — uses existing nutrition_logs table.
+Run migrations if any were pending:
   npx supabase db push
-If duplicate key error: npx supabase migration list,
-skip already-applied ones.
 
 ===========================
 AUTO DEPLOY
@@ -304,7 +291,7 @@ AUTO DEPLOY
 
 After everything is complete and npm run build passes:
 1. git add .
-2. git commit -m "Add nutrition label scanner tab"
+2. git commit -m "Add describe your meal feature with USDA and Open Food Facts lookup"
 3. git push
 Do not push if build fails. Confirm push succeeded.
 
@@ -313,8 +300,18 @@ OUTPUT
 ===========================
 Report each section with ✓ or ✗.
 Specifically confirm:
-  - Camera capture works on mobile (input with capture attribute)
-  - Image is compressed before sending to Claude
-  - anthropic-proxy correctly passes image content to Anthropic API
-  - Macros update the daily total strip immediately on add
-  - Delete also updates the strip immediately
+  - USDA returns results for "grilled chicken breast"
+  - Open Food Facts returns results for "Chobani yogurt"
+  - Parallel lookups are used (not sequential)
+  - Estimated items are clearly badged in amber
+  - Daily total strip updates immediately after adding
+
+---
+
+## Session note — deviation from the prompt as written
+
+The prompt says "UPDATE existing usda-proxy Edge Function". There is no
+`usda-proxy` in this repo: the USDA proxy was **removed on 2026-06-29** along
+with the Macro Tracker. `supabase/functions/` contained only `_shared/` and
+`anthropic-proxy/`. So `usda-proxy` was **created** this session (with the
+`type: "describe"` contract the prompt specifies) rather than updated.
