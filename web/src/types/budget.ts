@@ -47,9 +47,26 @@ export interface BudgetGroup {
   cc_weeks: number;
   cc_start_date: string | null; // YYYY-MM-DD (first pay date)
   cc_due_date: string | null; // YYYY-MM-DD (paid off by)
-  /** Day of month (1–31) this fixed cost is charged. null → flat even split; set
-   *  → per-month payoff tracker (like a card) via budget_group_payments. */
+  /** Day of month (1–31) this fixed cost is charged. Metadata only — it says
+   *  WHEN the bill hits, never HOW MUCH to set aside. The weekly set-aside is
+   *  always the flat monthly ÷ weeksInMonth split (see `weeklyFromMonthly`). */
   due_day?: number | null;
+  /** With a charge day set, mark the pay week the charge lands in (Paycheck
+   *  view). Display only — it does not change any amount. */
+  float_savings?: boolean;
+  created_at?: string;
+}
+
+/** A one-month override of a group's monthly amount. */
+export interface BudgetGroupOverride {
+  id: string;
+  user_id: string;
+  group_id: string;
+  budget_id: string;
+  /** First day of the overridden month, e.g. '2026-03-01'. */
+  month: string;
+  override_amount: number;
+  note: string | null;
   created_at?: string;
 }
 
@@ -263,6 +280,47 @@ export function payThursdaysForMonth(monthStartISO: string): string[] {
   const prevThursdays = thursdaysInMonth(toISODate(new Date(prev.getFullYear(), prev.getMonth(), 1)));
   if (prevThursdays.length >= 5) counted.push(prevThursdays[4]); // carried-in overflow
   return counted;
+}
+
+/**
+ * How many weeks a calendar month contains, for the purpose of splitting a
+ * monthly cost into weekly set-asides. Weeks run Thursday–Wednesday here, so
+ * this counts the month's Thursdays: July 2026 has 5 → divide by 5; August 2026
+ * has 4 → divide by 4.
+ */
+export function weeksInMonth(monthStartISO: string): number {
+  return Math.max(1, thursdaysInMonth(monthStartISO).length);
+}
+
+/**
+ * THE weekly set-aside rule: a monthly amount spread evenly over the month's
+ * actual weeks. A group's charge day (`due_day`) is deliberately NOT an input —
+ * it says when the bill hits, not how much to put away each week.
+ */
+export function weeklyFromMonthly(monthly: number, monthStartISO: string): number {
+  return (Number(monthly) || 0) / weeksInMonth(monthStartISO);
+}
+
+/** The inverse: a weekly amount typed by hand → the monthly it implies. */
+export function monthlyFromWeekly(weekly: number, monthStartISO: string): number {
+  return (Number(weekly) || 0) * weeksInMonth(monthStartISO);
+}
+
+/**
+ * True when the pay week beginning on `thursdayISO` (Thursday–Wednesday)
+ * contains `day` of the month. Used for the "⚡ Charges this week" marker; the
+ * charge day is clamped to the month's length, so the 31st resolves to the 30th
+ * in a 30-day month.
+ */
+export function weekContainsChargeDay(thursdayISO: string, day: number): boolean {
+  const [y, m, d] = thursdayISO.split('-').map(Number);
+  const start = new Date(y, m - 1, d);
+  for (let i = 0; i < 7; i++) {
+    const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const lastDay = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
+    if (cur.getDate() === Math.min(Math.max(1, day), lastDay)) return true;
+  }
+  return false;
 }
 
 export interface PeriodBounds {

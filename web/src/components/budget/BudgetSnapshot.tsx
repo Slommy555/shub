@@ -14,19 +14,12 @@ interface Props {
   onPrevMonth: () => void;
   onNextMonth: () => void;
 
-  // Income
+  // Income — still the denominator for the savings-rate note.
   monthlyIncome: number;
-  weeklyIncome: number;
-  payDayCount: number;
 
-  // Where it goes
-  recurringNetMonthly: number;
-  scheduledTotal: number;
+  // Debt
   cardsWeeklySuggested: number;
   cardsRemainingTotal: number;
-  monthlyAllocated: number;
-  monthlyRemaining: number;
-  savingsCovering: number;
 
   // Savings
   savingsBalance: number;
@@ -47,27 +40,6 @@ interface Props {
 /** "Thu, Jul 30" from YYYY-MM-DD. */
 function dayLabel(iso: string): string {
   return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-/** A big headline number with a caption. */
-function Tile({ label, value, tone, note }: { label: string; value: number; tone?: 'good' | 'bad'; note?: string }) {
-  const color =
-    tone === 'good' ? 'var(--color-success)' : tone === 'bad' ? 'var(--color-danger)' : 'var(--color-text-primary)';
-  return (
-    <div className="rounded-2xl border p-3.5" style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}>
-      <span className="mb-1 block text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.06em', color: 'var(--color-text-secondary)' }}>
-        {label}
-      </span>
-      <span className="block text-[22px] font-bold tabular-nums" style={{ color, letterSpacing: '-0.03em' }}>
-        {formatMoney(value)}
-      </span>
-      {note && (
-        <span className="mt-0.5 block text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-          {note}
-        </span>
-      )}
-    </div>
-  );
 }
 
 /** One line of a breakdown list. */
@@ -105,24 +77,17 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 }
 
 /**
- * At-a-glance rundown for the month in view: what's coming in, where it's
- * committed, what's left, and how savings is actually tracking (added vs pulled
- * back out) against the last six months.
+ * How savings is actually tracking for the month in view — added vs pulled back
+ * out, the running balance, and the last six months of income vs saved. The
+ * month's funding progress lives above this in SetAsideSnapshot.
  */
 export default function BudgetSnapshot({
   monthLabel,
   onPrevMonth,
   onNextMonth,
   monthlyIncome,
-  weeklyIncome,
-  payDayCount,
-  recurringNetMonthly,
-  scheduledTotal,
   cardsWeeklySuggested,
   cardsRemainingTotal,
-  monthlyAllocated,
-  monthlyRemaining,
-  savingsCovering,
   savingsBalance,
   startingBalance,
   startMonthLabel,
@@ -133,7 +98,6 @@ export default function BudgetSnapshot({
   upcoming,
   savingsTrend,
 }: Props) {
-  const committedPct = monthlyIncome > 0 ? Math.min(100, (monthlyAllocated / monthlyIncome) * 100) : 0;
   const savingsRate = monthlyIncome > 0 ? (savedThisMonth / monthlyIncome) * 100 : 0;
   const netSavings = savedThisMonth - earmarkedThisMonth + adjustedThisMonth;
   const peak = Math.max(1, ...history.map((h) => Math.max(h.income, h.saved)));
@@ -169,47 +133,6 @@ export default function BudgetSnapshot({
           </svg>
         </button>
       </div>
-
-      {/* Headline tiles */}
-      <div className="grid grid-cols-2 gap-3">
-        <Tile
-          label="Income"
-          value={monthlyIncome}
-          note={`${payDayCount} paycheck${payDayCount === 1 ? '' : 's'} · ${formatMoney(weeklyIncome)} avg`}
-        />
-        <Tile label="Committed" value={monthlyAllocated} note={`${Math.round(committedPct)}% of income`} />
-        <Tile
-          label="Left over"
-          value={monthlyRemaining}
-          tone={monthlyRemaining < 0 ? 'bad' : 'good'}
-          note={monthlyRemaining < 0 ? 'over budget' : 'unspoken for'}
-        />
-        <Tile label="Savings" value={savingsBalance} note={`${formatMoney(savedThisMonth)} added this month`} />
-      </div>
-
-      {/* Committed vs income bar */}
-      <div className="mt-3 h-2 w-full overflow-hidden rounded-full" style={{ background: 'var(--color-bg-surface)' }}>
-        <div
-          className="h-full rounded-full"
-          style={{ width: `${committedPct}%`, background: monthlyRemaining < 0 ? 'var(--color-danger)' : 'var(--color-accent)' }}
-        />
-      </div>
-
-      <Card title="Where it goes">
-        <Line label="Recurring fixed costs" value={recurringNetMonthly} note="net of savings" />
-        <div style={{ borderTop: '1px solid var(--color-border)' }} />
-        <Line label="Scheduled expenses" value={scheduledTotal} note="this month" />
-        <div style={{ borderTop: '1px solid var(--color-border)' }} />
-        <Line label="Card payoff pace" value={cardsWeeklySuggested * 4} note={`${formatMoney(cardsWeeklySuggested)}/wk`} />
-        <div style={{ borderTop: '1px solid var(--color-border)' }} />
-        <Line label="Left over" value={monthlyRemaining} tone={monthlyRemaining < 0 ? 'bad' : 'good'} />
-        {savingsCovering > 0 && (
-          <>
-            <div style={{ borderTop: '1px solid var(--color-border)' }} />
-            <Line label="Savings covering" value={savingsCovering} note="paid from the pool" tone="good" />
-          </>
-        )}
-      </Card>
 
       <Card title="Savings growth">
         <Line label="Added this month" value={savedThisMonth} note={`${Math.round(savingsRate)}% of income`} tone="good" />

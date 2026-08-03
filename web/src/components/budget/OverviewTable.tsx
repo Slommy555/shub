@@ -1,7 +1,14 @@
 import { useMemo, useRef, useState } from 'react';
-import { formatMoney, parseMoney, savingsOffset, type BudgetGroup } from '../../types/budget';
+import {
+  formatMoney,
+  parseMoney,
+  savingsOffset,
+  type BudgetGroup,
+  type BudgetGroupOverride,
+} from '../../types/budget';
 import type { PayDay } from '../../hooks/budget/usePayDayIncomes';
 import AddGroupForm from './AddGroupForm';
+import GroupEditPanel from './GroupEditPanel';
 
 // Column geometry (mobile-first). Name is fixed; the two money columns share the
 // remaining width equally but never shrink below 100px, so the table scrolls
@@ -31,6 +38,8 @@ interface Props {
   weeklyIncome: number;
   monthlyIncome: number;
   onSetPayDayIncome: (thursday: string, n: number) => void;
+  /** Thursdays in the month — the divisor turning a monthly amount into weekly. */
+  weeks: number;
   /** Gross (pre-savings) amounts — what the editable cell edits. */
   grossMonthlyOf: (g: BudgetGroup) => number;
   grossWeeklyOf: (g: BudgetGroup) => number;
@@ -41,9 +50,17 @@ interface Props {
   onAddGroup: (name: string, color: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
-  /** Set/clear the day of month a fixed cost is charged (enables the payoff
-   *  tracker in the Paycheck view). Omit to hide the charge-day control. */
+  /** Set/clear the day of month a fixed cost is charged. Metadata only — it
+   *  never changes a weekly amount. Omit to hide the whole edit panel. */
   onSetDueDay?: (id: string, day: number | null) => void;
+  /** Mark the charge week in the Paycheck view (needs a charge day). */
+  onSetFloatSavings?: (id: string, on: boolean) => void;
+  /** This month's amount override for a group, or null when it uses the default. */
+  overrideFor?: (id: string) => BudgetGroupOverride | null;
+  /** The group's DEFAULT monthly amount, ignoring any override. */
+  defaultMonthlyOf?: (g: BudgetGroup) => number;
+  onSetOverride?: (id: string, amount: number, note?: string | null) => void;
+  onClearOverride?: (id: string) => void;
 }
 
 /** "1st", "2nd", "25th" … */
@@ -51,46 +68,6 @@ function ordinal(d: number): string {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = d % 100;
   return d + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
-}
-
-/** A tiny inline control under a group name to set the day of month it's charged. */
-function DueDayControl({ day, onSave }: { day: number | null; onSave: (d: number | null) => void }) {
-  const [open, setOpen] = useState(false);
-  if (open) {
-    return (
-      <select
-        data-no-drag
-        autoFocus
-        value={day ?? ''}
-        onChange={(e) => {
-          const v = e.target.value;
-          onSave(v === '' ? null : Number(v));
-          setOpen(false);
-        }}
-        onBlur={() => setOpen(false)}
-        className="mt-0.5 self-start rounded-md border px-1 py-0.5 text-[11px] outline-none"
-        style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-accent-muted)', color: 'var(--color-text-primary)' }}
-      >
-        <option value="">No charge day</option>
-        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-          <option key={d} value={d}>
-            {ordinal(d)}
-          </option>
-        ))}
-      </select>
-    );
-  }
-  return (
-    <button
-      data-no-drag
-      type="button"
-      onClick={() => setOpen(true)}
-      className="mt-0.5 self-start text-[11px] active:opacity-70"
-      style={{ color: day ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
-    >
-      {day ? `Charged ${ordinal(day)}` : '+ charge day'}
-    </button>
-  );
 }
 
 /** A labelled currency input (raw number while focused, formatted on blur). */
@@ -219,6 +196,7 @@ export default function OverviewTable({
   weeklyIncome,
   monthlyIncome,
   onSetPayDayIncome,
+  weeks,
   grossMonthlyOf,
   grossWeeklyOf,
   savingsMonthlyOf,
@@ -228,9 +206,16 @@ export default function OverviewTable({
   onRename,
   onDelete,
   onSetDueDay,
+  onSetFloatSavings,
+  overrideFor,
+  defaultMonthlyOf,
+  onSetOverride,
+  onClearOverride,
 }: Props) {
   const [swipe, setSwipe] = useState<{ id: string; x: number } | null>(null);
   const [editing, setEditing] = useState<EditState | null>(null);
+  /** Which group's edit panel is open (charge day / float savings / override). */
+  const [expanded, setExpanded] = useState<string | null>(null);
   const swipeRef = useRef<typeof swipe>(null);
   swipeRef.current = swipe;
 
@@ -241,10 +226,10 @@ export default function OverviewTable({
     for (const g of groups) {
       const em = savingsMonthlyOf(g);
       m += savingsOffset(grossMonthlyOf(g), em).net;
-      w += savingsOffset(grossWeeklyOf(g), em / 4).net;
+      w += savingsOffset(grossWeeklyOf(g), em / weeks).net;
     }
     return { monthly: m, weekly: w };
-  }, [groups, grossMonthlyOf, grossWeeklyOf, savingsMonthlyOf]);
+  }, [groups, grossMonthlyOf, grossWeeklyOf, savingsMonthlyOf, weeks]);
 
   const onRowPointerDown = (id: string, e: React.PointerEvent) => {
     const target = e.target as HTMLElement;
@@ -403,6 +388,11 @@ export default function OverviewTable({
               const editWeekly = !roWeekly && editing?.id === g.id && editing.col === 'weekly';
               const editMonthly = !roMonthly && editing?.id === g.id && editing.col === 'monthly';
               const earmarkM = savingsMonthlyOf(g);
+              // The Savings category is auto-driven, so it gets no edit panel.
+              const canEditPanel = !!onSetDueDay && !(roWeekly && roMonthly);
+              const isExpanded = expanded === g.id;
+              const groupOverride = overrideFor?.(g.id) ?? null;
+              const hasOverride = !!groupOverride;
               return (
                 <div key={g.id} className="relative select-none border-t" style={{ borderColor: 'var(--color-border)' }}>
                   {/* Delete action behind the row */}
@@ -451,8 +441,43 @@ export default function OverviewTable({
                             {g.name}
                           </span>
                         )}
-                        {onSetDueDay && !(roWeekly && roMonthly) && (
-                          <DueDayControl day={g.due_day ?? null} onSave={(d) => onSetDueDay(g.id, d)} />
+                        {canEditPanel && (
+                          <button
+                            data-no-drag
+                            type="button"
+                            aria-expanded={isExpanded}
+                            onClick={() => setExpanded(isExpanded ? null : g.id)}
+                            className="mt-0.5 flex items-center gap-1 self-start text-[11px] active:opacity-70"
+                            style={{
+                              color: hasOverride
+                                ? 'var(--color-warning)'
+                                : g.due_day
+                                  ? 'var(--color-accent)'
+                                  : 'var(--color-text-tertiary)',
+                            }}
+                          >
+                            {hasOverride
+                              ? 'Override'
+                              : g.due_day
+                                ? `Charged ${ordinal(g.due_day)}`
+                                : 'Edit'}
+                            <svg
+                              width="10"
+                              height="10"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              style={{
+                                transform: isExpanded ? 'rotate(180deg)' : 'none',
+                                transition: 'transform 200ms ease',
+                              }}
+                            >
+                              <path d="m6 9 6 6 6-6" />
+                            </svg>
+                          </button>
                         )}
                       </div>
                     </div>
@@ -483,7 +508,7 @@ export default function OverviewTable({
                           }}
                         />
                       ) : (
-                        <AmountDisplay gross={grossWeeklyOf(g)} earmark={earmarkM / 4} readOnly={roWeekly} />
+                        <AmountDisplay gross={grossWeeklyOf(g)} earmark={earmarkM / weeks} readOnly={roWeekly} />
                       )}
                     </div>
 
@@ -506,6 +531,19 @@ export default function OverviewTable({
                       </button>
                     </div>
                   </div>
+
+                  {isExpanded && onSetDueDay && (
+                    <GroupEditPanel
+                      group={g}
+                      defaultMonthly={defaultMonthlyOf?.(g) ?? grossMonthlyOf(g)}
+                      override={groupOverride}
+                      monthLabel={monthLabel}
+                      onSetDueDay={(d) => onSetDueDay(g.id, d)}
+                      onSetFloatSavings={(on) => onSetFloatSavings?.(g.id, on)}
+                      onSetOverride={(amt, note) => onSetOverride?.(g.id, amt, note)}
+                      onClearOverride={() => onClearOverride?.(g.id)}
+                    />
+                  )}
                 </div>
               );
             })

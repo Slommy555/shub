@@ -44,6 +44,9 @@ export interface CardPayoff {
   paid?: number;
   /** Accent dot color (defaults to the card blue). */
   color?: string;
+  /** Float Savings is on AND this pay week contains the charge day. Display
+   *  only — the set-aside amount is unaffected. */
+  chargesThisWeek?: boolean;
 }
 
 export interface ScheduledPayoff {
@@ -407,6 +410,11 @@ function CardPayoffRow({
           <span className="truncate text-[15px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
             {payoff.name}
           </span>
+          {payoff.chargesThisWeek && (
+            <span className="shrink-0 text-[11px] font-medium" style={{ color: 'var(--color-warning)' }}>
+              ⚡ Charges this week
+            </span>
+          )}
         </span>
         <span className="shrink-0 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
           {dueLabel ? `due ${dueLabel}` : 'no due date'}

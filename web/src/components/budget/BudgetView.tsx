@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react';
 import {
-  formatMoney,
   fromView,
   payDatesThrough,
   periodForCursor,
   savingsOffset,
   shiftCursor,
+  thursdaysInMonth,
   toISODate,
   toView,
+  weeklyFromMonthly,
+  weekContainsChargeDay,
+  weeksInMonth,
+  monthlyFromWeekly,
   type BudgetGroup,
   type CreditCard,
 } from '../../types/budget';
@@ -35,7 +39,10 @@ import SavingsPoolSection from './SavingsPoolSection';
 import SavingsTrend from './SavingsTrend';
 import BudgetCalendar, { type CalEvent } from './BudgetCalendar';
 import BudgetSnapshot from './BudgetSnapshot';
+import SetAsideSnapshot from './SetAsideSnapshot';
 import { useBudgetHistory } from '../../hooks/budget/useBudgetHistory';
+import { useGroupOverrides } from '../../hooks/budget/useGroupOverrides';
+import { useAmountSetAside } from '../../hooks/budget/useAmountSetAside';
 
 export type BudgetViewMode = 'snapshot' | 'overview' | 'paycheck' | 'calendar';
 
@@ -85,6 +92,11 @@ export default function BudgetView({
   const cardCharges = useCardCharges(userId);
   const scheduled = useScheduledExpenses(userId, budgetId);
   const history = useBudgetHistory(userId, budgetId, monthBounds.start_date);
+  const overrides = useGroupOverrides(userId, budgetId, monthBounds.start_date);
+  const setAside = useAmountSetAside(monthPeriodId);
+
+  /** Thursdays in the month in view — the ONLY divisor for weekly set-asides. */
+  const weeks = weeksInMonth(monthBounds.start_date);
 
   // Charging a scheduled expense to a card: bump its balance AND log the charge.
   const chargeToCard = (cardId: string, name: string, amount: number) => {
@@ -144,42 +156,80 @@ export default function BudgetView({
 
   // --- gross (pre-savings) amounts -----------------------------------------
   const allocWeekly = (g: BudgetGroup) => Number(allocations.allocations[g.id]?.amount) || 0;
-  const grossMonthlyOf = (g: BudgetGroup) =>
+
+  /** A group's monthly amount ignoring any override — the default every other
+   *  month uses. The Savings category is driven by its deposits instead. */
+  const defaultMonthlyOf = (g: BudgetGroup) =>
     isSavings(g) ? deposits.monthTotal : toView(allocWeekly(g), 'monthly');
-  const grossWeeklyOf = (g: BudgetGroup) => (isSavings(g) ? deposits.monthTotal / 4 : allocWeekly(g));
+
+  /**
+   * THE amount resolver. Every display and every total goes through this, so an
+   * override can never be applied in one place and missed in another:
+   *   1. an override row for (group, this month) wins;
+   *   2. otherwise the group's default monthly amount.
+   */
+  const resolvedMonthlyOf = (g: BudgetGroup) => {
+    if (isSavings(g)) return deposits.monthTotal;
+    const o = overrides.overrideFor(g.id);
+    return o ? Number(o.override_amount) || 0 : defaultMonthlyOf(g);
+  };
+
+  const grossMonthlyOf = resolvedMonthlyOf;
+  /**
+   * The weekly set-aside: the resolved monthly spread over the month's actual
+   * weeks. `due_day` is deliberately absent — a charge day says WHEN a bill
+   * hits, never HOW MUCH to put away each week.
+   */
+  const grossWeeklyOf = (g: BudgetGroup) =>
+    weeklyFromMonthly(resolvedMonthlyOf(g), monthBounds.start_date);
   const savingsMonthlyOf = (g: BudgetGroup) => savings.earmarkAmounts[g.id] ?? 0;
 
-  // Editing writes the per-period allocation (weekly base). Monthly edits divide
-  // back down by the ×4 timeframe factor.
-  const saveWeekly = (g: BudgetGroup, entered: number) => void allocations.setAmount(g.id, Math.max(0, entered));
-  const saveMonthly = (g: BudgetGroup, entered: number) =>
-    void allocations.setAmount(g.id, Math.max(0, fromView(entered, 'monthly')));
+  // Editing an amount edits whatever is in force: the override when this month
+  // has one, otherwise the default allocation (stored as a weekly base).
+  const saveMonthly = (g: BudgetGroup, entered: number) => {
+    const amount = Math.max(0, entered);
+    if (overrides.overrideFor(g.id)) void overrides.setOverride(g.id, amount);
+    else void allocations.setAmount(g.id, fromView(amount, 'monthly'));
+  };
+  const saveWeekly = (g: BudgetGroup, entered: number) =>
+    saveMonthly(g, monthlyFromWeekly(Math.max(0, entered), monthBounds.start_date));
 
-  // A dated fixed cost (due_day set) is a payoff tracker like a card, but its
-  // funding cycle is anchored on the charge DAY, not the calendar month: a bill
-  // on the 25th funds from the last 25th to the next 25th. For a given pay day we
-  // find the next charge day on/after it, count set-asides back to the previous
-  // charge day, and spread what's left across the pay days until the next charge.
+  /** The charge date for a day-of-month in a given month, clamped to its length. */
   const chargeDateOn = (day: number, year: number, monthIndex0: number): Date => {
     const lastDay = new Date(year, monthIndex0 + 1, 0).getDate();
     return new Date(year, monthIndex0, Math.min(Math.max(1, day), lastDay));
   };
-  const nextChargeOnOrAfter = (day: number, fromISO: string): Date => {
-    const [y, m, d] = fromISO.split('-').map(Number);
-    const from = new Date(y, m - 1, d);
-    const thisMonth = chargeDateOn(day, y, m - 1);
-    return thisMonth < from ? chargeDateOn(day, y, m) : thisMonth; // roll to next month if past
-  };
+
+  /**
+   * A dated fixed cost as a per-month payoff tracker.
+   *
+   * The suggested set-aside is the FLAT monthly ÷ weeks split and nothing else.
+   * It used to be `remaining ÷ pay days until the next charge day`, which made a
+   * bill on the 5th demand far more per week than the same bill on the 25th —
+   * the bug Fix 1 addresses. The charge day now only decides the date shown and
+   * whether the "charges this week" marker appears.
+   */
   const groupPayoffFor = (g: BudgetGroup, payDate: string) => {
     const net = savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net;
-    const day = g.due_day ?? 1;
-    const next = nextChargeOnOrAfter(day, payDate);
-    const prev = chargeDateOn(day, next.getFullYear(), next.getMonth() - 1); // one cycle back
-    const nextISO = toISODate(next);
-    const paidBefore = groupPayments.paidInRange(g.id, toISODate(prev), payDate); // this cycle, before today
+    const suggested = weeklyFromMonthly(net, monthBounds.start_date);
+    // The funding cycle is the calendar month, matching where the amount comes
+    // from — set-asides earlier in the month count against this month's bill.
+    const paidBefore = groupPayments.paidInRange(g.id, monthBounds.start_date, payDate);
     const remaining = Math.max(0, net - paidBefore);
-    const suggested = remaining > 0 ? remaining / payDatesThrough(payDate, nextISO) : 0;
-    return { id: g.id, name: g.name, color: g.color, due_date: nextISO, remaining, suggested, paid: groupPayments.paymentOn(g.id, payDate) };
+    const [cy, cm] = monthBounds.start_date.split('-').map(Number);
+    const chargeISO = g.due_day != null ? toISODate(chargeDateOn(g.due_day, cy, cm - 1)) : null;
+    return {
+      id: g.id,
+      name: g.name,
+      color: g.color,
+      due_date: chargeISO,
+      remaining,
+      suggested,
+      paid: groupPayments.paymentOn(g.id, payDate),
+      // Float Savings is purely a marker: it never touches `suggested`.
+      chargesThisWeek:
+        g.float_savings === true && g.due_day != null && weekContainsChargeDay(payDate, g.due_day),
+    };
   };
   const isDated = (g: BudgetGroup) => g.due_day != null;
 
@@ -234,7 +284,7 @@ export default function BudgetView({
         onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
         onSetPayDayIncome={setIncome}
         weeklyOnDate={(g) => grossWeeklyOf(g)}
-        coveredOf={(g) => Math.min(savingsMonthlyOf(g), grossMonthlyOf(g)) / 4}
+        coveredOf={(g) => Math.min(savingsMonthlyOf(g), grossMonthlyOf(g)) / weeks}
         deposits={deposits.deposits}
         onSetDeposit={deposits.setDeposit}
         scheduledPayoffsForDate={(d) =>
@@ -276,17 +326,10 @@ export default function BudgetView({
     (s, g) => s + savingsOffset(grossMonthlyOf(g), savingsMonthlyOf(g)).net,
     0
   );
-  const recurringNetWeekly = recurringGroups.reduce(
-    (s, g) => s + savingsOffset(grossWeeklyOf(g), savingsMonthlyOf(g) / 4).net,
-    0
-  );
   const scheduledThisMonth = scheduled.expenses.filter((e) => e.due_month === monthBounds.start_date);
   const scheduledGross = scheduledThisMonth.reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const scheduledCovered = scheduledThisMonth.reduce((s, e) => s + savedForExpense(e), 0);
   const scheduledTotal = Math.max(0, scheduledGross - scheduledCovered); // net income must cover
-
-  const monthlyCovered =
-    recurringGroups.reduce((s, g) => s + Math.min(savingsMonthlyOf(g), grossMonthlyOf(g)), 0) + scheduledCovered;
 
   // Card obligation: for cards with a due date, the suggested weekly pace to
   // clear the remaining balance from this month's first payday through the due
@@ -300,9 +343,37 @@ export default function BudgetView({
   }, 0);
 
   const monthlyAllocated = recurringNetMonthly + scheduledTotal;
-  const weeklyAllocated = recurringNetWeekly + cardsWeeklySuggested;
-  const monthlyRemaining = monthlyIncome - monthlyAllocated;
-  const weeklyRemaining = weeklyIncome - weeklyAllocated;
+
+  // --- set-aside snapshot ---------------------------------------------------
+  // What the month must fund from income: every recurring group's RESOLVED
+  // amount (overrides applied) plus this month's scheduled expenses, both
+  // already net of the savings earmarked against them.
+  const totalNeeded = monthlyAllocated;
+  const monthThursdays = thursdaysInMonth(monthBounds.start_date);
+  const todayISO = toISODate(new Date());
+  const isCurrentMonth = todayISO.slice(0, 7) === monthBounds.start_date.slice(0, 7);
+  /** 1-based week of the month containing today; days before the first Thursday
+   *  still count as week 1. */
+  const currentWeek = (() => {
+    if (!isCurrentMonth) return 1;
+    let idx = 0;
+    monthThursdays.forEach((t, i) => {
+      if (t <= todayISO) idx = i;
+    });
+    return idx + 1;
+  })();
+
+  const setAsideCard = (
+    <SetAsideSnapshot
+      monthLabel={monthBounds.label}
+      totalNeeded={totalNeeded}
+      setAside={setAside.amount}
+      onSetAside={(n) => void setAside.save(n)}
+      weeks={weeks}
+      currentWeek={currentWeek}
+      isCurrentMonth={isCurrentMonth}
+    />
+  );
 
   // Hand adjustments are real movements of the balance, so they count toward what
   // savings can cover — both the earmark cap and every balance read-out.
@@ -334,10 +405,6 @@ export default function BudgetView({
     void adjustments.adjustBalanceAt(bucket.end, target - bucket.balance);
 
   if (view === 'snapshot') {
-    // Unlike the Overview's summary strip, the snapshot counts the card payoff
-    // pace as committed money too, so "where it goes" actually adds up.
-    const committed = monthlyAllocated + cardsWeeklySuggested * 4;
-    const todayISO = toISODate(new Date());
     const nextMonthStart = shiftCursor('monthly', monthCursor, 1);
     const upcoming = [...buildEvents(monthBounds.start_date), ...buildEvents(periodForCursor('monthly', nextMonthStart).start_date)]
       .filter((e) => e.date >= todayISO)
@@ -345,20 +412,15 @@ export default function BudgetView({
       .slice(0, 5);
 
     return (
-      <BudgetSnapshot
+      <>
+        {setAsideCard}
+        <BudgetSnapshot
         monthLabel={monthBounds.label}
         onPrevMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, -1))}
         onNextMonth={() => setMonthCursor((c) => shiftCursor('monthly', c, 1))}
         monthlyIncome={monthlyIncome}
-        weeklyIncome={weeklyIncome}
-        payDayCount={payDays.length}
-        recurringNetMonthly={recurringNetMonthly}
-        scheduledTotal={scheduledTotal}
         cardsWeeklySuggested={cardsWeeklySuggested}
         cardsRemainingTotal={cardsRemainingTotal}
-        monthlyAllocated={committed}
-        monthlyRemaining={monthlyIncome - committed}
-        savingsCovering={monthlyCovered}
         savingsBalance={savingsAvailable - savings.allocated}
         startingBalance={account.startingBalance}
         startMonthLabel={monthLabelOf(account.startMonth)}
@@ -384,12 +446,15 @@ export default function BudgetView({
             onDeleteAdjustment={(id) => void adjustments.deleteAdjustment(id)}
           />
         }
-      />
+        />
+      </>
     );
   }
 
   return (
     <>
+      {setAsideCard}
+
       <OverviewTable
         groups={recurringGroups}
         title="Recurring Fixed Costs"
@@ -401,6 +466,7 @@ export default function BudgetView({
         monthlyIncome={monthlyIncome}
         weeklyIncome={weeklyIncome}
         onSetPayDayIncome={setIncome}
+        weeks={weeks}
         grossMonthlyOf={grossMonthlyOf}
         grossWeeklyOf={grossWeeklyOf}
         savingsMonthlyOf={savingsMonthlyOf}
@@ -410,6 +476,11 @@ export default function BudgetView({
         onRename={(id, name) => void groupsApi.updateGroup(id, { name })}
         onDelete={groupsApi.deleteGroup}
         onSetDueDay={(id, day) => void groupsApi.updateGroup(id, { due_day: day })}
+        onSetFloatSavings={(id, on) => void groupsApi.updateGroup(id, { float_savings: on })}
+        overrideFor={overrides.overrideFor}
+        defaultMonthlyOf={defaultMonthlyOf}
+        onSetOverride={(id, amount, note) => void overrides.setOverride(id, amount, note)}
+        onClearOverride={(id) => void overrides.clearOverride(id)}
       />
 
       <CreditCardSection
@@ -452,73 +523,7 @@ export default function BudgetView({
         onSetExpenseEarmark={savings.setExpenseEarmark}
       />
 
-      {/* Summary */}
-      <div className="mt-6 rounded-2xl border p-4" style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}>
-        <SummaryRow label="Monthly" income={monthlyIncome} allocated={monthlyAllocated} remaining={monthlyRemaining} />
-        <div className="my-3 border-t" style={{ borderColor: 'var(--color-border)' }} />
-        <SummaryRow label="Weekly" income={weeklyIncome} allocated={weeklyAllocated} remaining={weeklyRemaining} />
-        {(monthlyCovered > 0 || cardsRemainingTotal > 0) && (
-          <div className="mt-3 flex flex-col gap-1 border-t pt-3 text-[12px] tabular-nums" style={{ borderColor: 'var(--color-border)' }}>
-            {monthlyCovered > 0 && (
-              <div className="flex items-center justify-between">
-                <span style={{ color: 'var(--color-text-secondary)' }}>Savings covering</span>
-                <span style={{ color: 'var(--color-success)' }}>{formatMoney(monthlyCovered)}/mo</span>
-              </div>
-            )}
-            {cardsRemainingTotal > 0 && (
-              <div className="flex items-center justify-between">
-                <span style={{ color: 'var(--color-text-secondary)' }}>Credit cards owed</span>
-                <span style={{ color: 'var(--color-text-tertiary)' }}>
-                  {formatMoney(cardsRemainingTotal)} left{cardsWeeklySuggested > 0 ? ` · ~${formatMoney(cardsWeeklySuggested)}/wk` : ''}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
     </>
-  );
-}
-
-function SummaryRow({
-  label,
-  income,
-  allocated,
-  remaining,
-}: {
-  label: string;
-  income: number;
-  allocated: number;
-  remaining: number;
-}) {
-  const color = remaining >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  return (
-    <div>
-      <span className="mb-2 block text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.08em', color: 'var(--color-text-secondary)' }}>
-        {label}
-      </span>
-      <div className="grid grid-cols-3 gap-2 text-center tabular-nums">
-        <Cell caption="Income" value={formatMoney(income)} />
-        <Cell caption="Allocated" value={formatMoney(allocated)} />
-        <Cell caption="Remaining" value={formatMoney(remaining)} valueColor={color} bold />
-      </div>
-    </div>
-  );
-}
-
-function Cell({ caption, value, valueColor, bold }: { caption: string; value: string; valueColor?: string; bold?: boolean }) {
-  return (
-    <div>
-      <span className="block text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-        {caption}
-      </span>
-      <span
-        className={`block ${bold ? 'text-lg font-bold' : 'text-[15px] font-medium'}`}
-        style={{ color: valueColor ?? 'var(--color-text-primary)', letterSpacing: '-0.02em' }}
-      >
-        {value}
-      </span>
-    </div>
   );
 }
 
