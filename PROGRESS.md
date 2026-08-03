@@ -1,8 +1,8 @@
 # Session Progress
 
 ## Describe Your Meal Feature
-- [ ] USDA proxy updated to support natural language search
-- [ ] Open Food Facts proxy Edge Function created
+- [x] USDA proxy updated to support natural language search — **created**, not updated: the old USDA proxy was removed 2026-06-29, so `supabase/functions/usda-proxy/` is new. `type: "describe"` searches Foundation + SR Legacy, drops branded and nutrient-less rows, ranks Foundation first, returns top 3 per-100g. `USDA_API_KEY` secret was still set. Deployed.
+- [x] Open Food Facts proxy Edge Function created — `cgi/search.pl` first, falling back to Search-a-licious (`search.openfoodfacts.org`) because `world.openfoodfacts.org` now answers anonymous text search with a 503 interstitial. Deployed.
 - [ ] Claude meal parser (identifies foods from description)
 - [ ] Multi-source lookup logic (USDA → Open Food Facts → Claude estimate)
 - [ ] Meal breakdown result UI
