@@ -88,11 +88,12 @@ export default function BudgetCard({
         </div>
       </div>
 
-      {/* Where the month is committed. */}
+      {/* Where the money is committed. Each tile names its own period, since
+          bills are a weekly set-aside and cards are a monthly payoff pace. */}
       <div className="mt-auto flex gap-2 pt-4">
-        <Stat label="Bills" value={b.bills} />
-        <Stat label="Credit" value={b.creditCards} />
-        <Stat label="Savings" value={b.savingsPool} color="var(--color-success)" />
+        <Stat label="Bills / wk" value={b.billsWeekly} />
+        <Stat label="Credit / mo" value={b.creditCards} />
+        <Stat label="Saved" value={b.savingsPool} color="var(--color-success)" />
       </div>
     </Card>
   );

@@ -37,7 +37,9 @@ export interface HomeBudget {
   setAside: number;
   /** What this pay day should be setting aside in total. */
   setAsideNeeded: number;
-  bills: number;
+  /** Recurring bills as a WEEKLY sum — the month's total over its actual weeks. */
+  billsWeekly: number;
+  /** Credit-card payoff pace for the month. */
   creditCards: number;
   savingsPool: number;
 }
@@ -115,14 +117,20 @@ export function useHomeBudget(userId: string | null): HomeBudget {
   const cardRemaining = (c: CreditCard) =>
     Math.max(0, (Number(c.balance) || 0) - cardPayments.paidTotal(c.id));
 
-  // --- headline monthly totals (the three big tiles) ------------------------
+  // --- headline totals (the three big tiles) --------------------------------
   const firstPayday = payDays[0]?.date ?? monthStart;
   const cardsWeekly = creditCards.cards.reduce((s, c) => {
     if (!c.due_date) return s;
     const remaining = cardRemaining(c);
     return remaining > 0 ? s + remaining / payDatesThrough(firstPayday, c.due_date) : s;
   }, 0);
-  const bills = recurringGroups.reduce((s, g) => s + resolvedMonthlyOf(g), 0);
+  // Bills are reported WEEKLY — the same flat monthly ÷ weeksInMonth split the
+  // rest of the app sets aside by, so the tile matches what a pay week asks for
+  // rather than a monthly figure sitting in a weekly card.
+  const billsWeekly = recurringGroups.reduce(
+    (s, g) => s + weeklyFromMonthly(resolvedMonthlyOf(g), monthStart),
+    0
+  );
 
   // --- this pay week's waterfall -------------------------------------------
   let setAside = 0;
@@ -192,7 +200,7 @@ export function useHomeBudget(userId: string | null): HomeBudget {
     weekLeft: income - setAside,
     setAside,
     setAsideNeeded: needed,
-    bills,
+    billsWeekly,
     creditCards: cardsWeekly * weeks,
     savingsPool: savings.totalSaved,
   };
