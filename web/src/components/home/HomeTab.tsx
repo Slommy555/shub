@@ -5,6 +5,7 @@ import ProgramCard from './ProgramCard';
 import HabitsCard from './HabitsCard';
 import TasksCard from './TasksCard';
 import EventsCard, { todaysEvents } from './EventsCard';
+import WeightCard from './WeightCard';
 import BudgetCard from './BudgetCard';
 
 /** The name the greeting uses. */
@@ -39,11 +40,11 @@ export default function HomeTab({
   const events = todaysEvents(tasks);
   const openTasks = () => onNavigate('todo');
 
-  // Budget is the wide tile that closes out the grid, so its span is whatever
-  // fills the last row — which depends on whether the Schedule card is showing.
-  //   2 cols, with events: P H / T E / B B      2 cols, without: P H / T B
-  //   3 cols, with events: P H T / E B B        3 cols, without: P H T / B B B
-  const budgetSpan = events.length > 0 ? 'sm:col-span-2 xl:col-span-2' : 'sm:col-span-1 xl:col-span-3';
+  // Budget closes out the grid, so its span is whatever squares off the last
+  // row — which depends on whether the Schedule card is showing.
+  //   with events (6 tiles): P H / T W / E B    and   P H T / W E B
+  //   without      (5 tiles): P H / T W / B B    and   P H T / W B B
+  const budgetSpan = events.length > 0 ? '' : 'sm:col-span-2';
 
   return (
     <div
@@ -74,6 +75,7 @@ export default function HomeTab({
           <ProgramCard userId={userId} onOpenWorkout={() => onNavigate('workout')} />
           <HabitsCard userId={userId} />
           <TasksCard tasks={tasks} onToggle={onToggleTask} onOpenTasks={openTasks} />
+          <WeightCard userId={userId} />
           {events.length > 0 && <EventsCard events={events} onOpenTasks={openTasks} />}
           <BudgetCard
             userId={userId}

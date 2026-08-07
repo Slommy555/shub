@@ -25,8 +25,25 @@ function Stat({ label, value, color }: { label: string; value: number; color?: s
   );
 }
 
+/** A quieter label/value pair for the desktop-only detail strip. */
+function Detail({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <span className="truncate text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+        {label}
+      </span>
+      <span
+        className="truncate text-[15px] font-medium tabular-nums"
+        style={{ color: color ?? 'var(--color-text-secondary)' }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 /**
- * This pay week's headroom up top, then where the month is committed. The
+ * This pay week's headroom up top, then where the week's money goes. The
  * figures are deliberately large — this card exists to be read from arm's length.
  */
 export default function BudgetCard({
@@ -46,7 +63,14 @@ export default function BudgetCard({
 
   return (
     <Card onClick={onOpenBudget} className={className}>
-      <SectionHeader title="Budget" meta={`Week of ${b.weekLabel}`} />
+      <SectionHeader
+        title="Budget"
+        meta={
+          b.payDayNumber > 0
+            ? `Week of ${b.weekLabel} · paycheck ${b.payDayNumber} of ${b.payDayCount}`
+            : `Week of ${b.weekLabel}`
+        }
+      />
 
       {/* Hero: what's left after this pay week's set-asides. */}
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
@@ -88,12 +112,26 @@ export default function BudgetCard({
         </div>
       </div>
 
-      {/* Where the money is committed. Each tile names its own period, since
-          bills are a weekly set-aside and cards are a monthly payoff pace. */}
+      {/* Where this week's money goes. All three are weekly. */}
       <div className="mt-auto flex gap-2 pt-4">
-        <Stat label="Bills / wk" value={b.billsWeekly} />
-        <Stat label="Credit / mo" value={b.creditCards} />
-        <Stat label="Saved" value={b.savingsPool} color="var(--color-success)" />
+        <Stat label="Fixed expenses" value={b.billsWeekly} />
+        <Stat label="Credit cards" value={b.creditWeekly} />
+        <Stat label="To savings" value={b.savingsWeekly} color="var(--color-success)" />
+      </div>
+
+      {/* Desktop has the width for the surrounding context; phones don't. */}
+      <div
+        className="mt-4 hidden grid-cols-2 gap-x-4 gap-y-3 border-t pt-4 sm:grid"
+        style={{ borderColor: 'var(--color-border)' }}
+      >
+        <Detail label="Income this week" value={formatMoney(b.income)} />
+        <Detail label="One-off expenses" value={formatMoney(b.scheduledWeekly)} />
+        <Detail label="Savings pool" value={formatMoney(b.savingsPool)} />
+        <Detail
+          label="Card balances owed"
+          value={formatMoney(b.cardsOwed)}
+          color={b.cardsOwed > 0 ? 'var(--color-danger)' : undefined}
+        />
       </div>
     </Card>
   );
