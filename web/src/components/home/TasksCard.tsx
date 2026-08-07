@@ -14,7 +14,7 @@ const DOT: Record<Priority, string> = {
 };
 
 /** "Today" for today's date, "3d overdue" for the past, else "Aug 12". */
-function dueChip(due: string, today: string): { text: string; overdue: boolean } {
+function dayChip(due: string, today: string): { text: string; overdue: boolean } {
   if (due === today) return { text: 'Today', overdue: false };
   if (due < today) {
     const days = Math.round(
@@ -42,10 +42,22 @@ export default function TasksCard({
   const today = todayISO();
   const tomorrow = addDays(today, 1);
 
-  // Timed events live in the Schedule card, so they're left out here.
+  // A task's day is `listDate` — the day you scheduled it for, falling back to
+  // its hard deadline. That's the same rule the To-Do tab lists by, so "set for
+  // today" there means "due today" here. Reading `due_date` alone missed every
+  // task that was scheduled for today without a deadline.
+  // Timed events live in the Schedule card, so they're left out.
   const due = tasks
-    .filter((t) => !t.done && !isEvent(t) && t.due_date !== null && t.due_date <= today)
-    .sort((a, b) => (a.due_date! === b.due_date! ? a.position - b.position : a.due_date! < b.due_date! ? -1 : 1));
+    .filter((t) => {
+      if (t.done || isEvent(t)) return false;
+      const day = listDate(t);
+      return day !== null && day <= today;
+    })
+    .sort((a, b) => {
+      const da = listDate(a)!;
+      const db = listDate(b)!;
+      return da === db ? a.position - b.position : da < db ? -1 : 1;
+    });
 
   const shown = due.slice(0, MAX_ROWS);
   const tomorrowCount = tasks.filter((t) => !t.done && !isEvent(t) && listDate(t) === tomorrow).length;
@@ -61,7 +73,7 @@ export default function TasksCard({
       ) : (
         <div className="flex flex-col">
           {shown.map((t) => {
-            const chip = dueChip(t.due_date!, today);
+            const chip = dayChip(listDate(t)!, today);
             return (
               <div key={t.id} className="flex items-center gap-2" style={{ minHeight: 40 }}>
                 <CheckCircle checked={false} label={t.text} onToggle={() => { haptic(); onToggle(t.id, true); }} />

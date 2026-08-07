@@ -233,6 +233,15 @@ function addDays(d: Date, n: number): Date {
   return c;
 }
 
+/**
+ * The pay Thursday of the week containing `d` — i.e. the most recent Thursday on
+ * or before it, since pay weeks run Thursday–Wednesday. This is the week you are
+ * CURRENTLY in, which may sit in the previous calendar month.
+ */
+export function payWeekThursday(d: Date): string {
+  return toISODate(thursdayOf(d));
+}
+
 /** Thursday of the week containing d (weeks run Thursday–Wednesday). */
 function thursdayOf(d: Date): Date {
   const day = d.getDay(); // 0=Sun … 6=Sat; 4=Thu

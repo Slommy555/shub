@@ -10,6 +10,104 @@ import {
 } from '../../../lib/program';
 import { parseISO, todayISO } from '../../../lib/dates';
 import DayEditSheet, { type DayDraft } from './DayEditSheet';
+import Sheet from './Sheet';
+
+const inputStyle: React.CSSProperties = {
+  height: 48,
+  background: 'var(--color-bg-surface)',
+  borderColor: 'var(--color-border)',
+  color: 'var(--color-text-primary)',
+};
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className="mb-1.5 block text-[11px] font-medium uppercase"
+      style={{ letterSpacing: '0.08em', color: 'var(--color-text-secondary)' }}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Edit the block itself. Moving the start date slides the whole calendar — every
+ * week and every cycle day re-derives from it, so nothing else has to change.
+ */
+function ProgramEditSheet({
+  program,
+  onSave,
+  onClose,
+}: {
+  program: WorkoutProgram;
+  onSave: (patch: { name: string; start_date: string; total_weeks: number }) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(program.name);
+  const [startDate, setStartDate] = useState(program.start_date);
+  const [weeks, setWeeks] = useState(String(program.total_weeks));
+  const nextWeeks = Math.max(1, Math.min(104, Number(weeks) || program.total_weeks));
+
+  return (
+    <Sheet title="Edit program" onClose={onClose}>
+      <label className="mb-4 block">
+        <FieldLabel>Name</FieldLabel>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full rounded-xl border px-4 text-[15px] outline-none"
+          style={inputStyle}
+        />
+      </label>
+
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        <label className="block">
+          <FieldLabel>Start date</FieldLabel>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full rounded-xl border px-3 text-[15px] outline-none"
+            style={inputStyle}
+          />
+        </label>
+        <label className="block">
+          <FieldLabel>Total weeks</FieldLabel>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={104}
+            value={weeks}
+            onChange={(e) => setWeeks(e.target.value)}
+            className="w-full rounded-xl border px-4 text-[15px] tabular-nums outline-none"
+            style={inputStyle}
+          />
+        </label>
+      </div>
+
+      <p className="mb-5 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+        {startDate !== program.start_date && 'Moving the start date shifts every week and cycle day. '}
+        {nextWeeks < program.total_weeks
+          ? `Cutting to ${nextWeeks} weeks discards the deload settings and notes on weeks ${nextWeeks + 1}–${program.total_weeks}.`
+          : `The ${program.cycle_length}-day cycle is set when the program is created and can't be changed here.`}
+      </p>
+
+      <button
+        type="button"
+        onClick={() => {
+          onSave({ name, start_date: startDate || program.start_date, total_weeks: nextWeeks });
+          onClose();
+        }}
+        className="w-full rounded-full text-[15px] font-semibold active:scale-[0.98] active:opacity-85"
+        style={{ height: 52, background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+      >
+        Save
+      </button>
+    </Sheet>
+  );
+}
 
 /**
  * Which day the editor sheet is open on: a day of the default split, or one
@@ -86,6 +184,7 @@ export default function ProgramDetail({
   onBack: () => void;
 }) {
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [editingProgram, setEditingProgram] = useState(false);
 
   const defaults = useMemo(() => api.daysFor(program.id), [api, program.id]);
   const templateName = useMemo(() => {
@@ -163,10 +262,21 @@ export default function ProgramDetail({
           {program.is_active ? 'Active' : 'Set active'}
         </button>
       </div>
-      <p className="mb-6 pl-11 text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
-        {program.cycle_length}-day cycle · {program.total_weeks} weeks · starts{' '}
-        {parseISO(program.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-      </p>
+      <button
+        type="button"
+        onClick={() => setEditingProgram(true)}
+        className="mb-6 flex items-center gap-1.5 pl-11 text-[13px] active:opacity-70"
+        style={{ color: 'var(--color-text-secondary)' }}
+      >
+        <span>
+          {program.cycle_length}-day cycle · {program.total_weeks} weeks · starts{' '}
+          {parseISO(program.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+        </span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" style={{ color: 'var(--color-accent)' }}>
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+      </button>
 
       {/* Default split */}
       <SectionHeader>Default split</SectionHeader>
@@ -359,6 +469,14 @@ export default function ProgramDetail({
           );
         })}
       </div>
+
+      {editingProgram && (
+        <ProgramEditSheet
+          program={program}
+          onSave={(patch) => void api.updateProgram(program.id, patch)}
+          onClose={() => setEditingProgram(false)}
+        />
+      )}
 
       {editor && editing && (
         <DayEditSheet

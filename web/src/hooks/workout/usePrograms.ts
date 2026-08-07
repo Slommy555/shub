@@ -195,12 +195,62 @@ export function usePrograms(userId: string | null) {
     if (error) console.error('deleteProgram failed:', error.message);
   }, []);
 
-  const renameProgram = useCallback(async (id: string, name: string) => {
-    const trimmed = name.trim() || 'Program';
-    setPrograms((prev) => prev.map((p) => (p.id === id ? { ...p, name: trimmed } : p)));
-    const { error } = await supabase.from('workout_programs').update({ name: trimmed }).eq('id', id);
-    if (error) console.error('renameProgram failed:', error.message);
-  }, []);
+  /**
+   * Edit a program's name, start date or length. Moving the start date shifts
+   * the whole calendar — the weeks and the split both re-derive from it, so
+   * nothing else needs rewriting. Changing `total_weeks` adds or removes
+   * program_weeks rows so every week still has one; shrinking DROPS the deload
+   * flags and notes on the weeks that go away.
+   */
+  const updateProgram = useCallback(
+    async (
+      id: string,
+      patch: { name?: string; start_date?: string; total_weeks?: number }
+    ) => {
+      const existing = programs.find((p) => p.id === id);
+      if (!existing) return;
+
+      const next: { name?: string; start_date?: string; total_weeks?: number } = {};
+      if (patch.name !== undefined) next.name = patch.name.trim() || 'Program';
+      if (patch.start_date) next.start_date = patch.start_date;
+      if (patch.total_weeks !== undefined) {
+        next.total_weeks = Math.max(1, Math.min(104, Math.round(patch.total_weeks) || 1));
+      }
+
+      setPrograms((prev) => prev.map((p) => (p.id === id ? { ...p, ...next } : p)));
+      const { error } = await supabase.from('workout_programs').update(next).eq('id', id);
+      if (error) {
+        console.error('updateProgram failed:', error.message);
+        await reload();
+        return;
+      }
+
+      const total = next.total_weeks;
+      if (total !== undefined && total !== existing.total_weeks) {
+        if (total > existing.total_weeks) {
+          const added = Array.from({ length: total - existing.total_weeks }, (_, i) => ({
+            program_id: id,
+            week_number: existing.total_weeks + i + 1,
+            is_deload: false,
+            deload_volume_pct: 0.6,
+            notes: null,
+            override_days: null,
+          }));
+          const { error: addErr } = await supabase.from('program_weeks').insert(added);
+          if (addErr) console.error('updateProgram (add weeks) failed:', addErr.message);
+        } else {
+          const { error: delErr } = await supabase
+            .from('program_weeks')
+            .delete()
+            .eq('program_id', id)
+            .gt('week_number', total);
+          if (delErr) console.error('updateProgram (trim weeks) failed:', delErr.message);
+        }
+        await reload();
+      }
+    },
+    [programs, reload]
+  );
 
   /** Make one program active (or deactivate it), clearing the others. */
   const setActive = useCallback(
@@ -293,7 +343,7 @@ export function usePrograms(userId: string | null) {
     weekFor,
     createProgram,
     deleteProgram,
-    renameProgram,
+    updateProgram,
     setActive,
     setDefaultDay,
     setWeekFields,
