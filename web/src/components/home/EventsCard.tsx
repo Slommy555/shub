@@ -7,22 +7,24 @@ const MAX_ROWS = 4;
 
 /**
  * Today's timed blocks (tasks with both a start and an end time), earliest
- * first. The whole card is hidden when today has none.
+ * first. Lives here rather than inside the card so Home knows up front whether
+ * the card renders — the grid's column spans depend on it.
  */
-export default function EventsCard({
-  tasks,
-  onOpenTasks,
-}: {
-  tasks: Task[];
-  onOpenTasks: () => void;
-}) {
+export function todaysEvents(tasks: Task[]): Task[] {
   const today = todayISO();
-  const events = tasks
+  return tasks
     .filter((t) => isEvent(t) && (t.scheduled_date ?? t.due_date) === today)
     .sort((a, b) => (a.start_time! < b.start_time! ? -1 : 1));
+}
 
-  if (events.length === 0) return null;
-
+/** Today's schedule. Home hides the card entirely when there's nothing on it. */
+export default function EventsCard({
+  events,
+  onOpenTasks,
+}: {
+  events: Task[];
+  onOpenTasks: () => void;
+}) {
   return (
     <Card>
       <SectionHeader title="Today's Schedule" />
@@ -51,7 +53,7 @@ export default function EventsCard({
         <button
           type="button"
           onClick={onOpenTasks}
-          className="mt-2 text-[13px] font-medium active:opacity-70"
+          className="mt-auto pt-2 text-left text-[13px] font-medium active:opacity-70"
           style={{ color: 'var(--color-accent)' }}
         >
           View all

@@ -255,15 +255,22 @@ export interface WorkoutSummary {
 
 // --- Training programs -----------------------------------------------------
 // See supabase/migrations/056_workout_programs.sql. A program is a repeating
-// split (7- or 8-day cycle) run for a fixed number of weeks. An 8-day cycle is
-// NOT tied to weekdays — a "week" is one pass of the cycle.
+// split (7- or 8-day cycle) run for a fixed number of weeks.
+//
+// A WEEK is always 7 calendar days — that's the calendar row, the unit
+// `total_weeks` counts, and what a deload applies to. The SPLIT rotates on its
+// own `cycle_length`, so an 8-day split isn't tied to weekdays: Day 1 drifts one
+// weekday later each week and a 7-day week shows 7 of its 8 days.
+// (The migration's header comment predates this and still calls a week one pass
+// of the cycle — lib/program.ts is the accurate description.)
 
 export interface WorkoutProgram {
   id: string;
   user_id: string;
   name: string;
-  /** Days in one pass of the split (7 or 8). */
+  /** Days in one pass of the split (7 or 8) — independent of the 7-day week. */
   cycle_length: number;
+  /** Calendar weeks (7 days each) the block runs for. */
   total_weeks: number;
   start_date: string; // YYYY-MM-DD
   is_active: boolean;

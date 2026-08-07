@@ -100,8 +100,8 @@ function NewProgramSheet({
         </div>
         {cycle === 8 && (
           <p className="mt-2 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-            An 8-day cycle isn't tied to weekdays — days are labelled Day 1–8 and drift across the
-            calendar.
+            Weeks stay 7 days. An 8-day split isn't tied to weekdays, so Day 1–8 drift one weekday
+            later each week and any given week shows 7 of the 8.
           </p>
         )}
       </div>

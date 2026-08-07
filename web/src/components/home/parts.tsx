@@ -17,12 +17,15 @@ export function Card({
     borderRadius: 16,
     padding: 16,
   };
+  // h-full + flex column: cards stretch to fill their grid cell, and anything
+  // marked `mt-auto` inside them (footers, the Start button) pins to the bottom.
+  const base = 'flex h-full flex-col border';
   if (onClick) {
     return (
       <button
         type="button"
         onClick={onClick}
-        className={`w-full border text-left transition-colors active:opacity-90 ${className}`}
+        className={`${base} w-full items-stretch text-left transition-colors active:opacity-90 ${className}`}
         style={style}
       >
         {children}
@@ -30,7 +33,7 @@ export function Card({
     );
   }
   return (
-    <section className={`border ${className}`} style={style}>
+    <section className={`${base} ${className}`} style={style}>
       {children}
     </section>
   );
@@ -56,9 +59,9 @@ export function SectionHeader({ title, meta }: { title: string; meta?: React.Rea
 }
 
 /** A card-shaped skeleton, matching the real card's box so nothing jumps. */
-export function CardSkeleton({ rows = 3 }: { rows?: number }) {
+export function CardSkeleton({ rows = 3, className = '' }: { rows?: number; className?: string }) {
   return (
-    <Card>
+    <Card className={className}>
       <div className="skeleton mb-3 h-3 w-24 rounded" />
       <div className="flex flex-col gap-2">
         {Array.from({ length: rows }, (_, i) => (

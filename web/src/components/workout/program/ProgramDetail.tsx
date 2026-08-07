@@ -1,14 +1,23 @@
 import { useMemo, useState } from 'react';
 import type { TemplateWithExercises, WorkoutProgram } from '../../../types/workout';
 import type { UsePrograms } from '../../../hooks/workout/usePrograms';
-import { dateForCycleDay, resolveDay, weekRangeLabel } from '../../../lib/program';
+import {
+  WEEK_DAYS,
+  cycleDayFor,
+  dateForWeekDay,
+  resolveDay,
+  weekRangeLabel,
+} from '../../../lib/program';
 import { parseISO, todayISO } from '../../../lib/dates';
 import DayEditSheet, { type DayDraft } from './DayEditSheet';
 
-/** Which day the editor sheet is open on: the default split, or one week. */
+/**
+ * Which day the editor sheet is open on: a day of the default split, or one
+ * cycle day inside one calendar week (`iso` is only for the sheet's title).
+ */
 type Editing =
   | { scope: 'default'; dayNumber: number }
-  | { scope: 'week'; weekNumber: number; dayNumber: number };
+  | { scope: 'week'; weekNumber: number; dayNumber: number; iso: string };
 
 /** Amber tint used for deload weeks (warning color at low alpha). */
 const DELOAD_TINT = 'color-mix(in srgb, var(--color-warning) 14%, transparent)';
@@ -24,11 +33,10 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** "Mon" for a 7-day cycle day, "Day 3" for an 8-day one (which isn't weekday-tied). */
-function dayHeading(program: WorkoutProgram, weekNumber: number, dayNumber: number): string {
-  if (program.cycle_length !== 7) return `Day ${dayNumber}`;
-  const iso = dateForCycleDay(program, weekNumber, dayNumber);
-  return parseISO(iso).toLocaleDateString(undefined, { weekday: 'short' });
+/** "Mon 11" — the calendar identity of a cell, since weeks are real weeks. */
+function dayHeading(iso: string): string {
+  const d = parseISO(iso);
+  return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${d.getDate()}`;
 }
 
 /** An inline note field that commits on blur (never on every keystroke). */
@@ -57,11 +65,14 @@ function NoteInput({ value, onSave }: { value: string; onSave: (v: string) => vo
 }
 
 /**
- * A program as a calendar: one row per week (a full pass of the cycle), each
- * with its day cells, a deload toggle and a note. The default split lives above
- * the calendar — editing a day there changes every week that hasn't been
- * overridden; editing a day inside a week row writes an override on that week
- * only (program_weeks.override_days).
+ * A program as a calendar: one row per CALENDAR week (always 7 days), each with
+ * its day cells, a deload toggle and a note. The split rotates on its own
+ * `cycle_length`, so with an 8-day cycle the Day 1–8 badges drift one weekday
+ * later each week and any given week shows 7 of the 8.
+ *
+ * The default split lives above the calendar — editing a day there changes every
+ * week that hasn't been overridden; editing a day inside a week row writes an
+ * override on that week only (program_weeks.override_days).
  */
 export default function ProgramDetail({
   program,
@@ -83,7 +94,10 @@ export default function ProgramDetail({
   }, [templates]);
 
   const today = todayISO();
+  /** The split's own days (1..cycle_length) — the Default split rows. */
   const dayNumbers = Array.from({ length: program.cycle_length }, (_, i) => i + 1);
+  /** Positions within a calendar week (1..7) — the calendar's columns. */
+  const weekDayIndexes = Array.from({ length: WEEK_DAYS }, (_, i) => i + 1);
   const weekNumbers = Array.from({ length: program.total_weeks }, (_, i) => i + 1);
 
   /** What the sheet should open with, and where saving it should write. */
@@ -103,8 +117,8 @@ export default function ProgramDetail({
     const week = api.weekFor(program.id, editing.weekNumber);
     const d = resolveDay(editing.dayNumber, defaults, week);
     return {
-      title: `Week ${editing.weekNumber} · Day ${editing.dayNumber}`,
-      scopeNote: `Changes this day in week ${editing.weekNumber} only.`,
+      title: `Week ${editing.weekNumber} · ${dayHeading(editing.iso)}`,
+      scopeNote: `Changes Day ${editing.dayNumber} in week ${editing.weekNumber} only.`,
       value: { template_id: d.template_id, label: d.label, is_rest: d.is_rest } as DayDraft,
       onSave: (draft: DayDraft) =>
         void api.setWeekDayOverride(program.id, editing.weekNumber, editing.dayNumber, draft),
@@ -273,39 +287,50 @@ export default function ProgramDetail({
                 </div>
               )}
 
-              {/* Day cells */}
+              {/* Day cells — always the 7 days of the calendar week. */}
               <div className="-mx-1 overflow-x-auto px-1">
                 <div
                   className="grid gap-2"
-                  style={{
-                    gridTemplateColumns: `repeat(${program.cycle_length}, minmax(78px, 1fr))`,
-                  }}
+                  style={{ gridTemplateColumns: `repeat(${WEEK_DAYS}, minmax(78px, 1fr))` }}
                 >
-                  {dayNumbers.map((dn) => {
-                    const d = resolveDay(dn, defaults, week);
-                    const iso = dateForCycleDay(program, wn, dn);
+                  {weekDayIndexes.map((i) => {
+                    const iso = dateForWeekDay(program, wn, i);
+                    const cycleDay = cycleDayFor(program, iso);
+                    const d = resolveDay(cycleDay, defaults, week);
                     const isToday = iso === today;
                     const name = d.is_rest
                       ? 'Rest'
                       : (d.label ?? templateName(d.template_id) ?? '—');
                     return (
                       <button
-                        key={dn}
+                        key={i}
                         type="button"
-                        onClick={() => setEditing({ scope: 'week', weekNumber: wn, dayNumber: dn })}
+                        onClick={() =>
+                          setEditing({ scope: 'week', weekNumber: wn, dayNumber: cycleDay, iso })
+                        }
                         className="flex flex-col items-start gap-1 rounded-xl border p-2 text-left active:opacity-80"
                         style={{
-                          minHeight: 68,
+                          minHeight: 72,
                           background: d.is_rest ? 'transparent' : 'var(--color-accent-subtle)',
                           borderColor: isToday ? 'var(--color-accent)' : 'var(--color-border)',
                           borderWidth: isToday ? 2 : 1,
                         }}
                       >
-                        <span
-                          className="text-[11px] font-medium"
-                          style={{ color: isToday ? 'var(--color-accent)' : 'var(--color-text-tertiary)', letterSpacing: '0.04em' }}
-                        >
-                          {dayHeading(program, wn, dn)}
+                        <span className="flex w-full items-baseline justify-between gap-1">
+                          <span
+                            className="text-[11px] font-medium"
+                            style={{ color: isToday ? 'var(--color-accent)' : 'var(--color-text-tertiary)', letterSpacing: '0.04em' }}
+                          >
+                            {dayHeading(iso)}
+                          </span>
+                          {/* Which day of the split this is — the 8-day cycle's
+                              badge walks one weekday later each week. */}
+                          <span
+                            className="shrink-0 text-[10px] font-medium tabular-nums"
+                            style={{ color: 'var(--color-accent-muted)' }}
+                          >
+                            D{cycleDay}
+                          </span>
                         </span>
                         <span
                           className="line-clamp-2 text-[12px] font-medium leading-tight"

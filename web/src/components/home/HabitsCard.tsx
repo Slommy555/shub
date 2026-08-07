@@ -13,15 +13,25 @@ export default function HabitsCard({ userId }: { userId: string }) {
   const today = todayISO();
 
   if (loading) return <CardSkeleton rows={4} />;
-  if (habits.length === 0) return null;
+  if (habits.length === 0) {
+    return (
+      <Card>
+        <SectionHeader title="Habits" />
+        <p className="text-[15px]" style={{ color: 'var(--color-text-tertiary)' }}>
+          No habits yet
+        </p>
+      </Card>
+    );
+  }
 
   const doneCount = habits.filter((h) => doneByHabit.get(h.id)?.has(today)).length;
 
   return (
     <Card>
       <SectionHeader title="Habits" meta={`${doneCount} / ${habits.length} complete`} />
-      {/* Caps the card at ~5 rows; anything more scrolls inside the card. */}
-      <div className="-mr-1 flex flex-col overflow-y-auto pr-1" style={{ maxHeight: 200 }}>
+      {/* Mobile caps the list at ~5 rows and scrolls; on wider screens the card
+          stretches to fill its grid cell and the list grows into it. */}
+      <div className="-mr-1 flex max-h-[200px] min-h-0 flex-1 flex-col overflow-y-auto pr-1 sm:max-h-none">
         {habits.map((h) => {
           const done = doneByHabit.get(h.id)?.has(today) ?? false;
           return (

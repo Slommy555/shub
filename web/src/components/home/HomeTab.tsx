@@ -4,7 +4,7 @@ import type { Tab } from '../nav/tabs';
 import ProgramCard from './ProgramCard';
 import HabitsCard from './HabitsCard';
 import TasksCard from './TasksCard';
-import EventsCard from './EventsCard';
+import EventsCard, { todaysEvents } from './EventsCard';
 import BudgetCard from './BudgetCard';
 
 /** The name the greeting uses. */
@@ -36,9 +36,21 @@ export default function HomeTab({
   onToggleTask: (id: string, done: boolean) => void;
   onNavigate: (tab: Tab) => void;
 }) {
+  const events = todaysEvents(tasks);
+  const openTasks = () => onNavigate('todo');
+
+  // Budget is the wide tile that closes out the grid, so its span is whatever
+  // fills the last row — which depends on whether the Schedule card is showing.
+  //   2 cols, with events: P H / T E / B B      2 cols, without: P H / T B
+  //   3 cols, with events: P H T / E B B        3 cols, without: P H T / B B B
+  const budgetSpan = events.length > 0 ? 'sm:col-span-2 xl:col-span-2' : 'sm:col-span-1 xl:col-span-3';
+
   return (
-    <div className="ui-scope min-h-screen" style={{ background: 'var(--color-bg-base)' }}>
-      <div className="pb-fab mx-auto w-full max-w-app px-4 py-6 sm:px-6">
+    <div
+      className="ui-scope flex min-h-screen flex-col"
+      style={{ background: 'var(--color-bg-base)' }}
+    >
+      <div className="pb-fab mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-6 sm:px-6">
         <h1
           className="text-xl font-bold"
           style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}
@@ -49,25 +61,25 @@ export default function HomeTab({
           {formatDayLong(todayISO())}
         </p>
 
-        {/* Mobile stacks; desktop pairs the columns and lets Budget span both. */}
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="flex flex-col gap-4">
-            <ProgramCard userId={userId} onOpenWorkout={() => onNavigate('workout')} />
-            <EventsCard tasks={tasks} onOpenTasks={() => onNavigate('todo')} />
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <HabitsCard userId={userId} />
-            <TasksCard
-              tasks={tasks}
-              onToggle={onToggleTask}
-              onOpenTasks={() => onNavigate('todo')}
-            />
-          </div>
-
-          <div className="lg:col-span-2">
-            <BudgetCard userId={userId} onOpenBudget={() => onNavigate('budget')} />
-          </div>
+        {/*
+          One tile per cell, 1 → 2 → 3 columns. `minmax(min-content, 1fr)` rows
+          never squash a tile below its content but do share out any leftover
+          height, so the grid fills the screen on a short page and simply scrolls
+          on a long one — on phones as well as desktop.
+        */}
+        <div
+          className="grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          style={{ gridAutoRows: 'minmax(min-content, 1fr)' }}
+        >
+          <ProgramCard userId={userId} onOpenWorkout={() => onNavigate('workout')} />
+          <HabitsCard userId={userId} />
+          <TasksCard tasks={tasks} onToggle={onToggleTask} onOpenTasks={openTasks} />
+          {events.length > 0 && <EventsCard events={events} onOpenTasks={openTasks} />}
+          <BudgetCard
+            userId={userId}
+            onOpenBudget={() => onNavigate('budget')}
+            className={budgetSpan}
+          />
         </div>
       </div>
     </div>

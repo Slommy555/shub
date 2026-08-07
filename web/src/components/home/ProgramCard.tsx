@@ -137,15 +137,16 @@ export default function ProgramCard({
         </p>
       )}
 
+      {/* mt-auto keeps the CTA on the card's bottom edge when it stretches. */}
       {workoutDone ? (
-        <p className="mt-4 text-[15px] font-semibold" style={{ color: 'var(--color-success)' }}>
+        <p className="mt-auto pt-4 text-[15px] font-semibold" style={{ color: 'var(--color-success)' }}>
           ✓ Workout complete
         </p>
       ) : (
         <button
           type="button"
           onClick={startWorkout}
-          className="mt-4 w-full rounded-full text-[15px] font-semibold active:scale-[0.98] active:opacity-85"
+          className="mt-auto w-full shrink-0 rounded-full text-[15px] font-semibold active:scale-[0.98] active:opacity-85"
           style={{ height: 52, background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
         >
           Start Workout

@@ -92,27 +92,30 @@ export default function TasksCard({
         </div>
       )}
 
-      {due.length > MAX_ROWS && (
-        <button
-          type="button"
-          onClick={onOpenTasks}
-          className="mt-2 text-[13px] font-medium active:opacity-70"
-          style={{ color: 'var(--color-accent)' }}
-        >
-          View {due.length - MAX_ROWS} more
-        </button>
-      )}
+      {/* mt-auto pins the links to the bottom when the card stretches. */}
+      <div className="mt-auto flex flex-col items-start">
+        {due.length > MAX_ROWS && (
+          <button
+            type="button"
+            onClick={onOpenTasks}
+            className="pt-2 text-[13px] font-medium active:opacity-70"
+            style={{ color: 'var(--color-accent)' }}
+          >
+            View {due.length - MAX_ROWS} more
+          </button>
+        )}
 
-      {tomorrowCount > 0 && (
-        <button
-          type="button"
-          onClick={onOpenTasks}
-          className="mt-3 block text-left text-[13px] active:opacity-70"
-          style={{ color: 'var(--color-text-tertiary)' }}
-        >
-          {tomorrowCount} task{tomorrowCount === 1 ? '' : 's'} scheduled for tomorrow
-        </button>
-      )}
+        {tomorrowCount > 0 && (
+          <button
+            type="button"
+            onClick={onOpenTasks}
+            className="pt-3 text-left text-[13px] active:opacity-70"
+            style={{ color: 'var(--color-text-tertiary)' }}
+          >
+            {tomorrowCount} task{tomorrowCount === 1 ? '' : 's'} scheduled for tomorrow
+          </button>
+        )}
+      </div>
     </Card>
   );
 }

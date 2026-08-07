@@ -1,9 +1,14 @@
 // Cycle math for training programs. Everything is keyed off calendar days in the
 // user's local zone (YYYY-MM-DD), matching the `start_date` column.
 //
-// A program repeats a split of `cycle_length` days (7 or 8). A "week" is one
-// pass of that cycle — for an 8-day cycle the days are deliberately NOT tied to
-// weekdays, so Day 1 drifts across the calendar as the block runs.
+// Two independent rhythms:
+//   * the WEEK is always 7 calendar days — that's what the calendar rows show,
+//     what `total_weeks` counts, and what a deload flag applies to;
+//   * the SPLIT repeats every `cycle_length` days (7 or 8). With an 8-day cycle
+//     the split is NOT tied to weekdays, so Day 1 drifts one weekday later each
+//     week and a 7-day week shows 7 of the 8 cycle days.
+//
+// With cycle_length 7 the two line up exactly and Day N is always the same weekday.
 
 import { addDays, parseISO, toISODate } from './dates';
 import type {
@@ -12,6 +17,9 @@ import type {
   ResolvedProgramDay,
   WorkoutProgram,
 } from '../types/workout';
+
+/** A calendar week — the unit `total_weeks` counts and the calendar rows show. */
+export const WEEK_DAYS = 7;
 
 /** Whole calendar days from `fromISO` to `toISO` (negative before the start). */
 export function daysBetween(fromISO: string, toISO: string): number {
@@ -33,35 +41,35 @@ export function cycleDayFor(program: WorkoutProgram, iso: string): number {
 }
 
 /**
- * The 1-based week (cycle pass) a date falls in. Returns null when the date is
- * before the program starts or past its final week.
+ * The 1-based CALENDAR week a date falls in — always 7 days, whatever the cycle
+ * length. Returns null when the date is before the program starts or past its
+ * final week.
  */
 export function weekNumberFor(program: WorkoutProgram, iso: string): number | null {
-  const len = Math.max(1, program.cycle_length);
   const since = daysBetween(program.start_date, iso);
   if (since < 0) return null;
-  const week = Math.floor(since / len) + 1;
+  const week = Math.floor(since / WEEK_DAYS) + 1;
   return week > program.total_weeks ? null : week;
 }
 
-/** The first calendar date of a week (cycle pass). */
+/** The first calendar date of a week. */
 export function weekStartISO(program: WorkoutProgram, weekNumber: number): string {
-  return addDays(program.start_date, (weekNumber - 1) * Math.max(1, program.cycle_length));
+  return addDays(program.start_date, (weekNumber - 1) * WEEK_DAYS);
 }
 
-/** The ISO date a specific (week, cycle day) pair falls on. */
-export function dateForCycleDay(
+/** The ISO date of the `index`-th day (1..7) of a calendar week. */
+export function dateForWeekDay(
   program: WorkoutProgram,
   weekNumber: number,
-  dayNumber: number
+  index: number
 ): string {
-  return addDays(weekStartISO(program, weekNumber), dayNumber - 1);
+  return addDays(weekStartISO(program, weekNumber), index - 1);
 }
 
 /** "Aug 7 – Aug 13" for a week row. */
 export function weekRangeLabel(program: WorkoutProgram, weekNumber: number): string {
   const start = weekStartISO(program, weekNumber);
-  const end = addDays(start, Math.max(1, program.cycle_length) - 1);
+  const end = addDays(start, WEEK_DAYS - 1);
   const fmt = (iso: string) =>
     parseISO(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return `${fmt(start)} – ${fmt(end)}`;
@@ -69,12 +77,16 @@ export function weekRangeLabel(program: WorkoutProgram, weekNumber: number): str
 
 /** The last date covered by the program (its final week's final day). */
 export function programEndISO(program: WorkoutProgram): string {
-  return addDays(program.start_date, program.total_weeks * Math.max(1, program.cycle_length) - 1);
+  return addDays(program.start_date, program.total_weeks * WEEK_DAYS - 1);
 }
 
 /**
  * A day as it actually resolves: the default split row, with the week's
  * `override_days` patch applied on top when one exists for that cycle day.
+ *
+ * Overrides are keyed by CYCLE day inside a given week, which pins them to one
+ * calendar day: a 7-day week holds 7 consecutive cycle days, all distinct for
+ * either offered cycle length (7 or 8).
  */
 export function resolveDay(
   dayNumber: number,

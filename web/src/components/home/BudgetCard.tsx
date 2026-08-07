@@ -6,16 +6,18 @@ import { Card, CardSkeleton, SectionHeader } from './parts';
 export default function BudgetCard({
   userId,
   onOpenBudget,
+  className = '',
 }: {
   userId: string;
   onOpenBudget: () => void;
+  className?: string;
 }) {
   const b = useHomeBudget(userId);
 
-  if (!b.ready) return <CardSkeleton rows={2} />;
+  if (!b.ready) return <CardSkeleton rows={2} className={className} />;
 
   return (
-    <Card onClick={onOpenBudget}>
+    <Card onClick={onOpenBudget} className={className}>
       <SectionHeader title="Budget" />
 
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -30,7 +32,7 @@ export default function BudgetCard({
         </span>
       </div>
 
-      <p className="mt-2 text-[13px] tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
+      <p className="mt-auto pt-2 text-[13px] tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
         Bills {formatMoney(b.bills)} &nbsp;•&nbsp; Credit {formatMoney(b.creditCards)} &nbsp;•&nbsp;
         Savings {formatMoney(b.savingsPool)}
       </p>
