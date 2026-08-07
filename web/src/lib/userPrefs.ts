@@ -8,6 +8,7 @@ export interface UserPrefsRow {
   show_rpe?: unknown;
   work_schedule?: unknown;
   accent_color?: unknown;
+  home_layout?: unknown;
 }
 
 /**
@@ -32,7 +33,7 @@ export function watchUserPrefs(
   const resync = async () => {
     const { data } = await supabase
       .from('user_preferences')
-      .select('theme, custom_colors, show_rpe, work_schedule, accent_color')
+      .select('theme, custom_colors, show_rpe, work_schedule, accent_color, home_layout')
       .eq('user_id', userId)
       .maybeSingle();
     if (data) apply(data as UserPrefsRow);
