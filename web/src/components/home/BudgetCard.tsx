@@ -25,20 +25,33 @@ function Stat({ label, value, color }: { label: string; value: number; color?: s
   );
 }
 
-/** A quieter label/value pair for the desktop-only detail strip. */
-function Detail({ label, value, color }: { label: string; value: string; color?: string }) {
+/** One term of the headline equation: a big number over a quiet caption. */
+function Term({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="truncate text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+    <div className="flex min-w-0 flex-col">
+      <span
+        className="truncate text-[24px] font-bold leading-none tabular-nums sm:text-[32px]"
+        style={{ color: color ?? 'var(--color-text-primary)', letterSpacing: '-0.02em' }}
+      >
+        {formatMoney(value)}
+      </span>
+      <span className="mt-1.5 truncate text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
         {label}
       </span>
-      <span
-        className="truncate text-[15px] font-medium tabular-nums"
-        style={{ color: color ?? 'var(--color-text-secondary)' }}
-      >
-        {value}
-      </span>
     </div>
+  );
+}
+
+/** The − and = between the terms, sitting on the numbers' line. */
+function Op({ children }: { children: string }) {
+  return (
+    <span
+      // Nudged down so the smaller glyph sits on the numbers' line, not above it.
+      className="shrink-0 pt-[2px] text-[20px] font-medium leading-none sm:pt-[4px] sm:text-[26px]"
+      style={{ color: 'var(--color-text-tertiary)' }}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -59,8 +72,6 @@ export default function BudgetCard({
 
   if (!b.ready) return <CardSkeleton rows={2} className={className} />;
 
-  const shortfall = b.setAsideNeeded - b.setAside;
-
   return (
     <Card onClick={onOpenBudget} className={className}>
       <SectionHeader
@@ -72,44 +83,17 @@ export default function BudgetCard({
         }
       />
 
-      {/* Hero: what's left after this pay week's set-asides. */}
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div className="flex min-w-0 flex-col">
-          <span
-            className="text-[32px] font-bold leading-none tabular-nums"
-            style={{
-              color: b.weekLeft >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            {formatMoney(b.weekLeft)}
-          </span>
-          <span className="mt-1.5 text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
-            left this week
-          </span>
-        </div>
-
-        <div className="flex min-w-0 flex-col sm:items-end">
-          <span
-            className="text-[24px] font-semibold leading-none tabular-nums"
-            style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}
-          >
-            {formatMoney(b.setAside)}
-            <span className="text-[17px]" style={{ color: 'var(--color-text-tertiary)' }}>
-              {' / '}
-              {formatMoney(b.setAsideNeeded)}
-            </span>
-          </span>
-          <span className="mt-1.5 text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
-            set aside
-            {shortfall > 0.5 && (
-              <span style={{ color: 'var(--color-warning)' }}>
-                {' '}
-                · {formatMoney(shortfall)} short
-              </span>
-            )}
-          </span>
-        </div>
+      {/* The week as one equation: paycheck − what's put away = what's left. */}
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-3">
+        <Term label="paycheck" value={b.income} />
+        <Op>−</Op>
+        <Term label="put away" value={b.setAside} />
+        <Op>=</Op>
+        <Term
+          label="left over"
+          value={b.weekLeft}
+          color={b.weekLeft >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}
+        />
       </div>
 
       {/* Where this week's money goes. All three are weekly. */}
@@ -117,21 +101,6 @@ export default function BudgetCard({
         <Stat label="Fixed expenses" value={b.billsWeekly} />
         <Stat label="Credit cards" value={b.creditWeekly} />
         <Stat label="To savings" value={b.savingsWeekly} color="var(--color-success)" />
-      </div>
-
-      {/* Desktop has the width for the surrounding context; phones don't. */}
-      <div
-        className="mt-4 hidden grid-cols-2 gap-x-4 gap-y-3 border-t pt-4 sm:grid"
-        style={{ borderColor: 'var(--color-border)' }}
-      >
-        <Detail label="Income this week" value={formatMoney(b.income)} />
-        <Detail label="One-off expenses" value={formatMoney(b.scheduledWeekly)} />
-        <Detail label="Savings pool" value={formatMoney(b.savingsPool)} />
-        <Detail
-          label="Card balances owed"
-          value={formatMoney(b.cardsOwed)}
-          color={b.cardsOwed > 0 ? 'var(--color-danger)' : undefined}
-        />
       </div>
     </Card>
   );

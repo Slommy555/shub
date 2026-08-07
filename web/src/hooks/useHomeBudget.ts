@@ -8,7 +8,6 @@ import {
   weeklyFromMonthly,
   weeksInMonth,
   type BudgetGroup,
-  type CreditCard,
 } from '../types/budget';
 import { useBudgets } from './budget/useBudgets';
 import { useBudgetGroups } from './budget/useBudgetGroups';
@@ -31,12 +30,10 @@ export interface HomeBudget {
   ready: boolean;
   /** "Thu, Jul 30" — the pay week these numbers describe. */
   weekLabel: string;
-  /** That pay day's income minus everything the week has to cover. */
+  /** income − setAside: what the paycheck leaves you after this week's outgoings. */
   weekLeft: number;
-  /** What's actually been set aside on this pay day. */
+  /** Everything this pay day puts away — bills, cards, one-offs and savings. */
   setAside: number;
-  /** What this pay day should be setting aside in total. */
-  setAsideNeeded: number;
 
   // The three tiles — all weekly, all scoped to the pay week above.
   /** Fixed expenses this week (the Savings category excluded — it has its own). */
@@ -46,15 +43,8 @@ export interface HomeBudget {
   /** What you're putting into savings on this pay day. */
   savingsWeekly: number;
 
-  // Desktop-only detail.
-  /** This pay day's income. */
+  /** This pay day's income — the headline `weekLeft` is measured off it. */
   income: number;
-  /** Scheduled one-offs' slice of this week. */
-  scheduledWeekly: number;
-  /** The running savings pool balance for the month. */
-  savingsPool: number;
-  /** Total still owed across all cards. */
-  cardsOwed: number;
   /** "Paycheck 2 of 5" — 0 when the pay day isn't in the loaded month. */
   payDayNumber: number;
   payDayCount: number;
@@ -130,9 +120,6 @@ export function useHomeBudget(userId: string | null): HomeBudget {
   const coveredOf = (g: BudgetGroup) =>
     Math.min(earmarkOf(g), resolvedMonthlyOf(g)) / weeks;
 
-  const cardRemaining = (c: CreditCard) =>
-    Math.max(0, (Number(c.balance) || 0) - cardPayments.paidTotal(c.id));
-
   // --- the three tiles, all scoped to THIS pay week --------------------------
   // Bills = fixed expenses only. The "Savings" category is a recurring group but
   // it isn't an expense — it gets its own tile, so counting it here would say the
@@ -153,19 +140,15 @@ export function useHomeBudget(userId: string | null): HomeBudget {
   // Savings = what you're putting away on this pay day.
   const savingsWeekly = deposits.deposits.find((d) => d.date === payDate)?.amount ?? 0;
 
-  // --- this pay week's waterfall -------------------------------------------
+  // --- what this pay week actually puts away --------------------------------
+  // One running total, so the card can state it as a plain equation:
+  //   paycheck − put away = left over.
   let setAside = 0;
-  let needed = 0;
-  /** Scheduled one-offs' slice of this week — surfaced in the desktop detail. */
-  let scheduledWeekly = 0;
 
-  // Undated recurring groups: no ledger, so the weekly set-aside is both the
-  // target and what counts as put away.
+  // Undated recurring groups: no ledger, so their weekly set-aside just counts.
   for (const g of recurringGroups) {
     if (isSavings(g) || g.due_day != null) continue;
-    const amount = Math.max(0, grossWeeklyOf(g) - coveredOf(g));
-    setAside += amount;
-    needed += amount;
+    setAside += Math.max(0, grossWeeklyOf(g) - coveredOf(g));
   }
 
   // Dated groups: a per-month payoff tracker. Float Savings assumes the flat
@@ -173,21 +156,17 @@ export function useHomeBudget(userId: string | null): HomeBudget {
   // payments is what made this read low.
   for (const g of recurringGroups) {
     if (isSavings(g) || g.due_day == null) continue;
-    const net = savingsOffset(resolvedMonthlyOf(g), earmarkOf(g)).net;
-    const suggested = weeklyFromMonthly(net, monthStart);
     const recorded = groupPayments.paymentOn(g.id, payDate);
-    setAside += recorded ?? (g.float_savings === true ? suggested : 0);
-    needed += suggested;
+    if (recorded !== undefined) {
+      setAside += recorded;
+    } else if (g.float_savings === true) {
+      const net = savingsOffset(resolvedMonthlyOf(g), earmarkOf(g)).net;
+      setAside += weeklyFromMonthly(net, monthStart);
+    }
   }
 
-  // Credit cards: the pace that clears the balance by the due date. A card with
-  // no due date has no schedule, so it asks for nothing this week (the same rule
-  // the Bills/Credit tile uses) — it would otherwise demand its whole balance.
+  // Credit cards: what's recorded against them this pay day.
   for (const c of creditCards.cards) {
-    if (c.due_date) {
-      const remaining = Math.max(0, (Number(c.balance) || 0) - cardPayments.paidBefore(c.id, payDate));
-      if (remaining > 0) needed += remaining / payDatesThrough(payDate, c.due_date);
-    }
     setAside += cardPayments.paymentOn(c.id, payDate) ?? 0;
   }
 
@@ -200,20 +179,14 @@ export function useHomeBudget(userId: string | null): HomeBudget {
     const remaining = Math.max(0, (Number(e.amount) || 0) - saved);
     if (!(remaining > 0)) continue;
     const start = e.save_from_date ?? (e.created_at ? e.created_at.slice(0, 10) : payDate);
-    const amount = remaining / payDatesThrough(start, e.due_date ?? null);
-    scheduledWeekly += amount;
-    setAside += amount;
-    needed += amount;
+    setAside += remaining / payDatesThrough(start, e.due_date ?? null);
   }
 
-  // This pay day's savings deposit counts on both sides — it's money moved, and
-  // there's no separate "target deposit" to compare it against.
+  // Plus whatever went into savings on this pay day.
   setAside += savingsWeekly;
-  needed += savingsWeekly;
 
   const income = payDays.find((p) => p.date === payDate)?.income ?? 0;
   const payDayIndex = payDays.findIndex((p) => p.date === payDate);
-  const cardsOwed = creditCards.cards.reduce((s, c) => s + cardRemaining(c), 0);
 
   return {
     ready: budgetId !== null,
@@ -224,14 +197,10 @@ export function useHomeBudget(userId: string | null): HomeBudget {
     }),
     weekLeft: income - setAside,
     setAside,
-    setAsideNeeded: needed,
     billsWeekly,
     creditWeekly,
     savingsWeekly,
     income,
-    scheduledWeekly,
-    savingsPool: savings.totalSaved,
-    cardsOwed,
     payDayNumber: payDayIndex >= 0 ? payDayIndex + 1 : 0,
     payDayCount: payDays.length,
   };
