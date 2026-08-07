@@ -19,6 +19,30 @@ interface Props {
   onWorkoutFinished: () => void;
   onSaveAsTemplate: (name: string, exercises: SessionExercise[]) => Promise<string | null>;
   showRpe: boolean;
+  /** Set when today falls in a deload week of the active program. */
+  deload?: { volumePct: number } | null;
+  /** Deload starting weight per exercise (null = keep the template's plan). */
+  prefillWeight?: (exerciseId: string) => number | null;
+}
+
+/** "Deload Week — working at 60% today", shown while a deload week is running. */
+function DeloadBanner({ pct }: { pct: number }) {
+  return (
+    <div
+      className="mx-auto mb-4 flex max-w-app items-center gap-2.5 rounded-2xl border px-4 py-3"
+      style={{
+        background: 'color-mix(in srgb, var(--color-warning, #f0a04b) 14%, transparent)',
+        borderColor: 'var(--color-warning, #f0a04b)',
+      }}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f0a04b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+        <path d="M12 3v3M12 18v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M3 12h3M18 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
+      </svg>
+      <span className="text-sm font-semibold" style={{ color: '#f0a04b' }}>
+        Deload Week — working at {Math.round(pct * 100)}% today
+      </span>
+    </div>
+  );
 }
 
 export default function LogTab({
@@ -31,25 +55,37 @@ export default function LogTab({
   onWorkoutFinished,
   onSaveAsTemplate,
   showRpe,
+  deload,
+  prefillWeight,
 }: Props) {
   // Finishing clears the session from the store, so the summary is held here —
   // otherwise the active-session screen unmounts before it can be shown.
   const [finished, setFinished] = useState<FinishedWorkout | null>(null);
 
+  const startTemplate = (t: TemplateWithExercises) =>
+    sessionApi.startFromTemplate(t, prefillWeight);
+
   // Active session takes over the whole tab.
   if (sessionApi.session) {
     return (
-      <ActiveWorkoutSession
-        api={sessionApi}
-        exercises={exercises}
-        onCreateCustom={createCustom}
-        onDeleteExercise={deleteExercise}
-        onFinished={(summary, snapshot, auto) => {
-          setFinished({ summary, name: snapshot.name, exercises: snapshot.exercises, auto });
-          onWorkoutFinished();
-        }}
-        showRpe={showRpe}
-      />
+      <>
+        {deload && (
+          <div className="px-4 pt-4">
+            <DeloadBanner pct={deload.volumePct} />
+          </div>
+        )}
+        <ActiveWorkoutSession
+          api={sessionApi}
+          exercises={exercises}
+          onCreateCustom={createCustom}
+          onDeleteExercise={deleteExercise}
+          onFinished={(summary, snapshot, auto) => {
+            setFinished({ summary, name: snapshot.name, exercises: snapshot.exercises, auto });
+            onWorkoutFinished();
+          }}
+          showRpe={showRpe}
+        />
+      </>
     );
   }
 
@@ -65,6 +101,8 @@ export default function LogTab({
 
   return (
     <div className="pb-fab mx-auto max-w-app space-y-5 p-4">
+      {deload && <DeloadBanner pct={deload.volumePct} />}
+
       <div>
         <h1 className="text-lg font-bold">Start a workout</h1>
         <p className="text-sm text-gray-500">Pick a template or go freestyle.</p>
@@ -109,7 +147,7 @@ export default function LogTab({
               <button
                 key={t.id}
                 type="button"
-                onClick={() => sessionApi.startFromTemplate(t)}
+                onClick={() => startTemplate(t)}
                 className="surface flex w-full items-center justify-between gap-3 p-4 text-left transition-[transform,background-color] hover:bg-gray-50 active:scale-[0.99] dark:hover:bg-gray-800"
               >
                 <span className="min-w-0">

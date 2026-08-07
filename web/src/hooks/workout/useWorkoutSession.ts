@@ -79,8 +79,17 @@ export function useWorkoutSession(userId: string | null) {
     setSession((s) => (s ? { ...s, name: name.trim() || s.name } : s));
   }, []);
 
-  const startFromTemplate = useCallback((tpl: TemplateWithExercises) => {
+  /**
+   * Start a session from a template. `weightFor` (used by the deload pre-fill)
+   * can override every set's starting weight per exercise; returning null keeps
+   * the template's planned weight.
+   */
+  const startFromTemplate = useCallback((
+    tpl: TemplateWithExercises,
+    weightFor?: (exerciseId: string) => number | null
+  ) => {
     const exercises: SessionExercise[] = tpl.exercises.map((te) => {
+      const override = weightFor?.(te.exercise_id) ?? null;
       // Prefer the explicit per-set plan; fall back to legacy default_* counts.
       const planned =
         te.sets && te.sets.length > 0
@@ -93,7 +102,7 @@ export function useWorkoutSession(userId: string | null) {
             }));
       const sets: SessionSet[] = planned.map((s) => ({
         id: crypto.randomUUID(),
-        weight_lbs: s.weight ?? null,
+        weight_lbs: override ?? s.weight ?? null,
         reps: s.reps ?? null,
         rpe: null,
         notes: '',

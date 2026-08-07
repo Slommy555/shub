@@ -253,6 +253,62 @@ export interface WorkoutSummary {
   muscleGroups: MuscleGroup[];
 }
 
+// --- Training programs -----------------------------------------------------
+// See supabase/migrations/056_workout_programs.sql. A program is a repeating
+// split (7- or 8-day cycle) run for a fixed number of weeks. An 8-day cycle is
+// NOT tied to weekdays — a "week" is one pass of the cycle.
+
+export interface WorkoutProgram {
+  id: string;
+  user_id: string;
+  name: string;
+  /** Days in one pass of the split (7 or 8). */
+  cycle_length: number;
+  total_weeks: number;
+  start_date: string; // YYYY-MM-DD
+  is_active: boolean;
+  created_at?: string;
+}
+
+/** One day of the DEFAULT split (day_number is 1..cycle_length). */
+export interface ProgramDay {
+  id: string;
+  program_id: string;
+  day_number: number;
+  template_id: string | null;
+  label: string | null;
+  is_rest: boolean;
+}
+
+/** A patch applied to one cycle day in one specific week. */
+export interface ProgramDayOverride {
+  template_id?: string | null;
+  label?: string | null;
+  is_rest?: boolean;
+}
+
+export interface ProgramWeek {
+  id: string;
+  program_id: string;
+  week_number: number;
+  is_deload: boolean;
+  /** Fraction of normal working weight during a deload (0.6 = 60%). */
+  deload_volume_pct: number;
+  notes: string | null;
+  /** cycle day number (as a string key) → override patch. */
+  override_days: Record<string, ProgramDayOverride> | null;
+}
+
+/** A day of a program as it actually resolves: default split + week override. */
+export interface ResolvedProgramDay {
+  day_number: number;
+  template_id: string | null;
+  label: string | null;
+  is_rest: boolean;
+  /** true when a week override (not the default split) produced this. */
+  overridden: boolean;
+}
+
 // --- Metrics shapes --------------------------------------------------------
 
 export type MuscleSetCounts = Record<string, number>;

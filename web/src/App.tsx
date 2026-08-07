@@ -20,6 +20,7 @@ import LoginScreen from './components/LoginScreen';
 import Sidebar from './components/Sidebar';
 import MobileDock from './components/MobileDock';
 import { TAB_IDS, type Tab } from './components/nav/tabs';
+import HomeTab from './components/home/HomeTab';
 import TodoView from './components/todo/TodoView';
 import VoiceTab from './components/VoiceTab';
 import VoiceController from './components/voice/VoiceController';
@@ -32,7 +33,7 @@ import DueDateReminder from './components/DueDateReminder';
 import EditTaskDialog from './components/EditTaskDialog';
 
 function Shell({ userId }: { userId: string }) {
-  const [tab, setTab] = useState<Tab>('todo');
+  const [tab, setTab] = useState<Tab>('home');
   const [editing, setEditing] = useState<Task | null>(null);
   const { resolvedTheme, toggleTheme } = useTheme(userId);
   const appearance = useAppearance(userId);
@@ -118,6 +119,14 @@ function Shell({ userId }: { userId: string }) {
             {...swipe.handlers}
           >
             <div key={tab} className="animate-fade-in">
+              {tab === 'home' && (
+                <HomeTab
+                  userId={userId}
+                  tasks={api.tasks}
+                  onToggleTask={(id, done) => api.updateTask(id, { done })}
+                  onNavigate={setTab}
+                />
+              )}
               {tab === 'todo' && <TodoView api={api} />}
               {tab === 'voice' && <VoiceTab />}
               {tab === 'workout' && <WorkoutTab userId={userId} showRpe={workoutPrefs.showRpe} />}

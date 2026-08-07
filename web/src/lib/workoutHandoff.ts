@@ -33,3 +33,26 @@ export function clearPendingWorkout(): void {
     /* ignore */
   }
 }
+
+// The same idea for the Workout tab's SUB-tab: the Home tab links straight to
+// Program, which the tab would otherwise never open on (it always lands on Log).
+const SUB_KEY = 'pendingWorkoutSubTab';
+
+export function setPendingWorkoutSubTab(sub: string): void {
+  try {
+    localStorage.setItem(SUB_KEY, sub);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Reads and clears the pending sub-tab in one step. */
+export function takePendingWorkoutSubTab(): string | null {
+  try {
+    const v = localStorage.getItem(SUB_KEY);
+    if (v) localStorage.removeItem(SUB_KEY);
+    return v;
+  } catch {
+    return null;
+  }
+}

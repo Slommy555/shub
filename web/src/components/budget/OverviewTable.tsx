@@ -61,6 +61,8 @@ interface Props {
   defaultMonthlyOf?: (g: BudgetGroup) => number;
   onSetOverride?: (id: string, amount: number, note?: string | null) => void;
   onClearOverride?: (id: string) => void;
+  /** Rendered under the income totals — the allocation breakdown + Remaining. */
+  breakdown?: React.ReactNode;
 }
 
 /** "1st", "2nd", "25th" … */
@@ -211,6 +213,7 @@ export default function OverviewTable({
   defaultMonthlyOf,
   onSetOverride,
   onClearOverride,
+  breakdown,
 }: Props) {
   const [swipe, setSwipe] = useState<{ id: string; x: number } | null>(null);
   const [editing, setEditing] = useState<EditState | null>(null);
@@ -351,6 +354,8 @@ export default function OverviewTable({
           </span>
         </div>
       </div>
+
+      {breakdown}
 
       {/* Section title */}
       <h2 className="mb-2 text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.08em', color: 'var(--color-text-secondary)' }}>

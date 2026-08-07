@@ -38,7 +38,7 @@ import SavingsPoolSection from './SavingsPoolSection';
 import SavingsTrend from './SavingsTrend';
 import BudgetCalendar, { type CalEvent } from './BudgetCalendar';
 import BudgetSnapshot from './BudgetSnapshot';
-import { useBudgetHistory } from '../../hooks/budget/useBudgetHistory';
+import AllocationBreakdown from './AllocationBreakdown';
 import { useGroupOverrides } from '../../hooks/budget/useGroupOverrides';
 
 export type BudgetViewMode = 'snapshot' | 'overview' | 'paycheck' | 'calendar';
@@ -88,7 +88,6 @@ export default function BudgetView({
   const groupPayments = useGroupPayments(userId);
   const cardCharges = useCardCharges(userId);
   const scheduled = useScheduledExpenses(userId, budgetId);
-  const history = useBudgetHistory(userId, budgetId, monthBounds.start_date);
   const overrides = useGroupOverrides(userId, budgetId, monthBounds.start_date);
 
   /** Thursdays in the month in view — the ONLY divisor for weekly set-asides. */
@@ -400,7 +399,6 @@ export default function BudgetView({
         savedThisMonth={deposits.monthTotal}
         earmarkedThisMonth={savings.allocated}
         adjustedThisMonth={adjustedThisMonth}
-        history={history}
         upcoming={upcoming}
         savingsTrend={
           <SavingsTrend
@@ -451,6 +449,19 @@ export default function BudgetView({
         defaultMonthlyOf={defaultMonthlyOf}
         onSetOverride={(id, amount, note) => void overrides.setOverride(id, amount, note)}
         onClearOverride={(id) => void overrides.clearOverride(id)}
+        breakdown={
+          <AllocationBreakdown
+            allocation={{
+              // Bills: every recurring group at its resolved (override-aware)
+              // monthly amount. Credit cards: the weekly payoff pace spread over
+              // the month's weeks. Savings pool: this month's pool total.
+              bills: recurringGroups.reduce((s, g) => s + resolvedMonthlyOf(g), 0),
+              creditCards: cardsWeeklySuggested * weeks,
+              savingsPool: savings.totalSaved,
+              income: monthlyIncome,
+            }}
+          />
+        }
       />
 
       <CreditCardSection

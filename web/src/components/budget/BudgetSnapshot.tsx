@@ -1,5 +1,4 @@
 import { formatMoney } from '../../types/budget';
-import type { HistoryMonth } from '../../hooks/budget/useBudgetHistory';
 
 export interface UpcomingItem {
   date: string; // YYYY-MM-DD
@@ -30,7 +29,6 @@ interface Props {
   /** Net of this month's hand adjustments — money the tracker never saw. */
   adjustedThisMonth: number;
 
-  history: HistoryMonth[];
   /** The next few dated events from today forward. */
   upcoming: UpcomingItem[];
   /** The savings balance chart + its editors (see SavingsTrend). */
@@ -78,7 +76,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 /**
  * How savings is actually tracking for the month in view — added vs pulled back
- * out, the running balance, and the last six months of income vs saved.
+ * out, and the running balance.
  */
 export default function BudgetSnapshot({
   monthLabel,
@@ -93,14 +91,11 @@ export default function BudgetSnapshot({
   savedThisMonth,
   earmarkedThisMonth,
   adjustedThisMonth,
-  history,
   upcoming,
   savingsTrend,
 }: Props) {
   const savingsRate = monthlyIncome > 0 ? (savedThisMonth / monthlyIncome) * 100 : 0;
   const netSavings = savedThisMonth - earmarkedThisMonth + adjustedThisMonth;
-  const peak = Math.max(1, ...history.map((h) => Math.max(h.income, h.saved)));
-  const avgSaved = history.length > 0 ? history.reduce((s, h) => s + h.saved, 0) / history.length : 0;
 
   return (
     <div>
@@ -155,53 +150,6 @@ export default function BudgetSnapshot({
       </Card>
 
       {savingsTrend}
-
-      {/* Six-month income vs saved */}
-      {history.length > 0 && (
-        <div className="mt-4">
-          <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-[11px] font-semibold uppercase" style={{ letterSpacing: '0.08em', color: 'var(--color-text-secondary)' }}>
-              Last {history.length} months
-            </h2>
-            <span className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-              {formatMoney(avgSaved)}/mo saved avg
-            </span>
-          </div>
-          <div className="rounded-2xl border p-4" style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)' }}>
-            <div className="flex items-end justify-between gap-2" style={{ height: 108 }}>
-              {history.map((h) => (
-                <div key={h.month} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-                  <div className="flex h-full w-full items-end justify-center gap-[3px]">
-                    <div
-                      className="w-1/2 rounded-t-[3px]"
-                      title={`${h.label} income ${formatMoney(h.income)}`}
-                      style={{ height: `${(h.income / peak) * 100}%`, minHeight: h.income > 0 ? 3 : 0, background: 'var(--color-border-strong)' }}
-                    />
-                    <div
-                      className="w-1/2 rounded-t-[3px]"
-                      title={`${h.label} saved ${formatMoney(h.saved)}`}
-                      style={{ height: `${(h.saved / peak) * 100}%`, minHeight: h.saved > 0 ? 3 : 0, background: 'var(--color-success)' }}
-                    />
-                  </div>
-                  <span className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
-                    {h.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 flex gap-4 text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: 'var(--color-border-strong)' }} />
-                Income
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: 'var(--color-success)' }} />
-                Saved
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {cardsRemainingTotal > 0 && (
         <Card title="Debt">

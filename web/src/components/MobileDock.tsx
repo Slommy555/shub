@@ -33,11 +33,14 @@ export default function MobileDock({ active, onSelect }: Props) {
               }}
               aria-label={t.label}
               aria-current={on ? 'page' : undefined}
+              // Inactive icons flex down as tabs are added so the row always
+              // fits a narrow phone; the active pill keeps room for its label.
+              style={on ? undefined : { maxWidth: 40 }}
               className={[
                 'flex h-11 items-center justify-center gap-1.5 rounded-2xl transition-all duration-200 ease-out',
                 on
-                  ? 'min-w-0 flex-1 bg-gradient-to-b from-accent-500 to-accent-600 px-2.5 text-accentfg shadow-glow'
-                  : 'w-10 shrink-0 text-gray-500 active:scale-90 active:bg-gray-100 dark:text-gray-400 dark:active:bg-gray-800',
+                  ? 'min-w-0 flex-[2] bg-gradient-to-b from-accent-500 to-accent-600 px-2.5 text-accentfg shadow-glow'
+                  : 'min-w-0 flex-1 text-gray-500 active:scale-90 active:bg-gray-100 dark:text-gray-400 dark:active:bg-gray-800',
               ].join(' ')}
             >
               <span className="shrink-0">{t.icon}</span>

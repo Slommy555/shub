@@ -1,4 +1,5 @@
 export type Tab =
+  | 'home'
   | 'todo'
   | 'workout'
   | 'budget'
@@ -26,6 +27,18 @@ const stroke = {
  * from this list, and it also defines the left/right swipe order on mobile.
  */
 export const TABS: TabItem[] = [
+  {
+    id: 'home',
+    label: 'Home',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" {...stroke}>
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      </svg>
+    ),
+  },
   {
     id: 'todo',
     label: 'To-Do',
