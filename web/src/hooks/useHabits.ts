@@ -106,8 +106,22 @@ export function useHabits(userId: string | null) {
 
   // --- mutations ----------------------------------------------------------
   const addHabit = useCallback(
-    async (input: { name: string; kind: HabitKind; color: ColorKey }) => {
+    async (input: {
+      name: string;
+      kind: HabitKind;
+      color: ColorKey;
+      isWater?: boolean;
+      waterGoalOz?: number | null;
+    }) => {
       if (!userId) return;
+      // A water habit owns the whole "water" concept — the presets, the goal,
+      // the day's total — so a second one would just split the tally in two.
+      if (input.isWater && habitsRef.current.some((h) => h.is_water_habit)) {
+        setError(
+          'You already have a water tracking habit. Edit the existing one to change your goal.'
+        );
+        return;
+      }
       const id = crypto.randomUUID();
       // New habit goes on top; everyone else shifts down.
       const shifted = habitsRef.current.map((h) => ({ ...h, position: h.position + 1 }));
@@ -120,6 +134,8 @@ export function useHabits(userId: string | null) {
         position: 0,
         archived: false,
         reminder_time: null,
+        is_water_habit: input.isWater ?? false,
+        water_goal_oz: input.isWater ? (input.waterGoalOz ?? null) : null,
         created_at: new Date().toISOString(),
       };
       setHabits([row, ...shifted].sort(byPosition));
@@ -131,6 +147,8 @@ export function useHabits(userId: string | null) {
         kind: row.kind,
         color: row.color,
         position: 0,
+        is_water_habit: row.is_water_habit,
+        water_goal_oz: row.water_goal_oz,
       });
       if (error) {
         console.error('addHabit failed:', error.message);
@@ -139,7 +157,11 @@ export function useHabits(userId: string | null) {
         setError(
           /relation .*habits.* does not exist|could not find the table/i.test(error.message)
             ? 'The habits tables don’t exist yet. Run the 009_habits.sql migration in Supabase.'
-            : `Couldn’t save habit: ${error.message}`
+            : // The one-water-habit-per-user unique index, if a second slipped
+              // past the check above (e.g. created on another device).
+              /habits_one_water_per_user/i.test(error.message)
+              ? 'You already have a water tracking habit. Edit the existing one to change your goal.'
+              : `Couldn’t save habit: ${error.message}`
         );
         return;
       }
@@ -151,7 +173,15 @@ export function useHabits(userId: string | null) {
   );
 
   const updateHabit = useCallback(
-    async (id: string, patch: Partial<Pick<Habit, 'name' | 'kind' | 'color' | 'position' | 'reminder_time'>>) => {
+    async (
+      id: string,
+      patch: Partial<
+        Pick<
+          Habit,
+          'name' | 'kind' | 'color' | 'position' | 'reminder_time' | 'is_water_habit' | 'water_goal_oz'
+        >
+      >
+    ) => {
       setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, ...patch } : h)).sort(byPosition));
       const { error } = await supabase.from('habits').update(patch).eq('id', id);
       if (error) console.error('updateHabit failed:', error.message);
@@ -191,7 +221,34 @@ export function useHabits(userId: string | null) {
     [userId, logs]
   );
 
-  return { habits, loading, error, doneByHabit, isDone, addHabit, updateHabit, deleteHabit, toggle };
+  /**
+   * Force a habit's completion for a day to `done`, no-op if it's already
+   * there. The water card drives this off the day's oz vs. the goal, so it
+   * fires on every log and needs to be safe to call repeatedly — unlike
+   * `toggle`, which flips whatever it finds.
+   */
+  const setDone = useCallback(
+    async (habitId: string, date: string, done: boolean) => {
+      if (!userId) return;
+      const existing = logs.find((l) => l.habit_id === habitId && l.date === date);
+      if (done === Boolean(existing)) return;
+      await toggle(habitId, date);
+    },
+    [userId, logs, toggle]
+  );
+
+  return {
+    habits,
+    loading,
+    error,
+    doneByHabit,
+    isDone,
+    addHabit,
+    updateHabit,
+    deleteHabit,
+    toggle,
+    setDone,
+  };
 }
 
 export type UseHabits = ReturnType<typeof useHabits>;

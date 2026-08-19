@@ -4,12 +4,23 @@ import { todayISO } from '../lib/dates';
 import { completionRate } from '../lib/habits';
 import AddHabitForm from './focus/AddHabitForm';
 import HabitCard from './focus/HabitCard';
+import WaterHabitCard from './focus/WaterHabitCard';
 
 /** The Focus tab: daily habits & goals with consistency stats. */
 export default function ProductivityView({ userId }: { userId: string }) {
-  const { habits, loading, error, doneByHabit, addHabit, updateHabit, deleteHabit, toggle } =
-    useHabits(userId);
+  const {
+    habits,
+    loading,
+    error,
+    doneByHabit,
+    addHabit,
+    updateHabit,
+    deleteHabit,
+    toggle,
+    setDone,
+  } = useHabits(userId);
   const today = todayISO();
+  const hasWaterHabit = habits.some((h) => h.is_water_habit);
 
   const { doneToday, avgConsistency } = useMemo(() => {
     if (habits.length === 0) return { doneToday: 0, avgConsistency: 0 };
@@ -49,7 +60,7 @@ export default function ProductivityView({ userId }: { userId: string }) {
       )}
 
       <div className="mb-4">
-        <AddHabitForm onAdd={addHabit} />
+        <AddHabitForm onAdd={addHabit} hasWaterHabit={hasWaterHabit} />
       </div>
 
       {loading ? (
@@ -69,18 +80,30 @@ export default function ProductivityView({ userId }: { userId: string }) {
         </div>
       ) : (
         <div className="space-y-2.5">
-          {habits.map((h) => (
-            <HabitCard
-              key={h.id}
-              habit={h}
-              done={doneByHabit.get(h.id) ?? new Set()}
-              today={today}
-              onToggle={(date) => toggle(h.id, date)}
-              onChangeColor={(color) => updateHabit(h.id, { color })}
-              onSetReminder={(time) => updateHabit(h.id, { reminder_time: time })}
-              onDelete={() => deleteHabit(h.id)}
-            />
-          ))}
+          {habits.map((h) =>
+            h.is_water_habit ? (
+              <WaterHabitCard
+                key={h.id}
+                userId={userId}
+                habit={h}
+                done={doneByHabit.get(h.id)?.has(today) ?? false}
+                onSetDone={(next) => void setDone(h.id, today, next)}
+                onEditGoal={(goalOz) => updateHabit(h.id, { water_goal_oz: goalOz })}
+                onDelete={() => deleteHabit(h.id)}
+              />
+            ) : (
+              <HabitCard
+                key={h.id}
+                habit={h}
+                done={doneByHabit.get(h.id) ?? new Set()}
+                today={today}
+                onToggle={(date) => toggle(h.id, date)}
+                onChangeColor={(color) => updateHabit(h.id, { color })}
+                onSetReminder={(time) => updateHabit(h.id, { reminder_time: time })}
+                onDelete={() => deleteHabit(h.id)}
+              />
+            )
+          )}
         </div>
       )}
     </div>

@@ -7,6 +7,7 @@ import {
   round1,
   toISODate,
 } from '../../lib/workout';
+import { formatWeightDelta, weightTrend } from '../../lib/weightTrend';
 import type { BodyWeightLog, WeightView } from '../../types/workout';
 import WeightChart from './WeightChart';
 
@@ -90,12 +91,13 @@ export default function WeightTab({ userId }: Props) {
 
     return {
       current: current.weight_lbs,
-      d7: changeOver(7),
+      // Rolling 14 days, anchored on today — see lib/weightTrend.ts.
+      trend: weightTrend(entries, today),
       d30: changeOver(30),
       low,
       high,
     };
-  }, [entries]);
+  }, [entries, today]);
 
   return (
     <div className="pb-fab mx-auto max-w-app space-y-5 p-4 pb-12">
@@ -173,7 +175,7 @@ export default function WeightTab({ userId }: Props) {
       {stats && (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           <StatBox label="Current" value={`${stats.current}`} />
-          <StatBox label="7-day" value={fmtChange(stats.d7)} />
+          <StatBox label="7d avg trend" value={formatWeightDelta(stats.trend)} />
           <StatBox label="30-day" value={fmtChange(stats.d30)} />
           <StatBox label="All-time low" value={`${stats.low}`} />
           <StatBox label="All-time high" value={`${stats.high}`} />

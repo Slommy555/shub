@@ -83,7 +83,7 @@ export default function HomeTab({
 
   const card: Record<HomeCardId, React.ReactNode> = {
     program: <ProgramCard userId={userId} onOpenWorkout={() => onNavigate('workout')} />,
-    habits: <HabitsCard userId={userId} />,
+    habits: <HabitsCard userId={userId} onOpenHabits={() => onNavigate('productivity')} />,
     tasks: <TasksCard tasks={tasks} onToggle={onToggleTask} onOpenTasks={openTasks} />,
     weight: <WeightCard userId={userId} />,
     events: events.length > 0 ? <EventsCard events={events} onOpenTasks={openTasks} /> : null,

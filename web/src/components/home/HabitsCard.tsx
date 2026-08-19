@@ -2,14 +2,24 @@ import { useHabits } from '../../hooks/useHabits';
 import { todayISO } from '../../lib/dates';
 import { haptic } from '../../lib/native';
 import { Card, CardSkeleton, CheckCircle, SectionHeader } from './parts';
+import WaterRow from './WaterRow';
 
 /**
  * Today's habits, checkable in place. This writes through the same `useHabits`
  * hook the Focus tab uses — the same `habits` / `habit_logs` tables — so a tick
  * here and a tick there are the same row, and realtime keeps both views in sync.
+ *
+ * The water habit gets its own compact row: it has no checkbox, it's completed
+ * by logging oz.
  */
-export default function HabitsCard({ userId }: { userId: string }) {
-  const { habits, loading, doneByHabit, toggle } = useHabits(userId);
+export default function HabitsCard({
+  userId,
+  onOpenHabits,
+}: {
+  userId: string;
+  onOpenHabits: () => void;
+}) {
+  const { habits, loading, doneByHabit, toggle, setDone } = useHabits(userId);
   const today = todayISO();
 
   if (loading) return <CardSkeleton rows={4} />;
@@ -34,6 +44,20 @@ export default function HabitsCard({ userId }: { userId: string }) {
       <div className="-mr-1 flex max-h-[200px] min-h-0 flex-1 flex-col overflow-y-auto pr-1 sm:max-h-none">
         {habits.map((h) => {
           const done = doneByHabit.get(h.id)?.has(today) ?? false;
+
+          if (h.is_water_habit) {
+            return (
+              <WaterRow
+                key={h.id}
+                userId={userId}
+                habit={h}
+                done={done}
+                onSetDone={(next) => void setDone(h.id, today, next)}
+                onOpen={onOpenHabits}
+              />
+            );
+          }
+
           return (
             <div key={h.id} className="flex items-center gap-2" style={{ minHeight: 40 }}>
               <CheckCircle

@@ -1,22 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useBodyWeight } from '../../hooks/workout/useBodyWeight';
 import { round1 } from '../../lib/workout';
-import { addDays, formatShort, todayISO } from '../../lib/dates';
+import { formatShort, todayISO } from '../../lib/dates';
+import { formatWeightDelta, weightTrend } from '../../lib/weightTrend';
 import { haptic } from '../../lib/native';
-import type { BodyWeightLog } from '../../types/workout';
 import { Card, CardSkeleton, SectionHeader } from './parts';
-
-/** Mean weight of the entries logged in [from, to], or null if there are none. */
-function windowAvg(entries: BodyWeightLog[], from: string, to: string): number | null {
-  let sum = 0;
-  let n = 0;
-  for (const e of entries) {
-    if (e.logged_at < from || e.logged_at > to) continue;
-    sum += Number(e.weight_lbs) || 0;
-    n += 1;
-  }
-  return n > 0 ? sum / n : null;
-}
 
 /**
  * Log today's weight and see the trend. Backed by `useBodyWeight` — the same
@@ -42,15 +30,8 @@ export default function WeightCard({ userId }: { userId: string }) {
     setDraft(todayEntry ? String(todayEntry.weight_lbs) : '');
   }, [todayEntry]);
 
-  const stats = useMemo(() => {
-    const thisWeek = windowAvg(entries, addDays(today, -6), today);
-    const lastWeek = windowAvg(entries, addDays(today, -13), addDays(today, -7));
-    return {
-      avg: thisWeek,
-      perWeek: thisWeek !== null && lastWeek !== null ? thisWeek - lastWeek : null,
-      latest: entries[0] ?? null,
-    };
-  }, [entries, today]);
+  const trend = useMemo(() => weightTrend(entries, today), [entries, today]);
+  const latest = entries[0] ?? null;
 
   function save() {
     const w = Number(draft);
@@ -62,7 +43,7 @@ export default function WeightCard({ userId }: { userId: string }) {
 
   if (loading) return <CardSkeleton rows={2} />;
 
-  const { avg, perWeek, latest } = stats;
+  const avg = trend.recentAvg;
   // Postgres numerics can arrive as strings, so compare as numbers.
   const dirty = draft.trim() !== '' && Number(draft) !== Number(todayEntry?.weight_lbs ?? NaN);
 
@@ -101,12 +82,10 @@ export default function WeightCard({ userId }: { userId: string }) {
               className="text-[20px] font-semibold leading-none tabular-nums"
               style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}
             >
-              {perWeek === null
-                ? '—'
-                : `${perWeek > 0 ? '↑' : perWeek < 0 ? '↓' : ''} ${round1(Math.abs(perWeek))} lb`}
+              {trend.delta === null ? '—' : formatWeightDelta(trend)}
             </span>
             <span className="mt-1.5 text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
-              per week
+              {trend.delta === null ? 'Not enough data' : '7d avg'}
             </span>
           </div>
         </div>
