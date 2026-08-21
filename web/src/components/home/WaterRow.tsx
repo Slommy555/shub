@@ -1,23 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useWaterLogs } from '../../hooks/useWaterLogs';
 import { haptic } from '../../lib/native';
-import { formatOz, loadLastOz, saveLastOz } from '../../lib/water';
+import { formatOz } from '../../lib/water';
 import type { Habit } from '../../types/habits';
+import QuickAddRow from '../water/QuickAddRow';
 
 interface Props {
   userId: string;
   habit: Habit;
   done: boolean;
   onSetDone: (done: boolean) => void;
-  /** Tapping anywhere but the quick-add goes to the Habits tab. */
+  /** Tapping the name or the bar goes to the Habits tab. */
   onOpen: () => void;
 }
 
 /**
- * The water habit on Home: one line, a mini progress bar, and a single
- * quick-add for whatever amount was logged last. Everything else about the
- * habit — presets, custom amounts, undo, history — lives on the Focus tab, so
- * the rest of the row is a link there.
+ * The water habit on Home: a line with a mini progress bar, and under it the
+ * quick-add buttons — the same editable set as the Focus card, so a button
+ * added or changed in either place shows up in both. Custom one-off amounts,
+ * undo and history stay on Focus; the name and the bar link there.
  *
  * It runs the same completion sync as the full card, and the two agree because
  * they compute it from the same realtime-backed totals.
@@ -26,9 +27,6 @@ export default function WaterRow({ userId, habit, done, onSetDone, onOpen }: Pro
   const { loading, todayTotal, addLog } = useWaterLogs(userId, habit.id);
   const goal = Number(habit.water_goal_oz) || 0;
   const reached = goal > 0 && todayTotal >= goal;
-  // Read once on mount: the amount only changes when this row or the Focus card
-  // logs one, and both write it back through `saveLastOz`.
-  const [quickOz] = useState(() => loadLastOz(userId));
 
   const wantDone = reached;
   useEffect(() => {
@@ -40,11 +38,12 @@ export default function WaterRow({ userId, habit, done, onSetDone, onOpen }: Pro
   const pct = goal > 0 ? Math.min(100, Math.round((todayTotal / goal) * 100)) : 0;
 
   return (
-    <div className="flex items-center gap-2" style={{ minHeight: 40 }}>
+    <div className="flex flex-col gap-1.5 py-1">
       <button
         type="button"
         onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+        className="flex min-w-0 items-center gap-2.5 text-left"
+        style={{ minHeight: 28 }}
       >
         <span className="shrink-0 text-[15px]">💧</span>
         <span
@@ -76,23 +75,18 @@ export default function WaterRow({ userId, habit, done, onSetDone, onOpen }: Pro
         </span>
       </button>
 
-      <button
-        type="button"
+      {/* Indented to the name, so the pills read as belonging to this habit and
+          not to the checkbox rows above and below it. */}
+      <QuickAddRow
+        userId={userId}
+        size="sm"
         disabled={goal <= 0}
-        onClick={() => {
+        className="pl-[25px]"
+        onLog={(oz) => {
           haptic();
-          saveLastOz(userId, quickOz);
-          void addLog(quickOz);
+          void addLog(oz);
         }}
-        className="shrink-0 rounded-full px-3 text-[13px] font-semibold tabular-nums active:scale-[0.98] active:opacity-85 disabled:opacity-40"
-        style={{
-          height: 32,
-          background: 'var(--color-accent-subtle)',
-          color: 'var(--color-accent)',
-        }}
-      >
-        +{formatOz(quickOz)}oz
-      </button>
+      />
     </div>
   );
 }

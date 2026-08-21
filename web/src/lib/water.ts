@@ -7,6 +7,9 @@ import { addDays } from './dates';
 
 export const DEFAULT_PRESETS = [8, 12, 16, 20];
 
+/** Room for a couple more than the defaults; past this they stop being quick. */
+export const MAX_PRESETS = 8;
+
 /** The bit of a water log the totals care about. */
 interface DatedOz {
   logged_at: string;
@@ -43,20 +46,21 @@ export function dailyTotals(
 }
 
 const presetsKey = (userId: string) => `water-presets:${userId}`;
-const lastOzKey = (userId: string) => `water-last-oz:${userId}`;
 
-/** The four quick-add amounts, falling back to the defaults for anything odd. */
+/**
+ * The quick-add amounts — however many the user has kept, up to MAX_PRESETS.
+ * Anything unreadable falls back to the defaults rather than leaving the row
+ * empty, and junk entries inside an otherwise fine list are dropped instead of
+ * discarding the whole thing.
+ */
 export function loadPresets(userId: string): number[] {
   try {
     const raw = localStorage.getItem(presetsKey(userId));
     if (!raw) return DEFAULT_PRESETS;
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return DEFAULT_PRESETS;
-    const nums = parsed.map(Number);
-    if (nums.length !== DEFAULT_PRESETS.length || nums.some((n) => !Number.isFinite(n) || n <= 0)) {
-      return DEFAULT_PRESETS;
-    }
-    return nums;
+    const nums = parsed.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+    return nums.length > 0 ? nums.slice(0, MAX_PRESETS) : DEFAULT_PRESETS;
   } catch {
     return DEFAULT_PRESETS;
   }
@@ -67,24 +71,6 @@ export function savePresets(userId: string, presets: number[]): void {
     localStorage.setItem(presetsKey(userId), JSON.stringify(presets));
   } catch {
     /* private mode / quota — the presets just don't stick */
-  }
-}
-
-/** The amount the compact Home card offers: whatever was last logged. */
-export function loadLastOz(userId: string, fallback = DEFAULT_PRESETS[2]): number {
-  try {
-    const n = Number(localStorage.getItem(lastOzKey(userId)));
-    return Number.isFinite(n) && n > 0 ? n : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-export function saveLastOz(userId: string, oz: number): void {
-  try {
-    localStorage.setItem(lastOzKey(userId), String(oz));
-  } catch {
-    /* see savePresets */
   }
 }
 

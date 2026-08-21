@@ -1,14 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useWaterLogs } from '../../hooks/useWaterLogs';
 import { haptic } from '../../lib/native';
-import {
-  formatLogTime,
-  formatOz,
-  loadPresets,
-  savePresets,
-  saveLastOz,
-} from '../../lib/water';
+import { formatLogTime, formatOz } from '../../lib/water';
 import type { Habit } from '../../types/habits';
+import QuickAddRow from '../water/QuickAddRow';
 import WaterHistoryChart from './WaterHistoryChart';
 
 interface Props {
@@ -22,8 +17,6 @@ interface Props {
   onDelete: () => void;
 }
 
-const LONG_PRESS_MS = 500;
-
 /**
  * The water habit: a progress bar over the day's oz, quick-add buttons, and a
  * 7-day history. Unlike every other habit it has no checkbox — completion is
@@ -31,8 +24,8 @@ const LONG_PRESS_MS = 500;
  * (via `onSetDone`) the moment the total reaches the goal, and takes it back if
  * an Undo drops the day below it again.
  *
- * Long-press a quick-add button to change what it adds; the four amounts live in
- * localStorage per user.
+ * The quick-add buttons are `QuickAddRow`, shared with the Home water row, so
+ * editing them in either place changes both.
  */
 export default function WaterHabitCard({
   userId,
@@ -49,11 +42,8 @@ export default function WaterHabitCard({
   const goal = Number(habit.water_goal_oz) || 0;
   const reached = goal > 0 && todayTotal >= goal;
 
-  const [presets, setPresets] = useState<number[]>(() => loadPresets(userId));
   const [customOpen, setCustomOpen] = useState(false);
   const [customOz, setCustomOz] = useState('');
-  const [editingPreset, setEditingPreset] = useState<number | null>(null);
-  const [presetDraft, setPresetDraft] = useState('');
   const [goalDraft, setGoalDraft] = useState('');
   const [editingGoal, setEditingGoal] = useState(false);
 
@@ -70,7 +60,6 @@ export default function WaterHabitCard({
 
   function log(oz: number, label: string | null = null) {
     haptic();
-    saveLastOz(userId, oz);
     void addLog(oz, label);
   }
 
@@ -80,16 +69,6 @@ export default function WaterHabitCard({
     log(oz, 'custom');
     setCustomOz('');
     setCustomOpen(false);
-  }
-
-  function commitPreset(index: number) {
-    const oz = Number(presetDraft);
-    if (Number.isFinite(oz) && oz > 0) {
-      const next = presets.map((p, i) => (i === index ? oz : p));
-      setPresets(next);
-      savePresets(userId, next);
-    }
-    setEditingPreset(null);
   }
 
   function commitGoal() {
@@ -191,44 +170,9 @@ export default function WaterHabitCard({
             : `${pct}% · ${formatOz(goal - todayTotal)} oz to go`}
       </p>
 
-      {/* Quick-add — long-press a button to change what it adds */}
-      <div className="mt-3 flex flex-wrap gap-2">
-        {presets.map((oz, i) =>
-          editingPreset === i ? (
-            <input
-              key={i}
-              type="number"
-              inputMode="numeric"
-              autoFocus
-              value={presetDraft}
-              onChange={(e) => setPresetDraft(e.target.value)}
-              onBlur={() => commitPreset(i)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitPreset(i);
-                if (e.key === 'Escape') setEditingPreset(null);
-              }}
-              aria-label={`Quick-add amount ${i + 1} in ounces`}
-              className="w-[72px] rounded-full border px-3 text-center text-[13px] font-semibold tabular-nums outline-none"
-              style={{
-                height: 40,
-                background: 'var(--color-bg-surface)',
-                borderColor: 'var(--color-accent-muted)',
-                color: 'var(--color-text-primary)',
-              }}
-            />
-          ) : (
-            <QuickAdd
-              key={i}
-              oz={oz}
-              disabled={goal <= 0}
-              onAdd={() => log(oz)}
-              onCustomize={() => {
-                setPresetDraft(String(oz));
-                setEditingPreset(i);
-              }}
-            />
-          )
-        )}
+      {/* Quick-add — hold a button to change it, "+" to add another */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <QuickAddRow userId={userId} disabled={goal <= 0} onLog={(oz) => log(oz)} />
 
         {customOpen ? (
           <span className="flex items-center gap-1.5">
@@ -320,73 +264,5 @@ export default function WaterHabitCard({
         </button>
       </div>
     </div>
-  );
-}
-
-/**
- * A quick-add pill. Tap logs the amount; a long press (or right-click on
- * desktop) switches it into the inline editor instead of logging.
- */
-function QuickAdd({
-  oz,
-  disabled,
-  onAdd,
-  onCustomize,
-}: {
-  oz: number;
-  disabled: boolean;
-  onAdd: () => void;
-  onCustomize: () => void;
-}) {
-  const timer = useRef<number | null>(null);
-  const longPressed = useRef(false);
-
-  function start() {
-    if (disabled) return;
-    longPressed.current = false;
-    timer.current = window.setTimeout(() => {
-      longPressed.current = true;
-      onCustomize();
-    }, LONG_PRESS_MS);
-  }
-
-  function cancel() {
-    if (timer.current !== null) {
-      window.clearTimeout(timer.current);
-      timer.current = null;
-    }
-  }
-
-  useEffect(() => cancel, []);
-
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onPointerDown={start}
-      onPointerUp={cancel}
-      onPointerLeave={cancel}
-      onPointerCancel={cancel}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        cancel();
-        onCustomize();
-      }}
-      onClick={() => {
-        // The long press already opened the editor — don't also log a drink.
-        if (longPressed.current) return;
-        onAdd();
-      }}
-      title={`Add ${formatOz(oz)}oz — hold to change this button`}
-      className="rounded-full px-4 text-[13px] font-semibold tabular-nums select-none active:scale-[0.98] active:opacity-85 disabled:opacity-40"
-      style={{
-        height: 40,
-        background: 'var(--color-accent-subtle)',
-        color: 'var(--color-accent)',
-        touchAction: 'manipulation',
-      }}
-    >
-      +{formatOz(oz)}oz
-    </button>
   );
 }
