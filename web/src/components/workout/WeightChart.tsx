@@ -7,7 +7,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ACCENT, formatDate, linearRegression, round1 } from '../../lib/workout';
+import { ACCENT, formatDate, round1 } from '../../lib/workout';
+import { regressionByDate } from '../../lib/weightTrend';
 
 interface Props {
   /** Ordered oldest → newest. */
@@ -29,11 +30,14 @@ export default function WeightChart({ data, height = 240, bare = false }: Props)
     );
   }
 
-  const { slope, intercept } = linearRegression(data.map((d, i) => ({ x: i, y: d.weight })));
-  const chartData = data.map((d, i) => ({
+  // Fit against the calendar, not against position in the array: a gap in
+  // logging would otherwise count as one step like any other, so a skipped week
+  // or a month with two entries would bend the slope for no reason.
+  const { at } = regressionByDate(data);
+  const chartData = data.map((d) => ({
     label: formatDate(d.date),
     weight: d.weight,
-    trend: round1(slope * i + intercept),
+    trend: round1(at(d.date)),
   }));
 
   const wrapper = bare

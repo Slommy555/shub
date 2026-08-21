@@ -3,8 +3,10 @@ import { useBodyWeight } from '../../hooks/workout/useBodyWeight';
 import { round1 } from '../../lib/workout';
 import { formatShort, todayISO } from '../../lib/dates';
 import {
+  formatRate,
   formatTrendCoverage,
   formatWeightDelta,
+  regressionByDate,
   weeklyAverageSeries,
   weightTrend,
 } from '../../lib/weightTrend';
@@ -24,6 +26,9 @@ import { Card, CardSkeleton, SectionHeader } from './parts';
  * several weeks is the thing that says whether weight is actually moving, which
  * no single delta can.
  */
+/** Weeks of history the card charts and fits its trend line across. */
+const CHART_WEEKS = 12;
+
 export default function WeightCard({ userId }: { userId: string }) {
   const { entries, loading, addEntry, updateEntry } = useBodyWeight(userId);
   const today = todayISO();
@@ -40,8 +45,12 @@ export default function WeightCard({ userId }: { userId: string }) {
   }, [todayEntry]);
 
   const trend = useMemo(() => weightTrend(entries, today), [entries, today]);
-  // Ascending for the chart; `entries` arrives newest-first.
-  const weekly = useMemo(() => weeklyAverageSeries(entries), [entries]);
+  // The last CHART_WEEKS weeks only. A line fit through everything on record
+  // answers "how has the whole diet gone", and its oldest points hold it down
+  // hardest — so it can read as on-track through a month of not moving. Bounded
+  // to a recent span it answers the question the card is actually asking.
+  const weekly = useMemo(() => weeklyAverageSeries(entries).slice(-CHART_WEEKS), [entries]);
+  const rate = useMemo(() => regressionByDate(weekly).lbsPerWeek, [weekly]);
   const latest = entries[0] ?? null;
 
   function save() {
@@ -120,7 +129,7 @@ export default function WeightCard({ userId }: { userId: string }) {
         <div className="mt-4">
           <WeightChart data={weekly} height={132} bare />
           <p className="mt-1 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-            Weekly average · dashed line is the trend
+            Weekly average · dashed line {formatRate(rate)} over {weekly.length} wks
           </p>
         </div>
       )}

@@ -12,7 +12,7 @@
 // the cost of the number reacting a little slower to a genuine change.
 
 import { addDays, todayISO } from './dates';
-import { mondayOf, parseISODate, round1, toISODate } from './workout';
+import { linearRegression, mondayOf, parseISODate, round1, toISODate } from './workout';
 
 /** Days per window. Both sides use it, so the two are always comparable. */
 export const TREND_WINDOW_DAYS = 14;
@@ -140,6 +140,43 @@ export function weeklyAverageSeries(
   return Array.from(map.entries())
     .map(([date, { sum, count }]) => ({ date, weight: round1(sum / count) }))
     .sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+/**
+ * Least-squares fit of a `{ date, weight }` series against the calendar — x is
+ * days since the first point, not its index — so a gap in logging doesn't count
+ * as one step like every other point. Returns the fitted value at any date and
+ * the slope expressed in lb per week, the rate you'd actually quote.
+ *
+ * Note what a fit like this answers: the slope over the whole span handed to
+ * it. Fed every week on record it describes the diet from the start, and the
+ * oldest points pull on it hardest — which is why it can still point downhill
+ * while the last month has been flat. Pass only the recent span to ask about
+ * the recent span.
+ */
+export function regressionByDate(series: { date: string; weight: number }[]): {
+  /** lb per week. Positive is gaining. */
+  lbsPerWeek: number;
+  /** The fitted line's value on a given day. */
+  at: (date: string) => number;
+} {
+  if (series.length === 0) return { lbsPerWeek: 0, at: () => 0 };
+  const origin = parseISODate(series[0].date).getTime();
+  const dayOf = (date: string) => (parseISODate(date).getTime() - origin) / 86_400_000;
+  const { slope, intercept } = linearRegression(
+    series.map((d) => ({ x: dayOf(d.date), y: d.weight }))
+  );
+  return {
+    lbsPerWeek: slope * 7,
+    at: (date) => slope * dayOf(date) + intercept,
+  };
+}
+
+/** "↓ 0.8 lb/wk" / "↑ 0.3 lb/wk" / "holding steady". */
+export function formatRate(lbsPerWeek: number): string {
+  const r = Math.abs(round1(lbsPerWeek));
+  if (r === 0) return 'holding steady';
+  return `${lbsPerWeek < 0 ? '↓' : '↑'} ${r.toFixed(1)} lb/wk`;
 }
 
 /** "↑ 0.4lb" / "~↓ 1.2lb" / "→ 0.0lb", or "Not enough data". */
