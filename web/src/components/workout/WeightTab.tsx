@@ -7,7 +7,13 @@ import {
   round1,
   toISODate,
 } from '../../lib/workout';
-import { formatWeightDelta, weightTrend } from '../../lib/weightTrend';
+import {
+  formatTrendBasis,
+  formatTrendCoverage,
+  formatWeightDelta,
+  rollingAverageSeries,
+  weightTrend,
+} from '../../lib/weightTrend';
 import type { BodyWeightLog, WeightView } from '../../types/workout';
 import WeightChart from './WeightChart';
 
@@ -17,9 +23,20 @@ interface Props {
 
 const VIEWS: { id: WeightView; label: string }[] = [
   { id: 'daily', label: 'Daily' },
+  // The series the "7d avg trend" stat is a difference of. "Weekly avg" is a
+  // calendar Mon–Sun bucket instead, so the two answer different questions and
+  // will not agree — see lib/weightTrend.ts.
+  { id: 'rolling', label: 'Rolling 7d' },
   { id: 'weekly', label: 'Weekly avg' },
   { id: 'monthly', label: 'Monthly avg' },
 ];
+
+const VIEW_NOTE: Record<WeightView, string> = {
+  daily: 'Every entry as logged.',
+  rolling: 'Each point is the mean of that day and the 6 days before it — the series the 7d avg trend below measures.',
+  weekly: 'Calendar Mon–Sun buckets. The newest point covers only the days elapsed this week, so it will not match the rolling trend.',
+  monthly: 'Calendar month buckets.',
+};
 
 function groupAverage(
   ascending: BodyWeightLog[],
@@ -69,6 +86,7 @@ export default function WeightTab({ userId }: Props) {
   const ascending = useMemo(() => [...entries].reverse(), [entries]);
   const chartData = useMemo(() => {
     if (view === 'daily') return ascending.map((e) => ({ date: e.logged_at, weight: e.weight_lbs }));
+    if (view === 'rolling') return rollingAverageSeries(ascending);
     if (view === 'weekly')
       return groupAverage(ascending, (iso) => toISODate(mondayOf(parseISODate(iso))));
     return groupAverage(ascending, (iso) => `${iso.slice(0, 7)}-01`);
@@ -148,21 +166,24 @@ export default function WeightTab({ userId }: Props) {
       </div>
 
       {/* view toggle */}
-      <div className="inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-gray-700">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            onClick={() => setView(v.id)}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-              view === v.id
-                ? 'bg-gray-800 text-white'
-                : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
-            }`}
-          >
-            {v.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-gray-700">
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => setView(v.id)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                view === v.id
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+        <p className="min-w-0 flex-1 text-[11px] leading-tight text-gray-400">{VIEW_NOTE[view]}</p>
       </div>
 
       {loading ? (
@@ -175,7 +196,13 @@ export default function WeightTab({ userId }: Props) {
       {stats && (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           <StatBox label="Current" value={`${stats.current}`} />
-          <StatBox label="7d avg trend" value={formatWeightDelta(stats.trend)} />
+          <StatBox
+            label="7d avg trend"
+            value={formatWeightDelta(stats.trend)}
+            // The two means behind the arrow, so it can be checked by hand.
+            sub={formatTrendBasis(stats.trend) ?? undefined}
+            title={`${formatDate(stats.trend.recentFrom)}–${formatDate(stats.trend.recentTo)} vs ${formatDate(stats.trend.previousFrom)}–${formatDate(stats.trend.previousTo)} · ${formatTrendCoverage(stats.trend)}`}
+          />
           <StatBox label="30-day" value={fmtChange(stats.d30)} />
           <StatBox label="All-time low" value={`${stats.low}`} />
           <StatBox label="All-time high" value={`${stats.high}`} />
@@ -215,11 +242,22 @@ export default function WeightTab({ userId }: Props) {
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
+function StatBox({
+  label,
+  value,
+  sub,
+  title,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  title?: string;
+}) {
   return (
-    <div className="rounded-xl bg-gray-50 px-3 py-2 text-center dark:bg-gray-800/60">
+    <div className="rounded-xl bg-gray-50 px-3 py-2 text-center dark:bg-gray-800/60" title={title}>
       <div className="text-[10px] uppercase tracking-wide text-gray-400">{label}</div>
       <div className="text-sm font-semibold">{value}</div>
+      {sub && <div className="text-[10px] tabular-nums text-gray-400">{sub}</div>}
     </div>
   );
 }

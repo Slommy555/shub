@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useBodyWeight } from '../../hooks/workout/useBodyWeight';
 import { round1 } from '../../lib/workout';
 import { formatShort, todayISO } from '../../lib/dates';
-import { formatWeightDelta, weightTrend } from '../../lib/weightTrend';
+import { formatTrendCoverage, formatWeightDelta, weightTrend } from '../../lib/weightTrend';
 import { haptic } from '../../lib/native';
 import { Card, CardSkeleton, SectionHeader } from './parts';
 
@@ -76,8 +76,18 @@ export default function WeightCard({ userId }: { userId: string }) {
           </div>
 
           {/* Direction only — up or down isn't inherently good or bad, that
-              depends on whether you're cutting or bulking. */}
-          <div className="flex min-w-0 flex-col">
+              depends on whether you're cutting or bulking. The label carries
+              the number being compared against: the delta is two rolling
+              windows, not this week against last week on the calendar, and
+              without the second figure there's no way to see which it is. */}
+          <div
+            className="flex min-w-0 flex-col"
+            title={
+              trend.delta === null
+                ? undefined
+                : `${trend.recentFrom}–${trend.recentTo} vs ${trend.previousFrom}–${trend.previousTo} · ${formatTrendCoverage(trend)}`
+            }
+          >
             <span
               className="text-[20px] font-semibold leading-none tabular-nums"
               style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}
@@ -85,7 +95,9 @@ export default function WeightCard({ userId }: { userId: string }) {
               {trend.delta === null ? '—' : formatWeightDelta(trend)}
             </span>
             <span className="mt-1.5 text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
-              {trend.delta === null ? 'Not enough data' : '7d avg'}
+              {trend.previousAvg === null
+                ? 'Not enough data'
+                : `vs ${round1(trend.previousAvg)} prior 7d`}
             </span>
           </div>
         </div>

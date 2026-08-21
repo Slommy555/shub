@@ -327,4 +327,4 @@ export interface ExercisePR {
 }
 
 export type VolumeRange = 'week' | '4weeks' | '3months';
-export type WeightView = 'daily' | 'weekly' | 'monthly';
+export type WeightView = 'daily' | 'rolling' | 'weekly' | 'monthly';
