@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useBodyWeight } from '../../hooks/workout/useBodyWeight';
-import {
-  formatDate,
-  mondayOf,
-  parseISODate,
-  round1,
-  toISODate,
-} from '../../lib/workout';
+import { formatDate, round1, toISODate } from '../../lib/workout';
 import {
   formatTrendBasis,
   formatTrendCoverage,
-  formatWeightDelta,
   rollingAverageSeries,
+  formatWeightDelta,
+  weeklyAverageSeries,
   weightTrend,
+  TREND_WINDOW_DAYS,
 } from '../../lib/weightTrend';
 import type { BodyWeightLog, WeightView } from '../../types/workout';
 import WeightChart from './WeightChart';
@@ -23,18 +19,19 @@ interface Props {
 
 const VIEWS: { id: WeightView; label: string }[] = [
   { id: 'daily', label: 'Daily' },
-  // The series the "7d avg trend" stat is a difference of. "Weekly avg" is a
-  // calendar Mon–Sun bucket instead, so the two answer different questions and
-  // will not agree — see lib/weightTrend.ts.
-  { id: 'rolling', label: 'Rolling 7d' },
+  // The series the trend stat is a difference of. "Weekly avg" is a calendar
+  // Mon–Sun bucket instead, so the two answer different questions and will not
+  // agree — see lib/weightTrend.ts.
+  { id: 'rolling', label: `Rolling ${TREND_WINDOW_DAYS}d` },
   { id: 'weekly', label: 'Weekly avg' },
   { id: 'monthly', label: 'Monthly avg' },
 ];
 
 const VIEW_NOTE: Record<WeightView, string> = {
   daily: 'Every entry as logged.',
-  rolling: 'Each point is the mean of that day and the 6 days before it — the series the 7d avg trend below measures.',
-  weekly: 'Calendar Mon–Sun buckets. The newest point covers only the days elapsed this week, so it will not match the rolling trend.',
+  rolling: `Each point is the mean of that day and the ${TREND_WINDOW_DAYS - 1} days before it — the series the ${TREND_WINDOW_DAYS}d avg trend below measures.`,
+  weekly:
+    'Calendar Mon–Sun buckets. The newest point covers only the days elapsed this week, so it will not match the rolling trend.',
   monthly: 'Calendar month buckets.',
 };
 
@@ -87,8 +84,7 @@ export default function WeightTab({ userId }: Props) {
   const chartData = useMemo(() => {
     if (view === 'daily') return ascending.map((e) => ({ date: e.logged_at, weight: e.weight_lbs }));
     if (view === 'rolling') return rollingAverageSeries(ascending);
-    if (view === 'weekly')
-      return groupAverage(ascending, (iso) => toISODate(mondayOf(parseISODate(iso))));
+    if (view === 'weekly') return weeklyAverageSeries(ascending);
     return groupAverage(ascending, (iso) => `${iso.slice(0, 7)}-01`);
   }, [ascending, view]);
 
@@ -197,7 +193,7 @@ export default function WeightTab({ userId }: Props) {
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           <StatBox label="Current" value={`${stats.current}`} />
           <StatBox
-            label="7d avg trend"
+            label={`${stats.trend.days}d avg trend`}
             value={formatWeightDelta(stats.trend)}
             // The two means behind the arrow, so it can be checked by hand.
             sub={formatTrendBasis(stats.trend) ?? undefined}

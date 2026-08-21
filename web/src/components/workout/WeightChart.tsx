@@ -12,11 +12,17 @@ import { ACCENT, formatDate, linearRegression, round1 } from '../../lib/workout'
 interface Props {
   /** Ordered oldest → newest. */
   data: { date: string; weight: number }[];
+  height?: number;
+  /**
+   * Drop the bordered card and the axes' breathing room, for embedding inside a
+   * card that already supplies both — the Home weight widget.
+   */
+  bare?: boolean;
 }
 
-export default function WeightChart({ data }: Props) {
+export default function WeightChart({ data, height = 240, bare = false }: Props) {
   if (data.length === 0) {
-    return (
+    return bare ? null : (
       <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
         <p className="text-sm text-gray-400">No weight entries yet — log one above.</p>
       </div>
@@ -30,15 +36,23 @@ export default function WeightChart({ data }: Props) {
     trend: round1(slope * i + intercept),
   }));
 
+  const wrapper = bare
+    ? ''
+    : 'rounded-2xl border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900';
+
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900">
-      <ResponsiveContainer width="100%" height={240}>
+    <div className={wrapper}>
+      <ResponsiveContainer width="100%" height={height}>
         <LineChart data={chartData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#a1a1a1" strokeOpacity={0.2} />
-          <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#a1a1a1' }} minTickGap={24} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 11, fill: '#a1a1a1' }}
+            minTickGap={bare ? 40 : 24}
+          />
           <YAxis
             tick={{ fontSize: 11, fill: '#a1a1a1' }}
-            width={48}
+            width={bare ? 40 : 48}
             domain={['dataMin - 3', 'dataMax + 3']}
           />
           <Tooltip

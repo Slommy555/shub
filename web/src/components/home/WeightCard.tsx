@@ -2,8 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useBodyWeight } from '../../hooks/workout/useBodyWeight';
 import { round1 } from '../../lib/workout';
 import { formatShort, todayISO } from '../../lib/dates';
-import { formatTrendCoverage, formatWeightDelta, weightTrend } from '../../lib/weightTrend';
+import {
+  formatTrendCoverage,
+  formatWeightDelta,
+  weeklyAverageSeries,
+  weightTrend,
+} from '../../lib/weightTrend';
 import { haptic } from '../../lib/native';
+import WeightChart from '../workout/WeightChart';
 import { Card, CardSkeleton, SectionHeader } from './parts';
 
 /**
@@ -12,8 +18,11 @@ import { Card, CardSkeleton, SectionHeader } from './parts';
  * made here is the same row that tab reads, and re-logging today updates it
  * rather than stacking a second entry on the same day.
  *
- * The headline is the 7-day moving average rather than the raw reading: daily
+ * The headline is the 14-day moving average rather than the raw reading: daily
  * body weight swings on water and food, and the average is what actually trends.
+ * Under it, the weekly averages with their regression line — the slope across
+ * several weeks is the thing that says whether weight is actually moving, which
+ * no single delta can.
  */
 export default function WeightCard({ userId }: { userId: string }) {
   const { entries, loading, addEntry, updateEntry } = useBodyWeight(userId);
@@ -31,6 +40,8 @@ export default function WeightCard({ userId }: { userId: string }) {
   }, [todayEntry]);
 
   const trend = useMemo(() => weightTrend(entries, today), [entries, today]);
+  // Ascending for the chart; `entries` arrives newest-first.
+  const weekly = useMemo(() => weeklyAverageSeries(entries), [entries]);
   const latest = entries[0] ?? null;
 
   function save() {
@@ -56,7 +67,7 @@ export default function WeightCard({ userId }: { userId: string }) {
 
       {avg === null ? (
         <p className="text-[15px]" style={{ color: 'var(--color-text-tertiary)' }}>
-          No weight logged in the last 7 days
+          No weight logged in the last {trend.days} days
         </p>
       ) : (
         <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
@@ -71,7 +82,7 @@ export default function WeightCard({ userId }: { userId: string }) {
               </span>
             </span>
             <span className="mt-1.5 text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
-              7-day average
+              {trend.days}-day average
             </span>
           </div>
 
@@ -97,9 +108,20 @@ export default function WeightCard({ userId }: { userId: string }) {
             <span className="mt-1.5 text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
               {trend.previousAvg === null
                 ? 'Not enough data'
-                : `vs ${round1(trend.previousAvg)} prior 7d`}
+                : `vs ${round1(trend.previousAvg)} prior ${trend.days}d`}
             </span>
           </div>
+        </div>
+      )}
+
+      {/* Weekly averages with the regression line through them. Two points
+          can't show a slope, so it only appears once there's a trend to see. */}
+      {weekly.length >= 3 && (
+        <div className="mt-4">
+          <WeightChart data={weekly} height={132} bare />
+          <p className="mt-1 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+            Weekly average · dashed line is the trend
+          </p>
         </div>
       )}
 
