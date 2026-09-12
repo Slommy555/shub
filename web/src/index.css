@@ -353,18 +353,14 @@ html[data-theme-custom] [class~='dark:border-gray-800'] {
 }
 
 /* ---------------------------------------------------------------------------
-   UI_SKILL.md design tokens. Scoped to `.budget-scope` / `.ui-scope`; those
-   screens' components all read these variables, so remapping them onto the app's
-   standard gray Tailwind palette makes them match the rest of the site without
-   changing any component. Dark values are the default; light-mode
-   values apply when <html> lacks `.dark`. Accent is the app's monochrome invert
-   (dark button in light mode, light button in dark mode) with
-   `--color-accent-text` for label color.
-
-   `.ui-scope` is the same token set for screens built later against UI_SKILL.md
-   (the Home tab, the Workout → Program tab).
+   UI_SKILL.md design tokens, scoped to `.ui-scope`. Those screens' components
+   all read these variables, so remapping them onto the app's standard gray
+   Tailwind palette makes them match the rest of the site without changing any
+   component. Dark values are the default; light-mode values apply when <html>
+   lacks `.dark`. Accent is the app's monochrome invert (dark button in light
+   mode, light button in dark mode) with `--color-accent-text` for label color.
+   Used by the Home tab and the Workout → Program tab.
 --------------------------------------------------------------------------- */
-.budget-scope,
 .ui-scope {
   --color-bg-base: #0b0b0b; /* gray-950 */
   --color-bg-elevated: #171717; /* gray-900 */
@@ -387,7 +383,6 @@ html[data-theme-custom] [class~='dark:border-gray-800'] {
   --color-danger: #e05c5c;
   --color-info: #5c9eff;
 }
-html:not(.dark) .budget-scope,
 html:not(.dark) .ui-scope {
   --color-bg-base: #fafafa; /* gray-50 */
   --color-bg-elevated: #ffffff;
@@ -409,10 +404,9 @@ html:not(.dark) .ui-scope {
   --color-danger: #dc2626;
   --color-info: #2563eb;
 }
-/* When custom colors are enabled, drive the Budget tab from the same --c-*
-   variables the rest of the app uses, so it recolors together with every other
+/* When custom colors are enabled, drive these screens from the same --c-*
+   variables the rest of the app uses, so they recolor together with every other
    tab. Placed after the default/light blocks so it wins in both modes. */
-html[data-theme-custom] .budget-scope,
 html[data-theme-custom] .ui-scope {
   --color-bg-base: var(--c-bg);
   --color-bg-elevated: var(--c-surface);
@@ -428,7 +422,6 @@ html[data-theme-custom] .ui-scope {
   --color-border: var(--c-border);
   --color-border-strong: var(--c-border);
 }
-.budget-scope input::placeholder,
 .ui-scope input::placeholder {
   color: var(--color-text-tertiary);
 }

@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { watchUserPrefs } from '../lib/userPrefs';
 
 /** Every widget the Home tab can show, in the order it ships with. */
-export const HOME_CARDS = ['program', 'habits', 'tasks', 'weight', 'events', 'budget'] as const;
+export const HOME_CARDS = ['program', 'habits', 'tasks', 'events'] as const;
 
 export type HomeCardId = (typeof HOME_CARDS)[number];
 

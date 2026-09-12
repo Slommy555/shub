@@ -21,8 +21,6 @@ import ProgramCard from './ProgramCard';
 import HabitsCard from './HabitsCard';
 import TasksCard from './TasksCard';
 import EventsCard, { todaysEvents } from './EventsCard';
-import WeightCard from './WeightCard';
-import BudgetCard from './BudgetCard';
 import SortableCard from './SortableCard';
 
 /** The name the greeting uses. */
@@ -52,8 +50,8 @@ function trailingSpan(count: number): string {
  * own beyond the rearrange toggle — App keys every tab by id, so returning here
  * remounts and refetches.
  *
- * Habits, tasks and weight are all editable in place and write to the same
- * tables (and, for tasks, the very same `useTasks` instance) as their own tabs.
+ * Habits and tasks are both editable in place and write to the same tables
+ * (and, for tasks, the very same `useTasks` instance) as their own tabs.
  */
 export default function HomeTab({
   userId,
@@ -85,9 +83,7 @@ export default function HomeTab({
     program: <ProgramCard userId={userId} onOpenWorkout={() => onNavigate('workout')} />,
     habits: <HabitsCard userId={userId} onOpenHabits={() => onNavigate('productivity')} />,
     tasks: <TasksCard tasks={tasks} onToggle={onToggleTask} onOpenTasks={openTasks} />,
-    weight: <WeightCard userId={userId} />,
     events: events.length > 0 ? <EventsCard events={events} onOpenTasks={openTasks} /> : null,
-    budget: <BudgetCard userId={userId} onOpenBudget={() => onNavigate('budget')} />,
   };
 
   // The Schedule widget disappears on a day with no events; it keeps its slot in

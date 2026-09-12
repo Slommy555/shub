@@ -31,7 +31,6 @@ import {
 import { setPendingNote } from '../../lib/noteHandoff';
 import {
   handleCompleteHabits,
-  handleLogWeight,
   handleWriteNote,
   handleStartWorkout,
 } from '../../lib/claudeActions';
@@ -90,7 +89,7 @@ export default function VoiceController({
   const [reschedules, setReschedules] = useState<ProposedReschedule[]>([]);
   const [deletions, setDeletions] = useState<ProposedDeletion[]>([]);
   const [workShifts, setWorkShifts] = useState<ProposedWorkShift[]>([]);
-  // App-wide actions (habits/workout/weight/reminders) from the second pass.
+  // App-wide actions (habits/workout/notes) from the second pass.
   const [extras, setExtras] = useState<ReviewModel>(emptyReview);
   const [finalTranscript, setFinalTranscript] = useState('');
   const [parseError, setParseError] = useState<string | null>(null);
@@ -258,7 +257,7 @@ export default function VoiceController({
         return mapResult(items);
       })();
 
-      // Pass 2 — app-wide actions (habits/workout/weight/reminders). Purely
+      // Pass 2 — app-wide actions (habits/workout/notes). Purely
       // additive, so its failures are non-fatal and never block the task review.
       const actionPass = (async (): Promise<ReviewModel> => {
         try {
@@ -500,10 +499,6 @@ export default function VoiceController({
       await handleCompleteHabits(extras.habits, userId);
       const n = extras.habits.targets.length;
       parts.push(`${n} habit${n === 1 ? '' : 's'}`);
-    }
-    if (extras.weight) {
-      await handleLogWeight(extras.weight, userId);
-      parts.push('weight');
     }
     if (extras.notes.length) {
       for (const note of extras.notes) await handleWriteNote(note, userId);

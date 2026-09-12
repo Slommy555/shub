@@ -43,11 +43,7 @@ Possible action types:
    If they name a specific workout template set template_name to that name
    If no template mentioned set freestyle: true
 
-3. log_weight
-   data: { weight_lbs: number, notes: string | null }
-   Use for: when user mentions their current weight or says they weighed themselves
-
-4. write_note
+3. write_note
    data: { page_name: string | null, title: string, content: string }
    Use for: when the user asks to write, create, save, or jot down a note
    page_name: the page they want it saved to, if mentioned (match against the existing note page names below). If not mentioned, set to null

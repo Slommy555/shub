@@ -39,7 +39,7 @@ export default function SortableCard({
         outlineOffset: 2,
       }}
     >
-      {/* Swallows clicks so dragging can't toggle a habit or open the Budget
+      {/* Swallows clicks so dragging can't toggle a habit or open the Workout
           tab. h-full passes the stretched grid height down to the card. */}
       <div className="pointer-events-none h-full select-none">{children}</div>
 

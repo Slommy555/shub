@@ -6,6 +6,7 @@ import {
   type TemplateWithExercises,
 } from '../../types/workout';
 import type { UseWorkoutSession } from '../../hooks/workout/useWorkoutSession';
+import type { TemplateItemInput } from '../../hooks/workout/useTemplates';
 import ActiveWorkoutSession from './ActiveWorkoutSession';
 import WorkoutSummaryCard, { type FinishedWorkout } from './WorkoutSummaryCard';
 
@@ -18,6 +19,8 @@ interface Props {
   deleteExercise: (id: string) => void;
   onWorkoutFinished: () => void;
   onSaveAsTemplate: (name: string, exercises: SessionExercise[]) => Promise<string | null>;
+  /** Writes a session's structural edits back to the template it started from. */
+  onSaveToTemplate: (templateId: string, items: TemplateItemInput[]) => Promise<void>;
   showRpe: boolean;
   /** Set when today falls in a deload week of the active program. */
   deload?: { volumePct: number } | null;
@@ -54,6 +57,7 @@ export default function LogTab({
   deleteExercise,
   onWorkoutFinished,
   onSaveAsTemplate,
+  onSaveToTemplate,
   showRpe,
   deload,
   prefillWeight,
@@ -84,6 +88,7 @@ export default function LogTab({
             onWorkoutFinished();
           }}
           showRpe={showRpe}
+          onSaveToTemplate={onSaveToTemplate}
         />
       </>
     );

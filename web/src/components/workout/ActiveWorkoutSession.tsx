@@ -29,7 +29,9 @@ import {
 import { DEFAULT_REST_SECONDS, formatClock } from '../../lib/workout';
 import { haptic } from '../../lib/native';
 import type { UseWorkoutSession } from '../../hooks/workout/useWorkoutSession';
+import type { TemplateItemInput } from '../../hooks/workout/useTemplates';
 import ExerciseModal from './ExerciseModal';
+import TemplateEditPrompt from './TemplateEditPrompt';
 
 /** Hard cap on a session. Past this the workout is ended and saved on its own —
  *  a forgotten session would otherwise log a 14-hour "workout". */
@@ -52,6 +54,8 @@ interface Props {
   ) => void;
   /** Whether to show the RPE column in the set logger (Settings → Workout). */
   showRpe: boolean;
+  /** Writes the session's structural edits back to its source template. */
+  onSaveToTemplate: (templateId: string, items: TemplateItemInput[]) => Promise<void>;
 }
 
 const SET_TYPE_NEXT: Record<SetType, SetType> = {
@@ -472,6 +476,7 @@ export default function ActiveWorkoutSession({
   onDeleteExercise,
   onFinished,
   showRpe,
+  onSaveToTemplate,
 }: Props) {
   const session = api.session!;
   const [now, setNow] = useState(Date.now());
@@ -481,6 +486,10 @@ export default function ActiveWorkoutSession({
   const [nameDraft, setNameDraft] = useState(session.name);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  // "Save changes to template?" — sits between the finish review and the
+  // completion summary, and only when the session actually drifted.
+  const [templatePrompt, setTemplatePrompt] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   // Rest timer between sets — starts when a set is checked off. `total` drives
   // the progress bar; `doneAt` keeps the "rest over" flash on screen briefly.
   const [rest, setRest] = useState<{ endsAt: number; total: number } | null>(null);
@@ -580,6 +589,30 @@ export default function ActiveWorkoutSession({
     savingRef.current = false;
     setSaving(false);
     if (summary) onFinished(summary, snapshot, auto);
+  }
+
+  /**
+   * The finish path once the user has committed. `saveTemplate` writes the
+   * structural edits back first, so a failed template write can't be mistaken
+   * for a lost workout — the log is saved either way, right after.
+   */
+  async function finishFromPrompt(saveTemplate: boolean) {
+    if (saveTemplate) {
+      const payload = api.buildTemplateSave();
+      if (payload) {
+        setSavingTemplate(true);
+        await onSaveToTemplate(payload.templateId, payload.items);
+        setSavingTemplate(false);
+      }
+    }
+    setTemplatePrompt(false);
+    await endSession(false);
+  }
+
+  /** "Save workout" — detour through the template prompt when there are edits. */
+  function confirmFinish() {
+    if (api.hasTemplateEdits) setTemplatePrompt(true);
+    else void endSession(false);
   }
 
   function commitRename() {
@@ -872,7 +905,7 @@ export default function ActiveWorkoutSession({
               </button>
               <button
                 type="button"
-                onClick={() => endSession(false)}
+                onClick={confirmFinish}
                 disabled={saving}
                 className="btn-accent flex-1 px-4 py-3 text-sm font-semibold disabled:opacity-60"
               >
@@ -881,6 +914,17 @@ export default function ActiveWorkoutSession({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Template save-on-edit. Skipped entirely when nothing structural
+          changed, and never shown on the 2h30m auto-end (nobody's there). */}
+      {templatePrompt && (
+        <TemplateEditPrompt
+          edits={api.templateEdits}
+          saving={savingTemplate || saving}
+          onDontSave={() => void finishFromPrompt(false)}
+          onSave={() => void finishFromPrompt(true)}
+        />
       )}
     </div>
   );

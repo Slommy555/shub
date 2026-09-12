@@ -188,14 +188,6 @@ export interface WorkoutSet {
   completed_at: string;
 }
 
-export interface BodyWeightLog {
-  id: string;
-  user_id: string;
-  weight_lbs: number;
-  logged_at: string; // ISO date (YYYY-MM-DD)
-  notes: string | null;
-}
-
 // --- Derived / composite shapes -------------------------------------------
 
 /** A template with its ordered exercises joined to the exercise records. */
@@ -237,11 +229,53 @@ export interface SessionExercise {
   sets: SessionSet[];
 }
 
+/**
+ * One template exercise exactly as it stood when the session started. Keyed by
+ * the `SessionExercise.key` it was hydrated into, so a template row and its live
+ * counterpart stay paired through renames, reorders and duplicate exercises.
+ */
+export interface TemplateBaselineExercise {
+  key: string;
+  exercise_id: string;
+  name: string;
+  /** Planned reps per set, in template order. */
+  reps: (number | null)[];
+  /** Planned weight per set. Kept so saving back never writes *logged* weights. */
+  weights: (number | null)[];
+  types: SetType[];
+  /** Per-set rest overrides from the plan. */
+  restPerSet: (number | null)[];
+  rest_seconds: number | null;
+}
+
+/** The structure of the source template, snapshotted at session start. */
+export interface TemplateBaseline {
+  templateId: string;
+  exercises: TemplateBaselineExercise[];
+}
+
+export type TemplateEditKind = 'added' | 'removed' | 'changed' | 'reordered';
+
+/** One line in the "save changes to template?" prompt. */
+export interface TemplateEdit {
+  kind: TemplateEditKind;
+  /** Exercise name; empty for the reorder entry, which is list-wide. */
+  name: string;
+  /** e.g. "4 sets → 5 sets, 10 reps → 8 reps". */
+  detail?: string;
+}
+
 export interface ActiveSession {
   templateId: string | null;
   name: string;
   startedAt: string; // ISO timestamp
   exercises: SessionExercise[];
+  /**
+   * Set only for a session started from a template — the structure it started
+   * with, diffed on finish to offer saving the edits back. Optional so sessions
+   * persisted before this shipped still parse.
+   */
+  templateBaseline?: TemplateBaseline | null;
 }
 
 /** Summary computed when finishing a workout. */
@@ -327,4 +361,3 @@ export interface ExercisePR {
 }
 
 export type VolumeRange = 'week' | '4weeks' | '3months';
-export type WeightView = 'daily' | 'rolling' | 'weekly' | 'monthly';

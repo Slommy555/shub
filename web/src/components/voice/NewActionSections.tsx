@@ -1,11 +1,6 @@
-import type {
-  NoteReviewModel,
-  ReviewModel,
-  WeightReviewModel,
-} from '../../lib/claudeRouter';
+import type { NoteReviewModel, ReviewModel } from '../../lib/claudeRouter';
 import HabitConfirmCard from './HabitConfirmCard';
 import WorkoutStartCard from './WorkoutStartCard';
-import WeightConfirmCard from './WeightConfirmCard';
 import NoteReviewCard from '../notes/NoteReviewCard';
 
 interface Props {
@@ -16,7 +11,7 @@ interface Props {
 }
 
 /**
- * The habit / workout / weight / note sections of a voice review. Rendered
+ * The habit / workout / note sections of a voice review. Rendered
  * inside VoicePopup alongside the existing task sections so the user reviews
  * everything in one place before confirming. Purely presentational — the parent
  * owns the ReviewModel state and runs the handlers on confirm.
@@ -24,8 +19,6 @@ interface Props {
 export default function NewActionSections({ review, onChange, onEditNote }: Props) {
   const patchNote = (id: string, np: Partial<NoteReviewModel>) =>
     onChange({ notes: review.notes.map((n) => (n.id === id ? { ...n, ...np } : n)) });
-  const patchWeight = (wp: Partial<WeightReviewModel>) =>
-    onChange({ weight: review.weight ? { ...review.weight, ...wp } : null });
 
   return (
     <>
@@ -49,17 +42,6 @@ export default function NewActionSections({ review, onChange, onEditNote }: Prop
       {review.workout && (
         <Section title="Workout to start">
           <WorkoutStartCard model={review.workout} onDismiss={() => onChange({ workout: null })} />
-        </Section>
-      )}
-
-      {/* Weight */}
-      {review.weight && (
-        <Section title="Weight to log">
-          <WeightConfirmCard
-            model={review.weight}
-            onChange={patchWeight}
-            onDismiss={() => onChange({ weight: null })}
-          />
         </Section>
       )}
 

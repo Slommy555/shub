@@ -2,7 +2,6 @@ export type Tab =
   | 'home'
   | 'todo'
   | 'workout'
-  | 'budget'
   | 'productivity'
   | 'notes'
   | 'voice'
@@ -57,15 +56,6 @@ export const TABS: TabItem[] = [
         <path d="M6.5 6.5 17.5 17.5M4 8l-1 1 2 2M20 16l1-1-2-2" />
         <path d="m7 4-1 1 4 4M17 20l1-1-4-4" />
         <path d="M3.5 14.5 9.5 8.5M14.5 15.5 20.5 9.5" />
-      </svg>
-    ),
-  },
-  {
-    id: 'budget',
-    label: 'Budget',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" {...stroke}>
-        <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
       </svg>
     ),
   },

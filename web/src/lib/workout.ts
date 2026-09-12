@@ -94,36 +94,6 @@ export const HEAT_LABELS: { level: 0 | 1 | 2 | 3 | 4; label: string }[] = [
   { level: 4, label: '10+' },
 ];
 
-// --- simple linear regression (for the body-weight trend line) -------------
-
-/** Least-squares fit; returns slope/intercept for y = slope*x + intercept. */
-export function linearRegression(points: { x: number; y: number }[]): {
-  slope: number;
-  intercept: number;
-} {
-  const n = points.length;
-  if (n < 2) return { slope: 0, intercept: points[0]?.y ?? 0 };
-  let sx = 0;
-  let sy = 0;
-  let sxy = 0;
-  let sxx = 0;
-  for (const p of points) {
-    sx += p.x;
-    sy += p.y;
-    sxy += p.x * p.y;
-    sxx += p.x * p.x;
-  }
-  const denom = n * sxx - sx * sx;
-  if (denom === 0) return { slope: 0, intercept: sy / n };
-  const slope = (n * sxy - sx * sy) / denom;
-  const intercept = (sy - slope * sx) / n;
-  return { slope, intercept };
-}
-
-export function round1(n: number): number {
-  return Math.round(n * 10) / 10;
-}
-
 /** Fallback rest used when an exercise has no configured rest. */
 export const DEFAULT_REST_SECONDS = 90;
 

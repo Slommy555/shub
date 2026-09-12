@@ -131,18 +131,14 @@ export function useTemplates(userId: string | null, exercises: Exercise[]) {
     [userId]
   );
 
-  const saveTemplate = useCallback(
-    async (
-      templateId: string,
-      data: { name: string; notes: string | null; items: TemplateItemInput[] }
-    ) => {
-      // Optimistic local update.
-      setTemplates((prev) =>
-        prev.map((t) =>
-          t.id === templateId ? { ...t, name: data.name, notes: data.notes } : t
-        )
-      );
-      const newRows: TemplateExercise[] = data.items.map((it) => ({
+  /**
+   * Replace a template's exercise list, leaving its name and notes alone. Used
+   * both by the full editor (below) and by "save changes to template" after a
+   * session edited the structure mid-workout.
+   */
+  const saveTemplateExercises = useCallback(
+    async (templateId: string, items: TemplateItemInput[]) => {
+      const newRows: TemplateExercise[] = items.map((it) => ({
         id: crypto.randomUUID(),
         template_id: templateId,
         exercise_id: it.exercise_id,
@@ -158,18 +154,13 @@ export function useTemplates(userId: string | null, exercises: Exercise[]) {
         ...newRows,
       ]);
 
-      const { error: upErr } = await supabase
-        .from('workout_templates')
-        .update({ name: data.name, notes: data.notes })
-        .eq('id', templateId);
-      if (upErr) console.error('saveTemplate (template) failed:', upErr.message);
-
-      // Replace the template_exercises rows wholesale.
+      // Replace the template_exercises rows wholesale: that covers removals,
+      // insertions and the new positions in one pass.
       const { error: delErr } = await supabase
         .from('template_exercises')
         .delete()
         .eq('template_id', templateId);
-      if (delErr) console.error('saveTemplate (clear) failed:', delErr.message);
+      if (delErr) console.error('saveTemplateExercises (clear) failed:', delErr.message);
 
       if (newRows.length) {
         const { error: insErr } = await supabase.from('template_exercises').insert(
@@ -185,10 +176,33 @@ export function useTemplates(userId: string | null, exercises: Exercise[]) {
             sets: r.sets,
           }))
         );
-        if (insErr) console.error('saveTemplate (insert) failed:', insErr.message);
+        if (insErr) console.error('saveTemplateExercises (insert) failed:', insErr.message);
       }
     },
     []
+  );
+
+  const saveTemplate = useCallback(
+    async (
+      templateId: string,
+      data: { name: string; notes: string | null; items: TemplateItemInput[] }
+    ) => {
+      // Optimistic local update.
+      setTemplates((prev) =>
+        prev.map((t) =>
+          t.id === templateId ? { ...t, name: data.name, notes: data.notes } : t
+        )
+      );
+
+      const { error: upErr } = await supabase
+        .from('workout_templates')
+        .update({ name: data.name, notes: data.notes })
+        .eq('id', templateId);
+      if (upErr) console.error('saveTemplate (template) failed:', upErr.message);
+
+      await saveTemplateExercises(templateId, data.items);
+    },
+    [saveTemplateExercises]
   );
 
   /**
@@ -223,6 +237,7 @@ export function useTemplates(userId: string | null, exercises: Exercise[]) {
     createTemplate,
     createTemplateFrom,
     saveTemplate,
+    saveTemplateExercises,
     deleteTemplate,
   };
 }

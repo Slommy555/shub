@@ -12,15 +12,15 @@ import {
   takePendingWorkoutSubTab,
 } from '../../lib/workoutHandoff';
 import { templateItemsFromSession } from '../../lib/workoutFromLog';
+import type { TemplateItemInput } from '../../hooks/workout/useTemplates';
 import type { SessionExercise } from '../../types/workout';
 import LogTab from './LogTab';
 import TemplatesTab from './TemplatesTab';
 import HistoryTab from './HistoryTab';
 import MetricsTab from './MetricsTab';
-import WeightTab from './WeightTab';
 import ProgramTab from './program/ProgramTab';
 
-type SubTab = 'log' | 'program' | 'templates' | 'history' | 'metrics' | 'weight';
+type SubTab = 'log' | 'program' | 'templates' | 'history' | 'metrics';
 
 const SUBTABS: { id: SubTab; label: string }[] = [
   { id: 'log', label: 'Log' },
@@ -28,7 +28,6 @@ const SUBTABS: { id: SubTab; label: string }[] = [
   { id: 'templates', label: 'Templates' },
   { id: 'history', label: 'History' },
   { id: 'metrics', label: 'Metrics' },
-  { id: 'weight', label: 'Weight' },
 ];
 
 export default function WorkoutTab({ userId, showRpe }: { userId: string; showRpe: boolean }) {
@@ -70,6 +69,15 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
   function onWorkoutFinished() {
     setVersion((v) => v + 1);
     templatesApi.reload(); // refresh "last used" dates
+  }
+
+  /**
+   * "Save to Template" from the finish prompt — the session's structure is
+   * written back over the template's exercise rows, leaving its name and notes
+   * (and every logged weight) alone.
+   */
+  async function saveEditsToTemplate(templateId: string, items: TemplateItemInput[]) {
+    await templatesApi.saveTemplateExercises(templateId, items);
   }
 
   /** "Save as template" from the post-workout summary (freestyle → repeatable). */
@@ -145,6 +153,7 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
             deleteExercise={exercisesApi.deleteExercise}
             onWorkoutFinished={onWorkoutFinished}
             onSaveAsTemplate={saveSessionAsTemplate}
+            onSaveToTemplate={saveEditsToTemplate}
             showRpe={showRpe}
             deload={deload}
             prefillWeight={prefillWeight}
@@ -174,7 +183,6 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
         {sub === 'metrics' && (
           <MetricsTab userId={userId} exercises={exercisesApi.exercises} version={version} />
         )}
-        {sub === 'weight' && <WeightTab userId={userId} />}
       </div>
     </div>
   );

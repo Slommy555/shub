@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { diffTemplateEdits, templateItemsFromEdited } from '../../lib/templateEdits';
+import type { TemplateItemInput } from './useTemplates';
 import type {
   ActiveSession,
   Exercise,
@@ -7,6 +9,7 @@ import type {
   SessionExercise,
   SessionSet,
   SetType,
+  TemplateBaselineExercise,
   TemplateWithExercises,
   WorkoutSummary,
 } from '../../types/workout';
@@ -61,6 +64,7 @@ export function useWorkoutSession(userId: string | null) {
       name: name?.trim() || 'Freestyle Workout',
       startedAt: new Date().toISOString(),
       exercises: [],
+      templateBaseline: null,
     });
   }, []);
 
@@ -71,6 +75,7 @@ export function useWorkoutSession(userId: string | null) {
       name: name.trim() || 'Workout',
       startedAt: new Date().toISOString(),
       exercises,
+      templateBaseline: null,
     });
   }, []);
 
@@ -88,6 +93,9 @@ export function useWorkoutSession(userId: string | null) {
     tpl: TemplateWithExercises,
     weightFor?: (exerciseId: string) => number | null
   ) => {
+    // Snapshotted alongside the hydration so the two share the generated key —
+    // that key is what pairs a template row with its live counterpart on finish.
+    const baseline: TemplateBaselineExercise[] = [];
     const exercises: SessionExercise[] = tpl.exercises.map((te) => {
       const override = weightFor?.(te.exercise_id) ?? null;
       // Prefer the explicit per-set plan; fall back to legacy default_* counts.
@@ -110,8 +118,20 @@ export function useWorkoutSession(userId: string | null) {
         done: false,
         rest: s.rest ?? null,
       }));
+      const key = crypto.randomUUID();
+      baseline.push({
+        key,
+        exercise_id: te.exercise_id,
+        name: te.exercise.name,
+        reps: planned.map((s) => s.reps ?? null),
+        // The PLANNED weight, never the deload override or anything logged.
+        weights: planned.map((s) => s.weight ?? null),
+        types: planned.map((s) => s.type ?? 'normal'),
+        restPerSet: planned.map((s) => s.rest ?? null),
+        rest_seconds: te.rest_seconds ?? null,
+      });
       return {
-        key: crypto.randomUUID(),
+        key,
         exercise: te.exercise,
         restSeconds: te.rest_seconds ?? null,
         notes: '',
@@ -123,6 +143,7 @@ export function useWorkoutSession(userId: string | null) {
       name: tpl.name,
       startedAt: new Date().toISOString(),
       exercises,
+      templateBaseline: { templateId: tpl.id, exercises: baseline },
     });
   }, []);
 
@@ -310,8 +331,39 @@ export function useWorkoutSession(userId: string | null) {
     [userId, session]
   );
 
+  /**
+   * What the user has changed about the template's STRUCTURE this session —
+   * exercises added or removed, set counts, planned reps, order. Derived from
+   * the baseline (which rides along in localStorage with the rest of the
+   * session), so it survives a reload mid-workout.
+   */
+  const templateEdits = useMemo(
+    () =>
+      session?.templateBaseline
+        ? diffTemplateEdits(session.templateBaseline, session.exercises)
+        : [],
+    [session]
+  );
+  const hasTemplateEdits = templateEdits.length > 0;
+
+  /** The rows to write back, or null when this session came from no template. */
+  const buildTemplateSave = useCallback((): {
+    templateId: string;
+    items: TemplateItemInput[];
+  } | null => {
+    const base = session?.templateBaseline;
+    if (!base) return null;
+    return {
+      templateId: base.templateId,
+      items: templateItemsFromEdited(base, session.exercises),
+    };
+  }, [session]);
+
   return {
     session,
+    templateEdits,
+    hasTemplateEdits,
+    buildTemplateSave,
     startFreestyle,
     startFromTemplate,
     startFromExercises,

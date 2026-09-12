@@ -7,7 +7,7 @@ export function Card({
   className = '',
 }: {
   children: React.ReactNode;
-  /** When set the whole card becomes a button (e.g. Budget → Budget tab). */
+  /** When set the whole card becomes a button (e.g. Program → Workout tab). */
   onClick?: () => void;
   className?: string;
 }) {

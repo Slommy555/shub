@@ -9,7 +9,6 @@ import { setPendingWorkout } from './workoutHandoff';
 import type {
   HabitReviewModel,
   NoteReviewModel,
-  WeightReviewModel,
   WorkoutReviewModel,
 } from './claudeRouter';
 
@@ -50,19 +49,7 @@ export function handleStartWorkout(
   navigate('workout');
 }
 
-// 3. Weight ----------------------------------------------------------------
-export async function handleLogWeight(model: WeightReviewModel, userId: string): Promise<void> {
-  const { error } = await supabase.from('body_weight_logs').insert({
-    id: uid(),
-    user_id: userId,
-    weight_lbs: model.weight_lbs,
-    logged_at: todayISO(),
-    notes: model.notes,
-  });
-  if (error) console.error('handleLogWeight failed:', error.message);
-}
-
-// 4. Notes -----------------------------------------------------------------
+// 3. Notes -----------------------------------------------------------------
 /**
  * Save a voice-proposed note. Resolves the target page — using the matched
  * existing page, an existing page whose title matches (case-insensitive), or a

@@ -30,12 +30,6 @@ export interface WorkoutReviewModel {
   matchedName: string | null;
 }
 
-export interface WeightReviewModel {
-  id: string;
-  weight_lbs: number;
-  notes: string | null;
-}
-
 export interface NoteReviewModel {
   id: string;
   title: string;
@@ -52,7 +46,6 @@ export interface NoteReviewModel {
 export interface ReviewModel {
   habits: HabitReviewModel | null;
   workout: WorkoutReviewModel | null;
-  weight: WeightReviewModel | null;
   notes: NoteReviewModel[];
 }
 
@@ -60,7 +53,6 @@ export function emptyReview(): ReviewModel {
   return {
     habits: null,
     workout: null,
-    weight: null,
     notes: [],
   };
 }
@@ -70,7 +62,6 @@ export function reviewHasContent(r: ReviewModel): boolean {
   return (
     (r.habits != null && r.habits.targets.length > 0) ||
     r.workout != null ||
-    r.weight != null ||
     r.notes.length > 0
   );
 }
@@ -79,10 +70,6 @@ const uid = () => crypto.randomUUID();
 
 function asString(v: unknown): string | null {
   return typeof v === 'string' && v.trim() ? v : null;
-}
-function asNumber(v: unknown): number | null {
-  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN;
-  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -158,15 +145,6 @@ export async function prepareReview(
           templateName,
           matchedName: matched,
         };
-        break;
-      }
-
-      case 'log_weight': {
-        const d = (action.data ?? {}) as { weight_lbs?: unknown; notes?: unknown };
-        const w = asNumber(d.weight_lbs);
-        if (w != null && w > 0) {
-          review.weight = { id: uid(), weight_lbs: w, notes: asString(d.notes) };
-        }
         break;
       }
 

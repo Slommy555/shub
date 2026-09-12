@@ -21,7 +21,7 @@ interface Props {
   reschedules: ProposedReschedule[];
   deletions: ProposedDeletion[];
   workShifts: ProposedWorkShift[];
-  /** Habit/workout/weight/note sections from the app-wide actions pass. */
+  /** Habit/workout/note sections from the app-wide actions pass. */
   extras: ReviewModel;
   stopKeyword: string;
   /** Mobile uses tap-to-stop, so the "say [keyword]" hint is replaced. */
@@ -313,7 +313,7 @@ export default function VoicePopup(props: Props) {
                 </div>
               )}
 
-              {/* App-wide actions: habits, workout, weight, notes */}
+              {/* App-wide actions: habits, workout, notes */}
               <NewActionSections
                 review={extras}
                 onChange={props.onChangeExtras}

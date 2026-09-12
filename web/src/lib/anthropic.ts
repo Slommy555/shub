@@ -247,7 +247,7 @@ function extractJsonArray(raw: string): unknown {
   if (objs.length) return objs;
   // A truly empty response signals a failed call — surface it so the user can
   // retry. A non-empty response with no array just means "no tasks" (e.g. the
-  // transcript was only a habit/weight/food/reminder command), which is normal.
+  // transcript was only a habit/workout/note command), which is normal.
   if (s === '') throw new Error('Claude returned an empty response. Try again.');
   return [];
 }
