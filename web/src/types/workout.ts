@@ -311,11 +311,20 @@ export interface WorkoutProgram {
   created_at?: string;
 }
 
-/** One day of the DEFAULT split (day_number is 1..cycle_length). */
+/**
+ * One day of the DEFAULT split (day_number is 1..cycle_length).
+ *
+ * A day holds an ORDERED list of templates — `template_ids` — so two or more
+ * workouts can share a day and be run in the order shown. `template_id` is the
+ * pre-list column, still written with the first entry; read through
+ * `dayTemplateIds()` rather than either field directly.
+ */
 export interface ProgramDay {
   id: string;
   program_id: string;
   day_number: number;
+  template_ids: string[];
+  /** Legacy single-template column — mirrors `template_ids[0]`. */
   template_id: string | null;
   label: string | null;
   is_rest: boolean;
@@ -323,6 +332,8 @@ export interface ProgramDay {
 
 /** A patch applied to one cycle day in one specific week. */
 export interface ProgramDayOverride {
+  template_ids?: string[];
+  /** Legacy single-template key, still honored on overrides written before 059. */
   template_id?: string | null;
   label?: string | null;
   is_rest?: boolean;
@@ -343,7 +354,8 @@ export interface ProgramWeek {
 /** A day of a program as it actually resolves: default split + week override. */
 export interface ResolvedProgramDay {
   day_number: number;
-  template_id: string | null;
+  /** Every workout on this day, in the order they're meant to be done. */
+  template_ids: string[];
   label: string | null;
   is_rest: boolean;
   /** true when a week override (not the default split) produced this. */

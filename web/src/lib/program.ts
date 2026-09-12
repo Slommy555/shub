@@ -13,6 +13,7 @@
 import { addDays, parseISO, toISODate } from './dates';
 import type {
   ProgramDay,
+  ProgramDayOverride,
   ProgramWeek,
   ResolvedProgramDay,
   WorkoutProgram,
@@ -81,6 +82,27 @@ export function programEndISO(program: WorkoutProgram): string {
 }
 
 /**
+ * The workouts on a day row or override patch, as an ordered list.
+ *
+ * A day used to hold one template and now holds a list (migration 059). Rows and
+ * overrides written before that still carry only the singular `template_id`, so
+ * every read funnels through here: prefer the list, fall back to the single, and
+ * treat "no template" as an empty list rather than a null to special-case.
+ */
+export function dayTemplateIds(
+  row: { template_ids?: string[] | null; template_id?: string | null } | null | undefined
+): string[] {
+  if (!row) return [];
+  if (row.template_ids && row.template_ids.length > 0) return row.template_ids;
+  return row.template_id ? [row.template_id] : [];
+}
+
+/** Does this patch say anything about which workouts the day holds? */
+function patchSetsTemplates(patch: ProgramDayOverride): boolean {
+  return 'template_ids' in patch || 'template_id' in patch;
+}
+
+/**
  * A day as it actually resolves: the default split row, with the week's
  * `override_days` patch applied on top when one exists for that cycle day.
  *
@@ -97,13 +119,13 @@ export function resolveDay(
   const patch = week?.override_days?.[String(dayNumber)];
   const resolved: ResolvedProgramDay = {
     day_number: dayNumber,
-    template_id: base?.template_id ?? null,
+    template_ids: dayTemplateIds(base),
     label: base?.label ?? null,
     is_rest: base?.is_rest ?? false,
     overridden: false,
   };
   if (!patch) return resolved;
-  if ('template_id' in patch) resolved.template_id = patch.template_id ?? null;
+  if (patchSetsTemplates(patch)) resolved.template_ids = dayTemplateIds(patch);
   if ('label' in patch) resolved.label = patch.label ?? null;
   if ('is_rest' in patch) resolved.is_rest = patch.is_rest ?? false;
   resolved.overridden = true;

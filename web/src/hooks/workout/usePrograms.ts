@@ -162,6 +162,7 @@ export function usePrograms(userId: string | null) {
       const dayRows = Array.from({ length: cycle }, (_, i) => ({
         program_id: program.id,
         day_number: i + 1,
+        template_ids: [],
         template_id: null,
         label: null,
         is_rest: false,
@@ -274,17 +275,28 @@ export function usePrograms(userId: string | null) {
     [userId]
   );
 
-  /** Edit a day of the DEFAULT split — changes every week that has no override. */
+  /**
+   * Edit a day of the DEFAULT split — changes every week that has no override.
+   *
+   * A day holds a LIST of templates; `template_id` is the pre-list column and is
+   * kept in step with the list's first entry so nothing reading it goes stale.
+   */
   const setDefaultDay = useCallback(
-    async (programId: string, dayNumber: number, patch: Partial<Omit<ProgramDay, 'id' | 'program_id' | 'day_number'>>) => {
+    async (
+      programId: string,
+      dayNumber: number,
+      patch: Partial<Omit<ProgramDay, 'id' | 'program_id' | 'day_number'>>
+    ) => {
+      const next = { ...patch };
+      if (next.template_ids) next.template_id = next.template_ids[0] ?? null;
       setDays((prev) =>
         prev.map((d) =>
-          d.program_id === programId && d.day_number === dayNumber ? { ...d, ...patch } : d
+          d.program_id === programId && d.day_number === dayNumber ? { ...d, ...next } : d
         )
       );
       const { error } = await supabase
         .from('program_days')
-        .update(patch)
+        .update(next)
         .eq('program_id', programId)
         .eq('day_number', dayNumber);
       if (error) console.error('setDefaultDay failed:', error.message);
@@ -325,7 +337,10 @@ export function usePrograms(userId: string | null) {
         weeks.find((w) => w.program_id === programId && w.week_number === weekNumber) ?? null;
       const next: Record<string, ProgramDayOverride> = { ...(current?.override_days ?? {}) };
       if (patch === null) delete next[String(dayNumber)];
-      else next[String(dayNumber)] = patch;
+      // Mirror the list's first entry onto the legacy key, same as the split rows.
+      else next[String(dayNumber)] = patch.template_ids
+        ? { ...patch, template_id: patch.template_ids[0] ?? null }
+        : patch;
       const value = Object.keys(next).length > 0 ? next : null;
       await setWeekFields(programId, weekNumber, { override_days: value });
     },

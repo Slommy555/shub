@@ -187,9 +187,9 @@ export default function ProgramDetail({
   const [editingProgram, setEditingProgram] = useState(false);
 
   const defaults = useMemo(() => api.daysFor(program.id), [api, program.id]);
-  const templateName = useMemo(() => {
+  const templateNames = useMemo(() => {
     const map = new Map(templates.map((t) => [t.id, t.name] as const));
-    return (id: string | null) => (id ? map.get(id) ?? 'Deleted template' : null);
+    return (ids: string[]) => ids.map((id) => map.get(id) ?? 'Deleted template');
   }, [templates]);
 
   const today = todayISO();
@@ -207,7 +207,7 @@ export default function ProgramDetail({
       return {
         title: `Day ${editing.dayNumber} — default split`,
         scopeNote: 'Changes every week that has no override of its own.',
-        value: { template_id: d.template_id, label: d.label, is_rest: d.is_rest } as DayDraft,
+        value: { template_ids: d.template_ids, label: d.label, is_rest: d.is_rest } as DayDraft,
         onSave: (draft: DayDraft) =>
           void api.setDefaultDay(program.id, editing.dayNumber, draft),
         onReset: undefined,
@@ -218,7 +218,7 @@ export default function ProgramDetail({
     return {
       title: `Week ${editing.weekNumber} · ${dayHeading(editing.iso)}`,
       scopeNote: `Changes Day ${editing.dayNumber} in week ${editing.weekNumber} only.`,
-      value: { template_id: d.template_id, label: d.label, is_rest: d.is_rest } as DayDraft,
+      value: { template_ids: d.template_ids, label: d.label, is_rest: d.is_rest } as DayDraft,
       onSave: (draft: DayDraft) =>
         void api.setWeekDayOverride(program.id, editing.weekNumber, editing.dayNumber, draft),
       onReset: d.overridden
@@ -286,7 +286,11 @@ export default function ProgramDetail({
       >
         {dayNumbers.map((n, i) => {
           const d = resolveDay(n, defaults, null);
-          const name = d.is_rest ? 'Rest' : (d.label ?? templateName(d.template_id) ?? 'Not set');
+          const names = templateNames(d.template_ids);
+          // The label names the day when there is one; otherwise the workouts do.
+          const name = d.is_rest
+            ? 'Rest'
+            : (d.label ?? (names.length > 0 ? names.join(' + ') : 'Not set'));
           return (
             <button
               key={n}
@@ -310,9 +314,9 @@ export default function ProgramDetail({
               >
                 {name}
               </span>
-              {!d.is_rest && d.label && templateName(d.template_id) && (
+              {!d.is_rest && d.label && names.length > 0 && (
                 <span className="shrink-0 truncate text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-                  {templateName(d.template_id)}
+                  {names.join(' + ')}
                 </span>
               )}
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -408,9 +412,13 @@ export default function ProgramDetail({
                     const cycleDay = cycleDayFor(program, iso);
                     const d = resolveDay(cycleDay, defaults, week);
                     const isToday = iso === today;
+                    const names = templateNames(d.template_ids);
                     const name = d.is_rest
                       ? 'Rest'
-                      : (d.label ?? templateName(d.template_id) ?? '—');
+                      : (d.label ?? (names.length > 0 ? names[0] : '—'));
+                    // A labelled day names its workouts underneath; an unlabelled
+                    // one already shows the first, so only the extras are left.
+                    const extras = d.is_rest ? [] : d.label ? names : names.slice(1);
                     return (
                       <button
                         key={i}
@@ -450,6 +458,15 @@ export default function ProgramDetail({
                         >
                           {name}
                         </span>
+                        {extras.map((n, j) => (
+                          <span
+                            key={`${n}-${j}`}
+                            className="line-clamp-1 text-[11px] leading-tight"
+                            style={{ color: 'var(--color-text-secondary)' }}
+                          >
+                            + {n}
+                          </span>
+                        ))}
                         {d.overridden && (
                           <span className="text-[10px]" style={{ color: 'var(--color-warning)' }}>
                             edited
