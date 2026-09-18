@@ -141,3 +141,31 @@ export function roundDownTo5(weight: number): number {
 export function todayForProgram(): string {
   return toISODate(new Date());
 }
+
+/** One of a day's workouts, resolved to a name and whether it's been logged. */
+export interface DayWorkout {
+  templateId: string;
+  name: string;
+  done: boolean;
+}
+
+/**
+ * Today's workouts, each paired with whether it's been done.
+ *
+ * Completions are spent left to right, so a day holding the same template twice
+ * shows the first row ticked and the second still to do. Shared by the Home
+ * card and the post-workout "next up" prompt so the two always agree on which
+ * session is still outstanding.
+ */
+export function resolveDayWorkouts(
+  templateIds: string[],
+  nameOf: (templateId: string) => string | undefined,
+  doneCounts: Map<string, number>
+): DayWorkout[] {
+  const remaining = new Map(doneCounts);
+  return templateIds.map((id) => {
+    const left = remaining.get(id) ?? 0;
+    if (left > 0) remaining.set(id, left - 1);
+    return { templateId: id, name: nameOf(id) ?? 'Deleted template', done: left > 0 };
+  });
+}

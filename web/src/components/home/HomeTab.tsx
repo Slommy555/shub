@@ -15,12 +15,14 @@ import {
 } from '@dnd-kit/sortable';
 import { formatDayLong, todayISO } from '../../lib/dates';
 import { useHomeLayout, type HomeCardId } from '../../hooks/useHomeLayout';
+import { useSpendEntries } from '../../hooks/useSpendEntries';
 import type { Task } from '../../types';
 import type { Tab } from '../nav/tabs';
 import ProgramCard from './ProgramCard';
 import HabitsCard from './HabitsCard';
 import TasksCard from './TasksCard';
 import EventsCard, { todaysEvents } from './EventsCard';
+import SpendCard from './SpendCard';
 import SortableCard from './SortableCard';
 
 /** The name the greeting uses. */
@@ -68,6 +70,9 @@ export default function HomeTab({
   const [arranging, setArranging] = useState(false);
 
   const events = todaysEvents(tasks);
+  // Owned here rather than inside the card, because whether the tile is laid out
+  // at all depends on there being an entry today.
+  const spend = useSpendEntries(userId);
   const openTasks = () => onNavigate('todo');
 
   // A hold-then-drag threshold rather than an immediate one: on a phone a quick
@@ -84,10 +89,18 @@ export default function HomeTab({
     habits: <HabitsCard userId={userId} onOpenHabits={() => onNavigate('productivity')} />,
     tasks: <TasksCard tasks={tasks} onToggle={onToggleTask} onOpenTasks={openTasks} />,
     events: events.length > 0 ? <EventsCard events={events} onOpenTasks={openTasks} /> : null,
+    spend: spend.lastToday ? (
+      <SpendCard
+        total={spend.todayTotal}
+        last={spend.lastToday}
+        onOpenSpend={() => onNavigate('spend')}
+      />
+    ) : null,
   };
 
-  // The Schedule widget disappears on a day with no events; it keeps its slot in
-  // the saved order, it just isn't laid out today.
+  // The Schedule and Spend widgets disappear on a day with no events / nothing
+  // spent; they keep their slot in the saved order, they just aren't laid out
+  // today.
   const visible = order.filter((id) => card[id] !== null);
   const lastId = visible[visible.length - 1];
   const spanOf = (id: HomeCardId) => (id === lastId ? trailingSpan(visible.length) : '');

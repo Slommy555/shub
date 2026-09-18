@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   MUSCLE_LABELS,
   type SessionExercise,
+  type TemplateWithExercises,
   type WorkoutSummary,
 } from '../../types/workout';
 
@@ -14,10 +15,77 @@ export interface FinishedWorkout {
   auto: boolean;
 }
 
+/** The program workout still outstanding today, once this one is logged. */
+export interface NextUpWorkout {
+  /** The template to run — already resolved, so "Start Now" needs no lookup. */
+  template: TemplateWithExercises;
+  /** Its 1-based position among today's workouts, and how many there are. */
+  position: number;
+  total: number;
+  /** The program day's own label ("Evening", "Push/Pull"), when it has one. */
+  dayLabel: string | null;
+}
+
 interface Props {
   finished: FinishedWorkout;
   onSaveAsTemplate: (name: string, exercises: SessionExercise[]) => Promise<string | null>;
   onDone: () => void;
+  /** Set only when today's program day still has a workout that isn't logged. */
+  nextUp?: NextUpWorkout | null;
+  /** "Start Now" — opens the next session straight away. */
+  onStartNext?: () => void;
+  /** "Skip" — drops the prompt and leaves the summary as it was. */
+  onSkipNext?: () => void;
+}
+
+/**
+ * "Next up" — the nudge into a second session on a day that schedules one. Only
+ * rendered when that workout exists and hasn't been logged yet; a day with a
+ * single workout never sees it.
+ */
+function NextUpPrompt({
+  next,
+  onStart,
+  onSkip,
+}: {
+  next: NextUpWorkout;
+  onStart: () => void;
+  onSkip: () => void;
+}) {
+  const ordinal = next.position === 2 ? 'second' : 'next';
+  return (
+    <div
+      className="mt-5 rounded-2xl border p-4 text-left"
+      style={{
+        borderColor: 'rgb(var(--accent-500) / 0.45)',
+        background: 'rgb(var(--accent-500) / 0.08)',
+      }}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+        Next up · workout {next.position} of {next.total}
+      </p>
+      <p className="mt-0.5 text-[15px] font-semibold">
+        {next.dayLabel ? `${next.dayLabel} — ${next.template.name}` : next.template.name}
+      </p>
+      <p className="mt-0.5 text-xs text-gray-500">Ready to start your {ordinal} session?</p>
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={onSkip}
+          className="h-12 flex-1 rounded-2xl border border-gray-200 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 active:scale-[0.98] dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+        >
+          Skip
+        </button>
+        <button
+          type="button"
+          onClick={onStart}
+          className="btn-accent h-12 flex-1 rounded-2xl text-sm font-semibold"
+        >
+          Start Now
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function formatDuration(ms: number): string {
@@ -46,7 +114,14 @@ function Stat({ label, value }: { label: string; value: string }) {
  * down the moment the log is written) so it survives long enough to show the
  * numbers and offer "Save as template".
  */
-export default function WorkoutSummaryCard({ finished, onSaveAsTemplate, onDone }: Props) {
+export default function WorkoutSummaryCard({
+  finished,
+  onSaveAsTemplate,
+  onDone,
+  nextUp,
+  onStartNext,
+  onSkipNext,
+}: Props) {
   const { summary, name, exercises, auto } = finished;
   const [tplName, setTplName] = useState(name === 'Freestyle Workout' ? '' : name);
   const [saving, setSaving] = useState(false);
@@ -133,6 +208,10 @@ export default function WorkoutSummaryCard({ finished, onSaveAsTemplate, onDone 
               </>
             )}
           </div>
+        )}
+
+        {nextUp && onStartNext && onSkipNext && (
+          <NextUpPrompt next={nextUp} onStart={onStartNext} onSkip={onSkipNext} />
         )}
 
         <button

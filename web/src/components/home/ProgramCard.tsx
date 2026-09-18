@@ -1,65 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { useMemo } from 'react';
 import { usePrograms } from '../../hooks/workout/usePrograms';
 import { useTemplates } from '../../hooks/workout/useTemplates';
+import { useWorkoutsDoneToday } from '../../hooks/workout/useWorkoutsDoneToday';
+import { resolveDayWorkouts, type DayWorkout } from '../../lib/program';
 import { setPendingWorkout, setPendingWorkoutSubTab } from '../../lib/workoutHandoff';
-import { todayISO } from '../../lib/dates';
 import type { Exercise } from '../../types/workout';
 import { Card, CardSkeleton, SectionHeader } from './parts';
 
 /** Home only needs template NAMES, so it hydrates against an empty library.
  *  Module-level so the reference is stable across renders. */
 const NO_EXERCISES: Exercise[] = [];
-
-/**
- * The workouts completed today: how many times each template was logged, plus
- * whether anything at all was. The counts (not just a set of ids) are what lets
- * a day holding the same template twice tick off one session at a time.
- */
-function useWorkoutsDoneToday(userId: string): {
-  counts: Map<string, number>;
-  anyDone: boolean;
-  loading: boolean;
-} {
-  const [counts, setCounts] = useState<Map<string, number>>(() => new Map());
-  const [anyDone, setAnyDone] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const start = `${todayISO()}T00:00:00`;
-      const { data, error } = await supabase
-        .from('workout_logs')
-        .select('id, template_id')
-        .eq('user_id', userId)
-        .not('completed_at', 'is', null)
-        .gte('completed_at', new Date(start).toISOString());
-      if (cancelled) return;
-      if (error) console.error('Failed to check today’s workouts:', error.message);
-      const rows = data ?? [];
-      const next = new Map<string, number>();
-      for (const r of rows) {
-        if (r.template_id) next.set(r.template_id, (next.get(r.template_id) ?? 0) + 1);
-      }
-      setCounts(next);
-      setAnyDone(rows.length > 0);
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  return { counts, anyDone, loading };
-}
-
-/** One of today's workouts, resolved to a name and whether it's been logged. */
-interface DayWorkout {
-  templateId: string;
-  name: string;
-  done: boolean;
-}
 
 /**
  * Where the active program has you today, and the buttons that start it.
@@ -85,19 +35,10 @@ export default function ProgramCard({
   const today = programs.today;
   const templateIds = today?.day.template_ids ?? [];
 
-  /**
-   * Today's workouts, each paired with whether it's been done. Completions are
-   * spent left to right, so a day with the same template twice shows the first
-   * row ticked and the second still to do.
-   */
+  /** Today's workouts, each paired with whether it's been done. */
   const workouts: DayWorkout[] = useMemo(() => {
     const names = new Map(templates.map((t) => [t.id, t.name] as const));
-    const remaining = new Map(counts);
-    return templateIds.map((id) => {
-      const left = remaining.get(id) ?? 0;
-      if (left > 0) remaining.set(id, left - 1);
-      return { templateId: id, name: names.get(id) ?? 'Deleted template', done: left > 0 };
-    });
+    return resolveDayWorkouts(templateIds, (id) => names.get(id), counts);
   }, [templateIds, templates, counts]);
 
   if (programs.loading || templatesLoading || doneLoading) return <CardSkeleton rows={2} />;

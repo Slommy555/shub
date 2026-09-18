@@ -8,7 +8,10 @@ import {
 import type { UseWorkoutSession } from '../../hooks/workout/useWorkoutSession';
 import type { TemplateItemInput } from '../../hooks/workout/useTemplates';
 import ActiveWorkoutSession from './ActiveWorkoutSession';
-import WorkoutSummaryCard, { type FinishedWorkout } from './WorkoutSummaryCard';
+import WorkoutSummaryCard, {
+  type FinishedWorkout,
+  type NextUpWorkout,
+} from './WorkoutSummaryCard';
 
 interface Props {
   exercises: Exercise[];
@@ -26,6 +29,10 @@ interface Props {
   deload?: { volumePct: number } | null;
   /** Deload starting weight per exercise (null = keep the template's plan). */
   prefillWeight?: (exerciseId: string) => number | null;
+  /** Today's remaining program workout, offered at the foot of the summary. */
+  nextUp?: NextUpWorkout | null;
+  /** Clears that offer — after Start Now, Skip, or Done. */
+  onClearNextUp?: () => void;
 }
 
 /** "Deload Week — working at 60% today", shown while a deload week is running. */
@@ -61,6 +68,8 @@ export default function LogTab({
   showRpe,
   deload,
   prefillWeight,
+  nextUp,
+  onClearNextUp,
 }: Props) {
   // Finishing clears the session from the store, so the summary is held here —
   // otherwise the active-session screen unmounts before it can be shown.
@@ -94,12 +103,30 @@ export default function LogTab({
     );
   }
 
+  /** Dismiss the summary (and any "next up" offer riding along with it). */
+  function closeSummary() {
+    setFinished(null);
+    onClearNextUp?.();
+  }
+
   if (finished) {
     return (
       <WorkoutSummaryCard
         finished={finished}
         onSaveAsTemplate={onSaveAsTemplate}
-        onDone={() => setFinished(null)}
+        onDone={closeSummary}
+        nextUp={nextUp}
+        // "Start Now": drop the summary and open the next session right here —
+        // this IS the Log tab, so there's nothing further to tap.
+        onStartNext={
+          nextUp
+            ? () => {
+                closeSummary();
+                startTemplate(nextUp.template);
+              }
+            : undefined
+        }
+        onSkipNext={onClearNextUp}
       />
     );
   }

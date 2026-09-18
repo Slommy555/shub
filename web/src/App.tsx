@@ -27,6 +27,7 @@ import VoiceController from './components/voice/VoiceController';
 import WorkoutTab from './components/workout/WorkoutTab';
 import ProductivityView from './components/ProductivityView';
 import NotesTab from './components/notes/NotesTab';
+import SpendTab from './components/spend/SpendTab';
 import SettingsView from './components/SettingsView';
 import DueDateReminder from './components/DueDateReminder';
 import EditTaskDialog from './components/EditTaskDialog';
@@ -131,6 +132,7 @@ function Shell({ userId }: { userId: string }) {
               {tab === 'workout' && <WorkoutTab userId={userId} showRpe={workoutPrefs.showRpe} />}
               {tab === 'productivity' && <ProductivityView userId={userId} />}
               {tab === 'notes' && <NotesTab userId={userId} />}
+              {tab === 'spend' && <SpendTab userId={userId} />}
               {tab === 'settings' && (
                 <SettingsView
                   theme={resolvedTheme}

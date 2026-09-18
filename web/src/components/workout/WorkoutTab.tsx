@@ -4,8 +4,9 @@ import { useTemplates } from '../../hooks/workout/useTemplates';
 import { useWorkoutSession } from '../../hooks/workout/useWorkoutSession';
 import { usePrograms } from '../../hooks/workout/usePrograms';
 import { useLastWeights } from '../../hooks/workout/useLastWeights';
+import { fetchWorkoutsDoneToday } from '../../hooks/workout/useWorkoutsDoneToday';
 import { rankMatches } from '../../lib/fuzzy';
-import { roundDownTo5 } from '../../lib/program';
+import { resolveDayWorkouts, roundDownTo5 } from '../../lib/program';
 import {
   clearPendingWorkout,
   readPendingWorkout,
@@ -14,6 +15,7 @@ import {
 import { templateItemsFromSession } from '../../lib/workoutFromLog';
 import type { TemplateItemInput } from '../../hooks/workout/useTemplates';
 import type { SessionExercise } from '../../types/workout';
+import type { NextUpWorkout } from './WorkoutSummaryCard';
 import LogTab from './LogTab';
 import TemplatesTab from './TemplatesTab';
 import HistoryTab from './HistoryTab';
@@ -43,6 +45,8 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
   });
   // Bumped after finishing a workout so Metrics refetches completed sessions.
   const [version, setVersion] = useState(0);
+  // The program workout still owed today, offered at the foot of the summary.
+  const [nextUp, setNextUp] = useState<NextUpWorkout | null>(null);
   const { weights: lastWeights, loading: weightsLoading } = useLastWeights(userId, version);
 
   // Today's deload state comes from the active program (null outside one).
@@ -66,9 +70,35 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
   /** The handoff must wait for these, or a deload session starts un-adjusted. */
   const prefillReady = !programsApi.loading && (!deload || !weightsLoading);
 
+  /**
+   * Today's program day resolved against what's actually been logged, read
+   * fresh so the session that just finished is already counted. Returns the
+   * first workout still outstanding — but only on a day that schedules more
+   * than one, and only while one is genuinely unlogged.
+   */
+  async function findNextUp(): Promise<NextUpWorkout | null> {
+    const day = programsApi.today?.day;
+    const ids = day?.template_ids ?? [];
+    if (day?.is_rest || ids.length < 2) return null;
+    const { counts } = await fetchWorkoutsDoneToday(userId);
+    const byId = new Map(templatesApi.templates.map((t) => [t.id, t] as const));
+    const workouts = resolveDayWorkouts(ids, (id) => byId.get(id)?.name, counts);
+    const index = workouts.findIndex((w) => !w.done);
+    if (index < 0) return null; // every workout today is already logged
+    const template = byId.get(workouts[index].templateId);
+    if (!template) return null; // the day points at a deleted template
+    return {
+      template,
+      position: index + 1,
+      total: workouts.length,
+      dayLabel: day?.label ?? null,
+    };
+  }
+
   function onWorkoutFinished() {
     setVersion((v) => v + 1);
     templatesApi.reload(); // refresh "last used" dates
+    void findNextUp().then(setNextUp);
   }
 
   /**
@@ -157,6 +187,8 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
             showRpe={showRpe}
             deload={deload}
             prefillWeight={prefillWeight}
+            nextUp={nextUp}
+            onClearNextUp={() => setNextUp(null)}
           />
         )}
         {sub === 'program' && (
