@@ -24,9 +24,10 @@ function line(e: TemplateEdit): string {
 
 /**
  * Shown between "Finish workout" and the completion summary when the session
- * drifted from the template it started from. Only structural changes are on
- * offer — the weights logged today are workout data and stay out of it, which
- * the footnote says out loud so "Save to Template" isn't a gamble.
+ * drifted from the template it started from. Saving overwrites that template —
+ * by id, the one the session was started from — with the workout as performed,
+ * weights included, which is what makes progressive overload carry week to
+ * week. The footnote says so out loud, so it isn't a gamble either way.
  */
 export default function TemplateEditPrompt({ edits, saving, onDontSave, onSave }: Props) {
   return (
@@ -53,8 +54,8 @@ export default function TemplateEditPrompt({ edits, saving, onDontSave, onSave }
         </ul>
 
         <p className="mt-2 text-[11px] text-gray-400">
-          Exercises, sets, reps and order only — the weights you logged today stay in this
-          workout.
+          This replaces the template with today's workout — exercises, order, sets, reps and
+          weights — so next time starts where you left off.
         </p>
 
         <div className="mt-4 flex gap-2">

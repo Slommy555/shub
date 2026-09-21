@@ -13,6 +13,8 @@ export interface LogExerciseGroup {
   sets: WorkoutSet[];
   /** The per-exercise note (stored on the first saved set — see useWorkoutSession). */
   note: string;
+  /** The superset this exercise was part of, if any (shared with its partner). */
+  supersetGroupId: string | null;
 }
 
 /**
@@ -31,7 +33,7 @@ export function groupLogSets(
     if (!exercise) continue; // exercise was deleted from the library
     let g = groups.get(s.exercise_id);
     if (!g) {
-      g = { exercise, sets: [], note: '' };
+      g = { exercise, sets: [], note: '', supersetGroupId: s.superset_group_id ?? null };
       groups.set(s.exercise_id, g);
     }
     g.sets.push(s);
@@ -75,6 +77,7 @@ export function templateItemsFromLog(
   default_reps: number | null;
   default_weight: number | null;
   rest_seconds: number | null;
+  superset_group_id: string | null;
   sets: TemplateSet[];
 }[] {
   return groupLogSets(log, exercises).map((g, i) => {
@@ -92,6 +95,7 @@ export function templateItemsFromLog(
       default_reps: first?.reps ?? null,
       default_weight: first?.weight ?? null,
       rest_seconds: null,
+      superset_group_id: g.supersetGroupId,
       sets,
     };
   });
@@ -119,6 +123,7 @@ export function templateItemsFromSession(
       default_reps: sets[0].reps,
       default_weight: sets[0].weight,
       rest_seconds: ex.restSeconds,
+      superset_group_id: ex.supersetGroupId ?? null,
       sets,
     });
   }
@@ -146,6 +151,7 @@ export function sessionExercisesFromLog(
       exercise: g.exercise,
       restSeconds: null,
       notes: g.note,
+      supersetGroupId: g.supersetGroupId,
       sets: sets.length ? sets : [
         {
           id: crypto.randomUUID(),

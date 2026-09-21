@@ -16,6 +16,8 @@ export interface TemplateItemInput {
   default_reps: number | null;
   default_weight: number | null;
   rest_seconds: number | null;
+  /** Shared by the exercises supersetted together; null when the row is solo. */
+  superset_group_id?: string | null;
   sets: TemplateSet[];
 }
 
@@ -90,6 +92,7 @@ export function useTemplates(userId: string | null, exercises: Exercise[]) {
           .map((te) => ({
             ...te,
             sets: Array.isArray(te.sets) ? te.sets : [],
+            superset_group_id: te.superset_group_id ?? null,
             exercise: exerciseById.get(te.exercise_id),
           }))
           .filter((x): x is TemplateExercise & { exercise: Exercise } => Boolean(x.exercise));
@@ -133,11 +136,16 @@ export function useTemplates(userId: string | null, exercises: Exercise[]) {
 
   /**
    * Replace a template's exercise list, leaving its name and notes alone. Used
-   * both by the full editor (below) and by "save changes to template" after a
-   * session edited the structure mid-workout.
+   * both by the full editor (below) and by "Save to Template" after a session
+   * edited the workout mid-flight.
+   *
+   * The template is addressed by `templateId` and nothing else — never matched
+   * by name — and every existing row for it is deleted before the new list goes
+   * in, so removals, insertions, reorders and changed reps/weights all land in
+   * one pass on exactly the template the session started from.
    */
   const saveTemplateExercises = useCallback(
-    async (templateId: string, items: TemplateItemInput[]) => {
+    async (templateId: string, items: TemplateItemInput[]): Promise<boolean> => {
       const newRows: TemplateExercise[] = items.map((it) => ({
         id: crypto.randomUUID(),
         template_id: templateId,
@@ -147,6 +155,7 @@ export function useTemplates(userId: string | null, exercises: Exercise[]) {
         default_reps: it.default_reps,
         default_weight: it.default_weight,
         rest_seconds: it.rest_seconds,
+        superset_group_id: it.superset_group_id ?? null,
         sets: it.sets,
       }));
       setTemplateExercises((prev) => [
@@ -160,7 +169,10 @@ export function useTemplates(userId: string | null, exercises: Exercise[]) {
         .from('template_exercises')
         .delete()
         .eq('template_id', templateId);
-      if (delErr) console.error('saveTemplateExercises (clear) failed:', delErr.message);
+      if (delErr) {
+        console.error('saveTemplateExercises (clear) failed:', delErr.message);
+        return false;
+      }
 
       if (newRows.length) {
         const { error: insErr } = await supabase.from('template_exercises').insert(
@@ -173,11 +185,16 @@ export function useTemplates(userId: string | null, exercises: Exercise[]) {
             default_reps: r.default_reps,
             default_weight: r.default_weight,
             rest_seconds: r.rest_seconds,
+            superset_group_id: r.superset_group_id,
             sets: r.sets,
           }))
         );
-        if (insErr) console.error('saveTemplateExercises (insert) failed:', insErr.message);
+        if (insErr) {
+          console.error('saveTemplateExercises (insert) failed:', insErr.message);
+          return false;
+        }
       }
+      return true;
     },
     []
   );

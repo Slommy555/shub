@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -45,19 +45,32 @@ interface EditorItem {
   key: string;
   exercise: Exercise;
   restSeconds: number | null;
+  /** Carried through the editor untouched so editing a template — or saving one
+   *  back from a session — never silently breaks a superset pairing. */
+  supersetGroupId: string | null;
   sets: EditorSet[];
 }
 
 const SET_TYPE_NEXT: Record<SetType, SetType> = {
   normal: 'warmup',
   warmup: 'failure',
-  failure: 'normal',
+  failure: 'dropset',
+  dropset: 'normal',
 };
 
 const TYPE_CELL: Record<SetType, string> = {
   normal: 'text-gray-400',
   warmup: 'text-amber-600 font-bold dark:text-amber-400',
   failure: 'text-red-600 font-bold dark:text-red-400',
+  dropset: 'text-accent-600 font-bold dark:text-accent-400',
+};
+
+/** The letter shown in the leading cell; normal sets show their number. */
+const TYPE_MARK: Record<SetType, string | null> = {
+  normal: null,
+  warmup: 'W',
+  failure: 'F',
+  dropset: 'D',
 };
 
 const SET_GRID = 'grid grid-cols-[1.5rem_1fr_1fr_1.4fr_1.4rem_1.4rem] items-center gap-1';
@@ -215,11 +228,30 @@ function TemplateEditor({
         key: crypto.randomUUID(),
         exercise: te.exercise,
         restSeconds: te.rest_seconds,
+        supersetGroupId: te.superset_group_id ?? null,
         sets: planned,
       };
     }) ?? []
   );
   const [modalOpen, setModalOpen] = useState(false);
+
+  // Editor key → its A/B position within its superset. A group that's lost its
+  // partner (the other exercise was removed here) gets no marker.
+  const supersetLabels = useMemo(() => {
+    const byGroup = new Map<string, string[]>();
+    for (const it of items) {
+      if (!it.supersetGroupId) continue;
+      const list = byGroup.get(it.supersetGroupId) ?? [];
+      list.push(it.key);
+      byGroup.set(it.supersetGroupId, list);
+    }
+    const labels = new Map<string, string>();
+    for (const keys of byGroup.values()) {
+      if (keys.length < 2) continue;
+      keys.forEach((k, i) => labels.set(k, String.fromCharCode(65 + i)));
+    }
+    return labels;
+  }, [items]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -251,6 +283,7 @@ function TemplateEditor({
           default_reps: firstWorking?.reps ?? null,
           default_weight: firstWorking?.weight ?? null,
           rest_seconds: it.restSeconds,
+          superset_group_id: it.supersetGroupId,
           sets: it.sets.map((s) => ({
             type: s.type,
             reps: s.reps,
@@ -304,6 +337,7 @@ function TemplateEditor({
                 <ExerciseCard
                   key={it.key}
                   item={it}
+                  supersetLabel={supersetLabels.get(it.key) ?? null}
                   onPatch={(patch) => patchItem(it.key, patch)}
                   onRemove={() => setItems((prev) => prev.filter((x) => x.key !== it.key))}
                 />
@@ -325,7 +359,8 @@ function TemplateEditor({
         <p className="text-center text-[11px] text-gray-400">
           Tap a set number to cycle{' '}
           <span className="font-semibold text-amber-600 dark:text-amber-400">W</span>arm-up /{' '}
-          <span className="font-semibold text-red-600 dark:text-red-400">F</span>ailure · drag{' '}
+          <span className="font-semibold text-red-600 dark:text-red-400">F</span>ailure /{' '}
+          <span className="font-semibold text-accent-600 dark:text-accent-400">D</span>rop set · drag{' '}
           <span className="font-medium">⠿</span> to reorder sets
         </p>
       )}
@@ -362,6 +397,7 @@ function TemplateEditor({
                 key: crypto.randomUUID(),
                 exercise: e,
                 restSeconds: DEFAULT_REST_SECONDS,
+                supersetGroupId: null,
                 sets: Array.from({ length: 3 }, () => newSet()),
               },
             ]);
@@ -380,10 +416,13 @@ function TemplateEditor({
 
 function ExerciseCard({
   item,
+  supersetLabel,
   onPatch,
   onRemove,
 }: {
   item: EditorItem;
+  /** 'A', 'B', … when this exercise is part of a superset; null when solo. */
+  supersetLabel: string | null;
   onPatch: (patch: Partial<EditorItem>) => void;
   onRemove: () => void;
 }) {
@@ -421,7 +460,21 @@ function ExerciseCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold">{item.exercise.name}</h3>
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+            {supersetLabel && (
+              <span
+                className="grid h-4 w-4 shrink-0 place-items-center rounded text-[9px] font-bold"
+                style={{
+                  color: 'var(--color-accent-muted)',
+                  border: '1px solid var(--color-accent-muted)',
+                }}
+                title="Supersetted"
+              >
+                {supersetLabel}
+              </span>
+            )}
+            <span className="truncate">{item.exercise.name}</span>
+          </h3>
           <div className="mt-1 flex flex-wrap gap-1">
             {item.exercise.muscle_groups.map((m) => (
               <span
@@ -541,7 +594,7 @@ function TemplateSetRow({
     transition,
     opacity: isDragging ? 0.6 : 1,
   };
-  const typeLabel = set.type === 'warmup' ? 'W' : set.type === 'failure' ? 'F' : index + 1;
+  const typeLabel = TYPE_MARK[set.type] ?? index + 1;
 
   return (
     <div ref={setNodeRef} style={style} className={`${SET_GRID} bg-white py-1 dark:bg-gray-900`}>
@@ -549,7 +602,7 @@ function TemplateSetRow({
         type="button"
         onClick={onCycleType}
         aria-label={`Set type: ${set.type}. Tap to change.`}
-        title="Tap to cycle: normal → warm-up → failure"
+        title="Tap to cycle: normal → warm-up → failure → drop set"
         className={`text-center text-xs ${TYPE_CELL[set.type]}`}
       >
         {typeLabel}

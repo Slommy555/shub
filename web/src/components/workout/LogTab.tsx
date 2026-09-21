@@ -22,8 +22,8 @@ interface Props {
   deleteExercise: (id: string) => void;
   onWorkoutFinished: () => void;
   onSaveAsTemplate: (name: string, exercises: SessionExercise[]) => Promise<string | null>;
-  /** Writes a session's structural edits back to the template it started from. */
-  onSaveToTemplate: (templateId: string, items: TemplateItemInput[]) => Promise<void>;
+  /** Overwrites the template a session started from; false if the write failed. */
+  onSaveToTemplate: (templateId: string, items: TemplateItemInput[]) => Promise<boolean>;
   showRpe: boolean;
   /** Set when today falls in a deload week of the active program. */
   deload?: { volumePct: number } | null;
@@ -74,9 +74,38 @@ export default function LogTab({
   // Finishing clears the session from the store, so the summary is held here —
   // otherwise the active-session screen unmounts before it can be shown.
   const [finished, setFinished] = useState<FinishedWorkout | null>(null);
+  // Confirmation for "Save to Template". Lives here rather than in the session
+  // screen, which unmounts the moment the workout is logged.
+  const [toast, setToast] = useState<string | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 3000);
+  }
+
+  /** Save the session back to its template, then say whether it landed. */
+  async function saveToTemplate(templateId: string, items: TemplateItemInput[]) {
+    const ok = await onSaveToTemplate(templateId, items);
+    showToast(ok ? 'Template updated ✓' : "Couldn't update the template");
+    return ok;
+  }
 
   const startTemplate = (t: TemplateWithExercises) =>
     sessionApi.startFromTemplate(t, prefillWeight);
+
+  // Rendered in every branch below — the tab swaps between the session, the
+  // summary and the start screen while the toast is still on screen.
+  const toastNode = toast ? (
+    <div
+      role="status"
+      aria-live="polite"
+      className="above-dock pointer-events-none fixed inset-x-0 bottom-0 z-[70] flex justify-center px-4 pb-4"
+    >
+      <div className="glass animate-slide-up rounded-full border px-4 py-2.5 text-sm font-semibold shadow-pop">
+        {toast}
+      </div>
+    </div>
+  ) : null;
 
   // Active session takes over the whole tab.
   if (sessionApi.session) {
@@ -97,8 +126,9 @@ export default function LogTab({
             onWorkoutFinished();
           }}
           showRpe={showRpe}
-          onSaveToTemplate={onSaveToTemplate}
+          onSaveToTemplate={saveToTemplate}
         />
+        {toastNode}
       </>
     );
   }
@@ -111,23 +141,26 @@ export default function LogTab({
 
   if (finished) {
     return (
-      <WorkoutSummaryCard
-        finished={finished}
-        onSaveAsTemplate={onSaveAsTemplate}
-        onDone={closeSummary}
-        nextUp={nextUp}
-        // "Start Now": drop the summary and open the next session right here —
-        // this IS the Log tab, so there's nothing further to tap.
-        onStartNext={
-          nextUp
-            ? () => {
-                closeSummary();
-                startTemplate(nextUp.template);
-              }
-            : undefined
-        }
-        onSkipNext={onClearNextUp}
-      />
+      <>
+        <WorkoutSummaryCard
+          finished={finished}
+          onSaveAsTemplate={onSaveAsTemplate}
+          onDone={closeSummary}
+          nextUp={nextUp}
+          // "Start Now": drop the summary and open the next session right here —
+          // this IS the Log tab, so there's nothing further to tap.
+          onStartNext={
+            nextUp
+              ? () => {
+                  closeSummary();
+                  startTemplate(nextUp.template);
+                }
+              : undefined
+          }
+          onSkipNext={onClearNextUp}
+        />
+        {toastNode}
+      </>
     );
   }
 
@@ -196,6 +229,7 @@ export default function LogTab({
           </div>
         )}
       </section>
+      {toastNode}
     </div>
   );
 }

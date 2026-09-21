@@ -66,6 +66,23 @@ function LogCard({
   const [savedAs, setSavedAs] = useState<string | null>(null);
 
   const groups = useMemo(() => groupLogSets(log, exercises), [log, exercises]);
+  // Exercise id → its A/B position in the superset it was logged as part of.
+  // Only pairings with a partner still in the log get a marker.
+  const supersetLabels = useMemo(() => {
+    const byGroup = new Map<string, string[]>();
+    for (const g of groups) {
+      if (!g.supersetGroupId) continue;
+      const list = byGroup.get(g.supersetGroupId) ?? [];
+      list.push(g.exercise.id);
+      byGroup.set(g.supersetGroupId, list);
+    }
+    const labels = new Map<string, string>();
+    for (const ids of byGroup.values()) {
+      if (ids.length < 2) continue;
+      ids.forEach((id, i) => labels.set(id, String.fromCharCode(65 + i)));
+    }
+    return labels;
+  }, [groups]);
   const totals = useMemo(() => logTotals(log), [log]);
   const freestyle = log.template_id === null;
 
@@ -130,7 +147,21 @@ function LogCard({
           <div className="space-y-3">
             {groups.map((g) => (
               <div key={g.exercise.id}>
-                <p className="text-xs font-semibold">{g.exercise.name}</p>
+                <p className="flex items-center gap-1.5 text-xs font-semibold">
+                  {supersetLabels.get(g.exercise.id) && (
+                    <span
+                      className="grid h-4 w-4 shrink-0 place-items-center rounded text-[9px] font-bold"
+                      style={{
+                        color: 'var(--color-accent-muted)',
+                        border: '1px solid var(--color-accent-muted)',
+                      }}
+                      title="Supersetted"
+                    >
+                      {supersetLabels.get(g.exercise.id)}
+                    </span>
+                  )}
+                  {g.exercise.name}
+                </p>
                 {g.note && <p className="mt-0.5 text-[11px] text-gray-500">{g.note}</p>}
                 <div className="mt-1 flex flex-wrap gap-1">
                   {g.sets.map((s) => (
@@ -141,7 +172,9 @@ function LogCard({
                           ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
                           : s.set_type === 'failure'
                             ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
-                            : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                            : s.set_type === 'dropset'
+                              ? 'bg-accent-100 text-accent-700 dark:bg-accent-500/15 dark:text-accent-300'
+                              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
                       }`}
                     >
                       {s.weight_lbs ?? '—'}×{s.reps ?? '—'}

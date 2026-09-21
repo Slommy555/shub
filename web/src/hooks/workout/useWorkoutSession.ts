@@ -31,6 +31,45 @@ function makeSet(prev?: SessionSet): SessionSet {
 }
 
 /**
+ * A superset needs at least two exercises. Removing one — by deleting it or by
+ * unpairing it — can leave a group holding a single exercise, which would draw
+ * a "SUPERSET" frame around one thing; clear those back to null.
+ */
+function dropLoneSupersets(exercises: SessionExercise[]): SessionExercise[] {
+  const counts = new Map<string, number>();
+  for (const e of exercises) {
+    if (e.supersetGroupId) counts.set(e.supersetGroupId, (counts.get(e.supersetGroupId) ?? 0) + 1);
+  }
+  return exercises.map((e) =>
+    e.supersetGroupId && (counts.get(e.supersetGroupId) ?? 0) < 2
+      ? { ...e, supersetGroupId: null }
+      : e
+  );
+}
+
+/**
+ * Pull each superset's members together, directly after the first of them. You
+ * alternate between them set for set, so they belong side by side in the list —
+ * and the grouped frame can only be drawn around a contiguous run.
+ */
+function orderSupersetsTogether(exercises: SessionExercise[]): SessionExercise[] {
+  const out: SessionExercise[] = [];
+  const placed = new Set<string>();
+  for (const e of exercises) {
+    if (placed.has(e.key)) continue;
+    out.push(e);
+    placed.add(e.key);
+    if (!e.supersetGroupId) continue;
+    for (const other of exercises) {
+      if (placed.has(other.key) || other.supersetGroupId !== e.supersetGroupId) continue;
+      out.push(other);
+      placed.add(other.key);
+    }
+  }
+  return out;
+}
+
+/**
  * Owns the in-progress workout. Persists to localStorage so a session survives
  * tab switches and reloads, and saves the log + sets to Supabase on finish.
  */
@@ -42,7 +81,11 @@ export function useWorkoutSession(userId: string | null) {
       const parsed = JSON.parse(raw) as ActiveSession;
       // Backfill fields added after a session may have been persisted (e.g. the
       // per-exercise `notes`) so older in-progress sessions stay valid.
-      parsed.exercises = (parsed.exercises ?? []).map((e) => ({ ...e, notes: e.notes ?? '' }));
+      parsed.exercises = (parsed.exercises ?? []).map((e) => ({
+        ...e,
+        notes: e.notes ?? '',
+        supersetGroupId: e.supersetGroupId ?? null,
+      }));
       return parsed;
     } catch {
       return null;
@@ -129,12 +172,15 @@ export function useWorkoutSession(userId: string | null) {
         types: planned.map((s) => s.type ?? 'normal'),
         restPerSet: planned.map((s) => s.rest ?? null),
         rest_seconds: te.rest_seconds ?? null,
+        superset_group_id: te.superset_group_id ?? null,
+        prefillWeight: override,
       });
       return {
         key,
         exercise: te.exercise,
         restSeconds: te.rest_seconds ?? null,
         notes: '',
+        supersetGroupId: te.superset_group_id ?? null,
         sets,
       };
     });
@@ -154,7 +200,14 @@ export function useWorkoutSession(userId: string | null) {
             ...s,
             exercises: [
               ...s.exercises,
-              { key: crypto.randomUUID(), exercise, restSeconds: null, notes: '', sets: [makeSet()] },
+              {
+                key: crypto.randomUUID(),
+                exercise,
+                restSeconds: null,
+                notes: '',
+                supersetGroupId: null,
+                sets: [makeSet()],
+              },
             ],
           }
         : s
@@ -162,13 +215,53 @@ export function useWorkoutSession(userId: string | null) {
   }, []);
 
   const removeExercise = useCallback((key: string) => {
-    setSession((s) =>
-      s ? { ...s, exercises: s.exercises.filter((e) => e.key !== key) } : s
-    );
+    setSession((s) => {
+      if (!s) return s;
+      const kept = s.exercises.filter((e) => e.key !== key);
+      return { ...s, exercises: dropLoneSupersets(kept) };
+    });
+  }, []);
+
+  /**
+   * Pair two exercises into a superset. Joining an exercise that's already in
+   * one folds the other into that same group rather than starting a new id, so
+   * "A with B, then B with C" ends up as one group of three, not two of two.
+   */
+  const pairSuperset = useCallback((keyA: string, keyB: string) => {
+    setSession((s) => {
+      if (!s || keyA === keyB) return s;
+      const a = s.exercises.find((e) => e.key === keyA);
+      const b = s.exercises.find((e) => e.key === keyB);
+      if (!a || !b) return s;
+      const groupId = a.supersetGroupId ?? b.supersetGroupId ?? crypto.randomUUID();
+      // Everything already in either exercise's group joins the merged one.
+      const absorbed = new Set(
+        [a.supersetGroupId, b.supersetGroupId].filter((g): g is string => Boolean(g))
+      );
+      const exercises = s.exercises.map((e) =>
+        e.key === keyA || e.key === keyB || (e.supersetGroupId && absorbed.has(e.supersetGroupId))
+          ? { ...e, supersetGroupId: groupId }
+          : e
+      );
+      return { ...s, exercises: orderSupersetsTogether(exercises) };
+    });
+  }, []);
+
+  /** Drop one exercise out of its superset (and dissolve a group left at one). */
+  const unpairSuperset = useCallback((key: string) => {
+    setSession((s) => {
+      if (!s) return s;
+      const exercises = s.exercises.map((e) =>
+        e.key === key ? { ...e, supersetGroupId: null } : e
+      );
+      return { ...s, exercises: dropLoneSupersets(exercises) };
+    });
   }, []);
 
   const reorderExercises = useCallback((ordered: SessionExercise[]) => {
-    setSession((s) => (s ? { ...s, exercises: ordered } : s));
+    // Re-tightened after the move so a superset travels as a unit: drag either
+    // half and the other follows, rather than the pair splitting across the list.
+    setSession((s) => (s ? { ...s, exercises: orderSupersetsTogether(ordered) } : s));
   }, []);
 
   const setExerciseRest = useCallback((key: string, restSeconds: number | null) => {
@@ -260,6 +353,7 @@ export function useWorkoutSession(userId: string | null) {
         rpe: number | null;
         notes: string | null;
         set_type: SetType;
+        superset_group_id: string | null;
       }[] = [];
       const muscles = new Set<MuscleGroup>();
       const exsWithSets = new Set<string>();
@@ -285,6 +379,7 @@ export function useWorkoutSession(userId: string | null) {
             rpe: st.rpe,
             notes: n === 1 ? exNote : null,
             set_type: st.type,
+            superset_group_id: ex.supersetGroupId ?? null,
           });
           // Warm-up sets are recorded but excluded from volume/working totals.
           if (st.type !== 'warmup') {
@@ -352,9 +447,13 @@ export function useWorkoutSession(userId: string | null) {
     items: TemplateItemInput[];
   } | null => {
     const base = session?.templateBaseline;
-    if (!base) return null;
+    if (!session || !base) return null;
+    // The template this session was STARTED from, matched by id — never by name
+    // and never re-derived, so the edits land on exactly that template.
+    const templateId = base.templateId || session.templateId;
+    if (!templateId) return null;
     return {
-      templateId: base.templateId,
+      templateId,
       items: templateItemsFromEdited(base, session.exercises),
     };
   }, [session]);
@@ -371,6 +470,8 @@ export function useWorkoutSession(userId: string | null) {
     addExercise,
     removeExercise,
     reorderExercises,
+    pairSuperset,
+    unpairSuperset,
     setExerciseRest,
     setExerciseNotes,
     addSet,

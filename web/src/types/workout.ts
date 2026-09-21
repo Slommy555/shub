@@ -158,6 +158,8 @@ export interface TemplateExercise {
   default_reps: number | null;
   default_weight: number | null;
   rest_seconds: number | null;
+  /** Exercises sharing this uuid are supersetted together. Null = not paired. */
+  superset_group_id: string | null;
   /** Per-set plan; falls back to default_* when empty (legacy templates). */
   sets: TemplateSet[];
 }
@@ -173,7 +175,7 @@ export interface WorkoutLog {
   created_at: string;
 }
 
-export type SetType = 'warmup' | 'normal' | 'failure';
+export type SetType = 'warmup' | 'normal' | 'failure' | 'dropset';
 
 export interface WorkoutSet {
   id: string;
@@ -185,6 +187,8 @@ export interface WorkoutSet {
   rpe: number | null;
   notes: string | null;
   set_type: SetType;
+  /** The superset this set belonged to, copied off the session's exercise. */
+  superset_group_id: string | null;
   completed_at: string;
 }
 
@@ -226,6 +230,8 @@ export interface SessionExercise {
   /** One free-text note for the whole exercise (not per set). Persisted onto the
    *  first saved set's `notes` column on finish (no exercise-level table). */
   notes: string;
+  /** Shared with the exercise(s) this one is supersetted with; null when solo. */
+  supersetGroupId: string | null;
   sets: SessionSet[];
 }
 
@@ -246,6 +252,14 @@ export interface TemplateBaselineExercise {
   /** Per-set rest overrides from the plan. */
   restPerSet: (number | null)[];
   rest_seconds: number | null;
+  /** The pairing as the template had it, so a new/dropped superset shows up. */
+  superset_group_id: string | null;
+  /**
+   * The weight every set was pre-filled to instead of the plan's — set only on
+   * a deload week. A set left at this number was not an edit to the plan, so
+   * saving back must not write the deload weight over the real one.
+   */
+  prefillWeight: number | null;
 }
 
 /** The structure of the source template, snapshotted at session start. */

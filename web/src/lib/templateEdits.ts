@@ -1,10 +1,12 @@
-// Detecting — and saving back — the structural edits a user makes to a template
-// while running it as a workout.
+// Detecting — and saving back — the edits a user makes to a template while
+// running it as a workout.
 //
-// "Structural" is the whole point of this file: exercises, set counts, planned
-// reps and order are TEMPLATE data and can be written back. The weights logged
-// per set are WORKOUT data and never are — `templateItemsFromEdited` rebuilds
-// each row's weights from the baseline snapshot, not from what was lifted.
+// "Save to Template" overwrites the source template with the session exactly as
+// it was performed: its exercises, their order, the sets logged, and the reps
+// AND weights of those sets. Carrying the weights back is the point — it's what
+// makes progressive overload stick from one week to the next. A set the user
+// never filled in has nothing to carry, so it keeps the weight the plan already
+// had rather than wiping it to blank.
 
 import type {
   SessionExercise,
@@ -25,6 +27,36 @@ function describeReps(reps: (number | null)[]): string {
   if (reps.length === 0) return '—';
   const shown = reps.map((r) => (r == null ? '—' : String(r)));
   return shown.every((r) => r === shown[0]) ? shown[0] : shown.join('/');
+}
+
+/** Same collapse as `describeReps`, for weights. */
+function describeWeights(weights: (number | null)[]): string {
+  if (weights.length === 0) return '—';
+  const shown = weights.map((w) => (w == null ? '—' : String(w)));
+  return shown.every((w) => w === shown[0]) ? shown[0] : shown.join('/');
+}
+
+/**
+ * The weight to write back for one set: what was actually logged, which is how
+ * progressive overload carries forward. Two cases keep the plan's own number
+ * instead:
+ *   - the row was never filled in, so there's nothing to carry;
+ *   - a deload week pre-filled every set at a reduced weight and the user just
+ *     lifted it. That's the deload doing its job, not a lighter plan — writing
+ *     it back would ratchet the template DOWN every deload.
+ * A set added past the end of the plan inherits the last planned weight.
+ */
+function savedWeight(
+  logged: number | null,
+  base: TemplateBaseline['exercises'][number] | undefined,
+  index: number
+): number | null {
+  const planned = base
+    ? base.weights[index] ?? base.weights[base.weights.length - 1] ?? null
+    : null;
+  if (logged == null) return planned;
+  if (base?.prefillWeight != null && logged === base.prefillWeight) return planned;
+  return logged;
 }
 
 /**
@@ -61,6 +93,15 @@ export function diffTemplateEdits(
     const before = describeReps(b.reps);
     const after = describeReps(ex.sets.map((s) => s.reps));
     if (before !== after) parts.push(`${before} reps → ${after} reps`);
+    // Weights carry back now, so a change in them is a real edit to report.
+    const wBefore = describeWeights(b.weights);
+    const wAfter = describeWeights(ex.sets.map((s, j) => savedWeight(s.weight_lbs, b, j)));
+    if (wBefore !== wAfter) parts.push(`${wBefore} lbs → ${wAfter} lbs`);
+    // Pairing is template data too — only whether it's paired, not with which
+    // generated uuid, so re-pairing the same two exercises reports nothing.
+    const wasPaired = Boolean(b.superset_group_id);
+    const isPaired = Boolean(ex.supersetGroupId);
+    if (wasPaired !== isPaired) parts.push(isPaired ? 'added to a superset' : 'superset removed');
     if (parts.length) {
       edits.push({ kind: 'changed', name: ex.exercise.name, detail: parts.join(', ') });
     }
@@ -79,11 +120,15 @@ export function diffTemplateEdits(
 }
 
 /**
- * Rebuild the template's exercise rows from the edited session: current order,
- * current exercises, current set counts and reps — and the *planned* weights
- * carried over from the baseline. A set added past the end of the plan inherits
- * the last planned weight; a newly added exercise has no plan, so its weights
- * start empty rather than borrowing today's numbers.
+ * Rebuild the template's exercise rows from the session exactly as performed:
+ * its exercises in their current order, the sets it ended with, and each set's
+ * reps, weight, type and superset pairing. Every row is rewritten, so exercises
+ * added, removed and reordered all land — the caller replaces the template's
+ * whole exercise list with what comes back.
+ *
+ * `default_sets` / `default_reps` / `default_weight` are the legacy single-value
+ * columns, kept in sync off the first set so templates written before the
+ * per-set plan still read correctly.
  */
 export function templateItemsFromEdited(
   baseline: TemplateBaseline,
@@ -94,17 +139,22 @@ export function templateItemsFromEdited(
     const b = base.get(ex.key);
     const sets: TemplateSet[] = ex.sets.map((s, j) => ({
       reps: s.reps,
-      weight: b ? b.weights[j] ?? b.weights[b.weights.length - 1] ?? null : null,
+      weight: savedWeight(s.weight_lbs, b, j),
       type: s.type,
       rest: s.rest ?? (b ? b.restPerSet[j] ?? null : null),
     }));
+    // The legacy default_* trio reads off the first set, falling back to the
+    // first set that has a value so a blank opening row doesn't blank the plan.
+    const firstReps = sets.find((s) => s.reps != null)?.reps ?? sets[0]?.reps ?? null;
+    const firstWeight = sets.find((s) => s.weight != null)?.weight ?? sets[0]?.weight ?? null;
     return {
       exercise_id: ex.exercise.id,
       position: i,
       default_sets: sets.length,
-      default_reps: sets[0]?.reps ?? null,
-      default_weight: sets[0]?.weight ?? null,
+      default_reps: sets[0]?.reps ?? firstReps,
+      default_weight: sets[0]?.weight ?? firstWeight,
       rest_seconds: ex.restSeconds,
+      superset_group_id: ex.supersetGroupId ?? null,
       sets,
     };
   });

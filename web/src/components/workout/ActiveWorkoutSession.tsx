@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -54,14 +54,30 @@ interface Props {
   ) => void;
   /** Whether to show the RPE column in the set logger (Settings → Workout). */
   showRpe: boolean;
-  /** Writes the session's structural edits back to its source template. */
-  onSaveToTemplate: (templateId: string, items: TemplateItemInput[]) => Promise<void>;
+  /** Overwrites the source template with this session; false if the write failed. */
+  onSaveToTemplate: (templateId: string, items: TemplateItemInput[]) => Promise<boolean>;
 }
 
 const SET_TYPE_NEXT: Record<SetType, SetType> = {
   normal: 'warmup',
   warmup: 'failure',
-  failure: 'normal',
+  failure: 'dropset',
+  dropset: 'normal',
+};
+
+const SET_TYPE_LABEL: Record<SetType, string> = {
+  normal: 'Normal',
+  warmup: 'Warm-up',
+  failure: 'Failure',
+  dropset: 'Drop set',
+};
+
+/** The letter shown in the leading cell; normal sets show their number instead. */
+const TYPE_MARK: Record<SetType, string | null> = {
+  normal: null,
+  warmup: 'W',
+  failure: 'F',
+  dropset: 'D',
 };
 
 const badge =
@@ -80,6 +96,30 @@ function gridColsFor(showRpe: boolean): string {
 /** An exercise is "complete" once it has sets and every set is checked off. */
 function isExerciseComplete(ex: SessionExercise): boolean {
   return ex.sets.length > 0 && ex.sets.every((s) => s.done);
+}
+
+/**
+ * One row of the exercise list: a lone exercise, or a superset rendered as a
+ * single framed unit holding the exercises paired into it.
+ */
+type DisplayRow =
+  | { kind: 'single'; id: string; ex: SessionExercise }
+  | { kind: 'group'; id: string; members: SessionExercise[] };
+
+/** Every exercise a row covers, in the order it's drawn. */
+function rowExercises(row: DisplayRow): SessionExercise[] {
+  return row.kind === 'single' ? [row.ex] : row.members;
+}
+
+/** Position markers inside a superset frame. */
+const SUPERSET_LABELS = ['A', 'B', 'C', 'D', 'E'];
+
+/** The other exercises sharing `ex`'s superset, by name. */
+function supersetPartners(all: SessionExercise[], ex: SessionExercise): string[] {
+  if (!ex.supersetGroupId) return [];
+  return all
+    .filter((e) => e.key !== ex.key && e.supersetGroupId === ex.supersetGroupId)
+    .map((e) => e.exercise.name);
 }
 
 /** Does this session have anything worth saving? */
@@ -142,6 +182,7 @@ const TYPE_CELL: Record<SetType, string> = {
   normal: 'text-gray-400',
   warmup: 'text-amber-600 font-bold dark:text-amber-400',
   failure: 'text-red-600 font-bold dark:text-red-400',
+  dropset: 'text-accent-600 font-bold dark:text-accent-400',
 };
 
 function SetRow({
@@ -161,8 +202,8 @@ function SetRow({
   onDelete: () => void;
   onCompleted: () => void;
 }) {
-  // The leading cell doubles as a set-type cycler: # → W (warm-up) → F (failure).
-  const typeLabel = set.type === 'warmup' ? 'W' : set.type === 'failure' ? 'F' : index + 1;
+  // The leading cell doubles as a set-type cycler: # → W → F → D → back to #.
+  const typeLabel = TYPE_MARK[set.type] ?? index + 1;
 
   return (
     <div className="overflow-hidden rounded-xl">
@@ -174,8 +215,8 @@ function SetRow({
         <button
           type="button"
           onClick={() => onChange({ type: SET_TYPE_NEXT[set.type] })}
-          aria-label={`Set type: ${set.type}. Tap to change.`}
-          title="Tap to cycle: normal → warm-up → failure"
+          aria-label={`Set type: ${SET_TYPE_LABEL[set.type]}. Tap to change.`}
+          title="Tap to cycle: normal → warm-up → failure → drop set"
           className={`text-center text-sm font-semibold ${TYPE_CELL[set.type]}`}
         >
           {typeLabel}
@@ -247,6 +288,198 @@ function SetRow({
   );
 }
 
+// --- the exercise overflow menu -------------------------------------------
+
+/** One row in the "..." menu. `tone` picks the destructive colouring. */
+function MenuItem({
+  label,
+  onClick,
+  tone,
+}: {
+  label: string;
+  onClick: () => void;
+  tone?: 'danger';
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 ${
+        tone === 'danger' ? 'text-red-600 dark:text-red-400' : ''
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+/**
+ * The "..." menu on an exercise block. Keeps the card down to its two primary
+ * controls (collapse, reorder) and parks everything else — supersets, bulk set
+ * types, removal — behind one tap, per the design system's three-action rule.
+ */
+function ExerciseMenu({
+  inSuperset,
+  partnerNames,
+  onAddToSuperset,
+  onRemoveFromSuperset,
+  onMarkAll,
+  onRemove,
+}: {
+  inSuperset: boolean;
+  /** The exercises this one is currently paired with, for the menu's label. */
+  partnerNames: string[];
+  onAddToSuperset: () => void;
+  onRemoveFromSuperset: () => void;
+  onMarkAll: (type: SetType) => void;
+  onRemove: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const run = (fn: () => void) => () => {
+    setOpen(false);
+    fn();
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Exercise options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="5" r="1.7" />
+          <circle cx="12" cy="12" r="1.7" />
+          <circle cx="12" cy="19" r="1.7" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          {/* Tap-away layer — sits under the menu, over everything else. */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+          <div
+            role="menu"
+            className="absolute right-0 top-10 z-50 w-56 animate-pop-in rounded-2xl border border-gray-200 bg-white p-1 shadow-pop dark:border-gray-800 dark:bg-gray-900"
+          >
+            {inSuperset ? (
+              <>
+                <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                  Supersetted with
+                </p>
+                <p className="px-3 pb-2 text-sm font-medium">
+                  {partnerNames.join(', ') || '—'}
+                </p>
+                <MenuItem label="Remove from superset" onClick={run(onRemoveFromSuperset)} />
+                <MenuItem label="Pair with another…" onClick={run(onAddToSuperset)} />
+              </>
+            ) : (
+              <MenuItem label="Add to superset" onClick={run(onAddToSuperset)} />
+            )}
+
+            <div className="my-1 h-px bg-gray-200 dark:bg-gray-800" />
+            <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+              Mark every set as
+            </p>
+            {(['warmup', 'failure', 'dropset', 'normal'] as SetType[]).map((t) => (
+              <MenuItem key={t} label={SET_TYPE_LABEL[t]} onClick={run(() => onMarkAll(t))} />
+            ))}
+
+            <div className="my-1 h-px bg-gray-200 dark:bg-gray-800" />
+            <MenuItem label="Remove exercise" onClick={run(onRemove)} tone="danger" />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Picks the exercise to pair with. Shows everything else in the session; an
+ * exercise already in a superset says so, because choosing it merges the two
+ * groups rather than starting a third.
+ */
+function SupersetPicker({
+  source,
+  candidates,
+  onPick,
+  onClose,
+}: {
+  source: SessionExercise;
+  candidates: SessionExercise[];
+  onPick: (key: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      data-no-swipe
+      role="dialog"
+      aria-modal="true"
+      aria-label="Pair into a superset"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-app rounded-t-3xl bg-white p-5 shadow-xl animate-slide-up dark:bg-gray-900 sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold">Superset with…</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Pair <span className="font-semibold">{source.exercise.name}</span> with another
+          exercise — you'll alternate a set of each.
+        </p>
+
+        {candidates.length === 0 ? (
+          <p className="mt-4 rounded-2xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400 dark:border-gray-700">
+            Add another exercise to this workout first.
+          </p>
+        ) : (
+          <div className="mt-3 max-h-72 space-y-1.5 overflow-y-auto">
+            {candidates.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => onPick(c.key)}
+                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800"
+              >
+                <span className="min-w-0 truncate text-sm font-semibold">
+                  {c.exercise.name}
+                </span>
+                {c.supersetGroupId && (
+                  <span
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em]"
+                    style={{
+                      color: 'var(--color-accent-muted)',
+                      border: '1px solid var(--color-accent-muted)',
+                    }}
+                  >
+                    In a superset
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-4 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold dark:border-gray-700"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // --- a sortable exercise block --------------------------------------------
 
 function ExerciseBlock({
@@ -256,6 +489,9 @@ function ExerciseBlock({
   showRpe,
   completed,
   current,
+  supersetLabel,
+  partnerNames,
+  onOpenSupersetPicker,
 }: {
   ex: SessionExercise;
   api: UseWorkoutSession;
@@ -264,6 +500,11 @@ function ExerciseBlock({
   completed: boolean;
   /** The exercise you're on right now — the one the screen is built around. */
   current: boolean;
+  /** 'A', 'B', … when this block sits inside a superset frame; null when solo. */
+  supersetLabel: string | null;
+  /** Names of the exercises it's paired with, shown in the overflow menu. */
+  partnerNames: string[];
+  onOpenSupersetPicker: () => void;
 }) {
   const restSeconds = ex.restSeconds ?? DEFAULT_REST_SECONDS;
   const gridCls = gridColsFor(showRpe);
@@ -295,10 +536,16 @@ function ExerciseBlock({
       ref={setNodeRef}
       style={style}
       className={[
-        'rounded-2xl border bg-white transition-all duration-300 dark:bg-gray-900',
-        current
-          ? 'border-accent-400/60 shadow-glow ring-1 ring-accent-400/40'
-          : 'border-gray-200 shadow-card dark:border-gray-800',
+        'rounded-2xl bg-white transition-all duration-300 dark:bg-gray-900',
+        // Inside a superset the frame around the group provides the edge, so a
+        // member only draws its own border while it's the current exercise.
+        supersetLabel
+          ? current
+            ? 'border border-accent-400/60 ring-1 ring-accent-400/40'
+            : 'border border-transparent'
+          : current
+            ? 'border border-accent-400/60 shadow-glow ring-1 ring-accent-400/40'
+            : 'border border-gray-200 shadow-card dark:border-gray-800',
         completed && !open && !isDragging ? 'opacity-60' : '',
       ].join(' ')}
     >
@@ -325,6 +572,18 @@ function ExerciseBlock({
           className="min-w-0 flex-1 text-left"
         >
           <span className="flex flex-wrap items-center gap-1.5">
+            {supersetLabel && (
+              <span
+                aria-label={`Superset position ${supersetLabel}`}
+                className="grid h-5 w-5 shrink-0 place-items-center rounded-md text-[11px] font-bold"
+                style={{
+                  color: 'var(--color-accent-muted)',
+                  border: '1px solid var(--color-accent-muted)',
+                }}
+              >
+                {supersetLabel}
+              </span>
+            )}
             {completed && (
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-green-600 dark:text-green-400" aria-label="Completed">
                 <path d="M20 6 9 17l-5-5" />
@@ -357,16 +616,18 @@ function ExerciseBlock({
         </button>
 
         <div className="flex shrink-0 items-center">
-          {open && (
-            <button
-              type="button"
-              onClick={() => api.removeExercise(ex.key)}
-              aria-label="Remove exercise"
-              className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:hover:bg-gray-800"
-            >
-              ×
-            </button>
-          )}
+          {/* Always reachable — supersetting a collapsed exercise shouldn't
+              mean expanding it first. */}
+          <ExerciseMenu
+            inSuperset={Boolean(ex.supersetGroupId)}
+            partnerNames={partnerNames}
+            onAddToSuperset={onOpenSupersetPicker}
+            onRemoveFromSuperset={() => api.unpairSuperset(ex.key)}
+            onMarkAll={(type) =>
+              ex.sets.forEach((st) => api.updateSet(ex.key, st.id, { type }))
+            }
+            onRemove={() => api.removeExercise(ex.key)}
+          />
           <button
             type="button"
             onClick={() => setOpenOverride(!open)}
@@ -467,6 +728,28 @@ function ExerciseBlock({
   );
 }
 
+/**
+ * The frame drawn around a superset: a thin accent-muted outline holding the
+ * paired exercises one after another, hairline-divided, with an A/B marker on
+ * each. One container, so the pairing reads as a single unit of work.
+ */
+function SupersetFrame({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="rounded-2xl p-1.5"
+      style={{ border: '1px solid var(--color-accent-muted)' }}
+    >
+      <div
+        className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
+        style={{ color: 'var(--color-accent-muted)' }}
+      >
+        Superset
+      </div>
+      <div className="divide-y divide-gray-200 dark:divide-gray-800">{children}</div>
+    </div>
+  );
+}
+
 // --- the session screen ----------------------------------------------------
 
 export default function ActiveWorkoutSession({
@@ -490,6 +773,8 @@ export default function ActiveWorkoutSession({
   // completion summary, and only when the session actually drifted.
   const [templatePrompt, setTemplatePrompt] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  // The exercise whose "Add to superset" was tapped — the picker's source.
+  const [pairingKey, setPairingKey] = useState<string | null>(null);
   // Rest timer between sets — starts when a set is checked off. `total` drives
   // the progress bar; `doneAt` keeps the "rest over" flash on screen briefly.
   const [rest, setRest] = useState<{ endsAt: number; total: number } | null>(null);
@@ -538,20 +823,42 @@ export default function ActiveWorkoutSession({
     [session.exercises, session.startedAt]
   );
 
-  // Display order: incomplete exercises first (in their user-defined order),
-  // completed ones sink to the bottom. This is a *view* — the session's stored
-  // order is untouched (Fix 7).
-  const displayExercises = useMemo(() => {
-    const incomplete: SessionExercise[] = [];
-    const complete: SessionExercise[] = [];
+  // Display order: incomplete first (in their user-defined order), completed
+  // ones sink to the bottom. This is a *view* — the session's stored order is
+  // untouched (Fix 7). A superset is one row here, so it moves as a unit and
+  // only sinks once every exercise in it is done.
+  const displayRows = useMemo<DisplayRow[]>(() => {
+    const rows: DisplayRow[] = [];
+    const seen = new Set<string>();
     for (const ex of session.exercises) {
-      (isExerciseComplete(ex) ? complete : incomplete).push(ex);
+      if (seen.has(ex.key)) continue;
+      const groupId = ex.supersetGroupId;
+      if (groupId) {
+        // Collected by group id rather than by adjacency, so a member that got
+        // dragged away still renders inside the frame instead of orphaned.
+        const members = session.exercises.filter((e) => e.supersetGroupId === groupId);
+        members.forEach((m) => seen.add(m.key));
+        rows.push({ kind: 'group', id: groupId, members });
+      } else {
+        seen.add(ex.key);
+        rows.push({ kind: 'single', id: ex.key, ex });
+      }
     }
-    return [...incomplete, ...complete];
+    const done = (r: DisplayRow) => rowExercises(r).every(isExerciseComplete);
+    return [...rows.filter((r) => !done(r)), ...rows.filter(done)];
   }, [session.exercises]);
+
+  // The flat, on-screen order — what drag-and-drop sorts against.
+  const displayExercises = useMemo(
+    () => displayRows.flatMap(rowExercises),
+    [displayRows]
+  );
 
   // The exercise you're on: the first one that still has unchecked sets.
   const currentKey = displayExercises.find((x) => !isExerciseComplete(x))?.key ?? null;
+  const pairingSource = pairingKey
+    ? session.exercises.find((e) => e.key === pairingKey) ?? null
+    : null;
   const doneCount = session.exercises.filter(isExerciseComplete).length;
   const allComplete = session.exercises.length > 0 && doneCount === session.exercises.length;
 
@@ -592,12 +899,14 @@ export default function ActiveWorkoutSession({
   }
 
   /**
-   * The finish path once the user has committed. `saveTemplate` writes the
-   * structural edits back first, so a failed template write can't be mistaken
-   * for a lost workout — the log is saved either way, right after.
+   * The finish path once the user has committed. `saveTemplate` overwrites the
+   * template first, so a failed template write can't be mistaken for a lost
+   * workout — the log is saved either way, right after.
    */
   async function finishFromPrompt(saveTemplate: boolean) {
     if (saveTemplate) {
+      // The template id carried by the session since it started — the edits go
+      // to exactly that template, never to one matched by name.
       const payload = api.buildTemplateSave();
       if (payload) {
         setSavingTemplate(true);
@@ -736,17 +1045,28 @@ export default function ActiveWorkoutSession({
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-2.5">
-              {displayExercises.map((ex) => (
-                <ExerciseBlock
-                  key={ex.key}
-                  ex={ex}
-                  api={api}
-                  startRest={startRest}
-                  showRpe={showRpe}
-                  completed={isExerciseComplete(ex)}
-                  current={ex.key === currentKey}
-                />
-              ))}
+              {displayRows.map((row) => {
+                const block = (ex: SessionExercise, label: string | null) => (
+                  <ExerciseBlock
+                    key={ex.key}
+                    ex={ex}
+                    api={api}
+                    startRest={startRest}
+                    showRpe={showRpe}
+                    completed={isExerciseComplete(ex)}
+                    current={ex.key === currentKey}
+                    supersetLabel={label}
+                    partnerNames={supersetPartners(session.exercises, ex)}
+                    onOpenSupersetPicker={() => setPairingKey(ex.key)}
+                  />
+                );
+                if (row.kind === 'single') return block(row.ex, null);
+                return (
+                  <SupersetFrame key={row.id}>
+                    {row.members.map((m, i) => block(m, SUPERSET_LABELS[i] ?? '?'))}
+                  </SupersetFrame>
+                );
+              })}
             </div>
           </SortableContext>
         </DndContext>
@@ -763,7 +1083,9 @@ export default function ActiveWorkoutSession({
       {session.exercises.length > 0 && (
         <p className="mt-2 text-center text-[11px] text-gray-400">
           Tap a set number to cycle <span className="font-semibold text-amber-600 dark:text-amber-400">W</span>arm-up /{' '}
-          <span className="font-semibold text-red-600 dark:text-red-400">F</span>ailure · check ✓ to start the rest timer
+          <span className="font-semibold text-red-600 dark:text-red-400">F</span>ailure /{' '}
+          <span className="font-semibold text-accent-600 dark:text-accent-400">D</span>rop set · ⋯ to
+          superset · check ✓ to start the rest timer
         </p>
       )}
 
@@ -914,6 +1236,24 @@ export default function ActiveWorkoutSession({
             </div>
           </div>
         </div>
+      )}
+
+      {/* superset pairing */}
+      {pairingSource && (
+        <SupersetPicker
+          source={pairingSource}
+          candidates={session.exercises.filter(
+            (e) =>
+              e.key !== pairingSource.key &&
+              // Already in this same superset — nothing to pair.
+              !(e.supersetGroupId && e.supersetGroupId === pairingSource.supersetGroupId)
+          )}
+          onPick={(key) => {
+            api.pairSuperset(pairingSource.key, key);
+            setPairingKey(null);
+          }}
+          onClose={() => setPairingKey(null)}
+        />
       )}
 
       {/* Template save-on-edit. Skipped entirely when nothing structural

@@ -102,12 +102,15 @@ export default function WorkoutTab({ userId, showRpe }: { userId: string; showRp
   }
 
   /**
-   * "Save to Template" from the finish prompt — the session's structure is
-   * written back over the template's exercise rows, leaving its name and notes
-   * (and every logged weight) alone.
+   * "Save to Template" from the finish prompt. `templateId` is the id the
+   * session has carried since it started, so the write lands on exactly the
+   * template the workout came from; its whole exercise list is replaced with
+   * the session as performed, leaving only the name and notes alone.
    */
   async function saveEditsToTemplate(templateId: string, items: TemplateItemInput[]) {
-    await templatesApi.saveTemplateExercises(templateId, items);
+    const ok = await templatesApi.saveTemplateExercises(templateId, items);
+    if (ok) templatesApi.reload(); // Templates tab shows the new plan right away
+    return ok;
   }
 
   /** "Save as template" from the post-workout summary (freestyle → repeatable). */

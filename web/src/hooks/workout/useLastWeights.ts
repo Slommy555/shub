@@ -47,7 +47,9 @@ export function useLastWeights(userId: string | null, version = 0) {
       // Rows arrive newest-first, so the first hit per exercise is the latest.
       const map: Record<string, number> = {};
       for (const row of (data ?? []) as Row[]) {
-        if (row.set_type === 'warmup') continue;
+        // Warm-ups and drop sets are both deliberately light — neither says
+        // anything about the working weight a deload should scale down from.
+        if (row.set_type === 'warmup' || row.set_type === 'dropset') continue;
         const w = Number(row.weight_lbs);
         if (!(w > 0)) continue;
         if (row.exercise_id in map) continue;
