@@ -26,26 +26,7 @@ export function useAuth() {
   }
 }
 
-export async function verifyEmailCode(email: string, token: string): Promise<void> {
-  const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
+export async function signInWithPassword(email: string, password: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw new Error(error.message)
-}
-
-export async function requestMagicLink(email: string): Promise<void> {
-  const { data, error } = await supabase.functions.invoke('lift-magic-link', {
-    body: { email, redirectTo: `${window.location.origin}/log` },
-  })
-  if (error) {
-    // FunctionsHttpError carries the response; surface the server's message.
-    const ctx = (error as { context?: Response }).context
-    let msg = error.message
-    try {
-      const body = ctx ? await ctx.json() : null
-      if (body?.error) msg = body.error
-    } catch {
-      /* keep default message */
-    }
-    throw new Error(msg)
-  }
-  if (data?.error) throw new Error(data.error)
 }

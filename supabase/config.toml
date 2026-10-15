@@ -5,6 +5,3 @@ project_id = "cntmsrztqgejgavrsdfp"
 # OPTIONS preflight requests are exempt from this check.
 [functions.anthropic-proxy]
 verify_jwt = true
-
-[functions.lift-magic-link]
-verify_jwt = false
