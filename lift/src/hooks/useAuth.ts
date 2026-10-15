@@ -26,6 +26,11 @@ export function useAuth() {
   }
 }
 
+export async function verifyEmailCode(email: string, token: string): Promise<void> {
+  const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
+  if (error) throw new Error(error.message)
+}
+
 export async function requestMagicLink(email: string): Promise<void> {
   const { data, error } = await supabase.functions.invoke('lift-magic-link', {
     body: { email, redirectTo: `${window.location.origin}/log` },
