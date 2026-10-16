@@ -8,7 +8,7 @@ import type {
   LiveExercise,
   LiveSession,
   LiveSet,
-  SetKind,
+  SetFlag,
   TemplateExercise,
   TemplateSnapshot,
 } from '../lib/types'
@@ -48,9 +48,9 @@ export interface FinishSummary {
 /* ---------- pure helpers ---------- */
 
 function liveVolume(s: LiveSet): number {
-  if (!s.done || s.kind === 'warmup') return 0
+  if (!s.done || s.warmup) return 0
   const main = (s.weight ?? 0) * (s.reps ?? 0)
-  const drop = s.kind === 'drop' ? (s.dropWeight ?? 0) * (s.dropReps ?? 0) : 0
+  const drop = s.drop ? (s.dropWeight ?? 0) * (s.dropReps ?? 0) : 0
   return main + drop
 }
 
@@ -59,13 +59,23 @@ export function isExerciseComplete(ex: LiveExercise): boolean {
 }
 
 function newSet(weight: number | null, reps: number | null): LiveSet {
-  return { id: uid(), kind: 'normal', weight, reps, dropWeight: null, dropReps: null, done: false }
+  return { id: uid(), warmup: false, failure: false, drop: false, weight, reps, dropWeight: null, dropReps: null, done: false }
 }
 
 function load(): LiveSession | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as LiveSession) : null
+    if (!raw) return null
+    const s = JSON.parse(raw) as LiveSession
+    // Sessions saved before set flags stored a single `kind`.
+    for (const ex of s.exercises) {
+      ex.sets = ex.sets.map((st) => {
+        const legacy = (st as LiveSet & { kind?: string }).kind
+        if (legacy === undefined) return st
+        return { ...st, warmup: legacy === 'warmup', failure: legacy === 'failure', drop: legacy === 'drop' }
+      })
+    }
+    return s
   } catch {
     return null
   }
@@ -124,7 +134,7 @@ export function computeTemplateChanges(live: LiveSession): TemplateChange[] {
   for (const ex of live.exercises) {
     const snap = live.snapshot.find((s) => s.exerciseId === ex.exerciseId)
     if (!snap) continue
-    const working = ex.sets.filter((s) => s.kind !== 'warmup')
+    const working = ex.sets.filter((s) => !s.warmup)
     if (working.length !== snap.sets) {
       changes.push({ kind: 'sets', text: `${ex.name}: ${snap.sets} → ${working.length} sets` })
     }
@@ -268,18 +278,19 @@ function useWorkoutSessionState() {
     [mutate],
   )
 
-  const setKind = useCallback(
-    (exKey: string, setId: string, kind: SetKind) =>
+  const toggleFlag = useCallback(
+    (exKey: string, setId: string, flag: SetFlag) =>
       mutateExercise(exKey, (ex) => ({
         ...ex,
         sets: ex.sets.map((s) => {
           if (s.id !== setId) return s
-          const next = s.kind === kind ? 'normal' : kind
+          const on = !s[flag]
+          const dropOn = flag === 'drop' ? on : s.drop
           return {
             ...s,
-            kind: next,
-            dropWeight: next === 'drop' ? (s.dropWeight ?? (s.weight != null ? Math.round(s.weight * 0.75) : null)) : s.dropWeight,
-            dropReps: next === 'drop' ? (s.dropReps ?? s.reps) : s.dropReps,
+            [flag]: on,
+            dropWeight: dropOn ? (s.dropWeight ?? (s.weight != null ? Math.round(s.weight * 0.75) : null)) : s.dropWeight,
+            dropReps: dropOn ? (s.dropReps ?? s.reps) : s.dropReps,
           }
         }),
       })),
@@ -289,7 +300,7 @@ function useWorkoutSessionState() {
   const addSet = useCallback(
     (exKey: string) =>
       mutateExercise(exKey, (ex) => {
-        const prev = [...ex.sets].reverse().find((s) => s.kind !== 'warmup') ?? ex.sets[ex.sets.length - 1]
+        const prev = [...ex.sets].reverse().find((s) => !s.warmup) ?? ex.sets[ex.sets.length - 1]
         return { ...ex, completedAt: null, sets: [...ex.sets, newSet(prev?.weight ?? null, prev?.reps ?? null)] }
       }),
     [mutateExercise],
@@ -441,11 +452,11 @@ function useWorkoutSessionState() {
           set_number: i + 1,
           weight: s.weight,
           reps: s.reps,
-          is_warmup: s.kind === 'warmup',
-          is_failure: s.kind === 'failure',
-          is_dropset: s.kind === 'drop',
-          drop_weight: s.kind === 'drop' ? s.dropWeight : null,
-          drop_reps: s.kind === 'drop' ? s.dropReps : null,
+          is_warmup: s.warmup,
+          is_failure: s.failure,
+          is_dropset: s.drop,
+          drop_weight: s.drop ? s.dropWeight : null,
+          drop_reps: s.drop ? s.dropReps : null,
           superset_group_id: ex.supersetGroupId,
         })),
     )
@@ -465,7 +476,7 @@ function useWorkoutSessionState() {
       const prev = history.get(ex.exerciseId) ?? []
       let best: PR | null = null
       for (const s of ex.sets) {
-        if (!s.done || s.kind === 'warmup' || !s.weight || !s.reps) continue
+        if (!s.done || s.warmup || !s.weight || !s.reps) continue
         const comparable = prev.filter((p) => p.reps >= s.reps!)
         if (!comparable.length) continue
         if (s.weight > Math.max(...comparable.map((p) => p.weight))) {
@@ -496,7 +507,7 @@ function useWorkoutSessionState() {
     start,
     updateSet,
     toggleSet,
-    setKind,
+    toggleFlag,
     addSet,
     removeSet,
     addExercise,

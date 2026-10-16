@@ -19,6 +19,26 @@ export interface Template {
   name: string
   day_label: string | null
   notes: string | null
+  folder_id: string | null
+  created_at: string
+}
+
+export interface TemplateFolder {
+  id: string
+  user_id: string
+  name: string
+  position: number
+  created_at: string
+}
+
+export type BodyLogType = 'weight' | 'calories'
+
+export interface BodyLog {
+  id: string
+  user_id: string
+  type: BodyLogType
+  value: number
+  logged_at: string
   created_at: string
 }
 
@@ -87,11 +107,15 @@ export interface WorkoutSet {
 
 /* ---------- in-progress session (client state) ---------- */
 
-export type SetKind = 'normal' | 'warmup' | 'failure' | 'drop'
+/** Independent set markers; a set may carry several (e.g. warmup + failure). */
+export type SetFlag = 'warmup' | 'failure' | 'drop'
+export const SET_FLAGS: SetFlag[] = ['warmup', 'failure', 'drop']
 
 export interface LiveSet {
   id: string
-  kind: SetKind
+  warmup: boolean
+  failure: boolean
+  drop: boolean
   weight: number | null
   reps: number | null
   dropWeight: number | null

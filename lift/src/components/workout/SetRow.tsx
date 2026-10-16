@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Check, MoreHorizontal } from 'lucide-react'
-import { KindBadge, SetChip } from '../ui/SetChip'
+import { SetBadges, SetChip } from '../ui/SetChip'
 import type { ChipState } from '../ui/SetChip'
 import { useLongPress } from '../ui/useLongPress'
 import { fmtWeight, numOrNull } from '../../lib/format'
@@ -81,17 +81,13 @@ interface Props {
 export function SetRow({ set, number, chip, onChange, onToggle, onMenu }: Props) {
   const { handlers } = useLongPress(onMenu)
   const muted = set.done
-  const isDrop = set.kind === 'drop'
+  const isDrop = set.drop
 
   return (
     <div className="flex items-center gap-2 py-1">
-      <div {...handlers} className="relative flex flex-col items-center">
-        <SetChip label={number} state={chip} kind={set.kind} />
-        {set.kind !== 'normal' && set.kind !== 'warmup' && (
-          <span className="absolute -bottom-2 left-1/2 -translate-x-1/2">
-            <KindBadge kind={set.kind} />
-          </span>
-        )}
+      <div {...handlers} className="flex shrink-0 items-center gap-1">
+        <SetBadges flags={set} />
+        <SetChip label={number} state={chip} />
       </div>
 
       <div className="flex flex-1 flex-col">

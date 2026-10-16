@@ -9,6 +9,9 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { GoldDivider } from '../components/ui/GoldDivider'
 import { Skeleton } from '../components/ui/Skeleton'
 import { TodayCard } from '../components/workout/TodayCard'
+import { SubTabs } from '../components/ui/SubTabs'
+import { TemplateList } from '../components/templates/TemplateList'
+import { TemplateEditor } from '../components/templates/TemplateEditor'
 import { programPosition, useProgram } from '../hooks/useProgram'
 import { useTemplates } from '../hooks/useTemplates'
 import type { TemplateWithExercises } from '../hooks/useTemplates'
@@ -339,6 +342,9 @@ export default function Program() {
   const { programs, active, loading } = useProgram()
   const [creating, setCreating] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [tab, setTab] = useState<'programs' | 'templates'>('programs')
+  // undefined = closed, null = new template
+  const [editingTemplate, setEditingTemplate] = useState<string | null | undefined>(undefined)
   const selected = useMemo(() => programs.find((p) => p.id === selectedId) ?? null, [programs, selectedId])
 
   if (selected) return <ProgramDetail program={selected} onBack={() => setSelectedId(null)} />
@@ -348,12 +354,37 @@ export default function Program() {
       <PageHeader
         title="Program"
         right={
-          <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
-            <Plus size={14} /> New Program
-          </Button>
+          tab === 'programs' ? (
+            <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+              <Plus size={14} /> New Program
+            </Button>
+          ) : (
+            <Button size="sm" onClick={() => setEditingTemplate(null)} className="font-display font-bold uppercase tracking-[0.1em]">
+              <Plus size={14} /> New Template
+            </Button>
+          )
         }
       />
-      <div className="space-y-3 px-5">
+      <div className="px-5">
+        <SubTabs
+          className="mb-5"
+          options={[
+            { value: 'programs', label: 'Programs' },
+            { value: 'templates', label: 'Templates' },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+      </div>
+      {tab === 'templates' && (
+        <div className="px-5">
+          <TemplateList onEdit={(id) => setEditingTemplate(id)} />
+        </div>
+      )}
+      {editingTemplate !== undefined && (
+        <TemplateEditor key={editingTemplate ?? 'new'} templateId={editingTemplate} onClose={() => setEditingTemplate(undefined)} />
+      )}
+      {tab === 'programs' && <div className="space-y-3 px-5">
         {active && <TodayCard />}
         {active && <GoldDivider className="my-6" />}
 
@@ -384,7 +415,7 @@ export default function Program() {
             action={<Button onClick={() => setCreating(true)}>New Program</Button>}
           />
         )}
-      </div>
+      </div>}
       <NewProgramSheet open={creating} onClose={() => setCreating(false)} />
     </div>
   )

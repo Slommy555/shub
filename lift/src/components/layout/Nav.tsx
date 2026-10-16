@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { BarChart3, BookOpen, CalendarDays, Dumbbell } from 'lucide-react'
+import { BarChart3, BookOpen, CalendarDays, Dumbbell, Scale } from 'lucide-react'
 
 const tabs = [
   { to: '/log', label: 'Log', icon: Dumbbell },
   { to: '/program', label: 'Program', icon: CalendarDays },
   { to: '/progress', label: 'Progress', icon: BarChart3 },
+  { to: '/body', label: 'Body', icon: Scale },
   { to: '/library', label: 'Library', icon: BookOpen },
 ]
 
@@ -21,7 +22,7 @@ export function Nav() {
           <NavLink
             key={to}
             to={to}
-            className="flex flex-1 flex-col items-center justify-center"
+            className="flex min-w-0 flex-1 flex-col items-center justify-center"
           >
             {({ isActive }) => (
               <>
@@ -30,7 +31,7 @@ export function Nav() {
                 />
                 <Icon size={19} strokeWidth={1.6} className={isActive ? 'text-ink' : 'text-ink-2'} />
                 <span
-                  className={`mt-1 text-[10px] font-medium uppercase tracking-[0.14em] ${isActive ? 'text-gold' : 'text-ink-2'}`}
+                  className={`mt-1 whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.08em] ${isActive ? 'text-gold' : 'text-ink-2'}`}
                 >
                   {label}
                 </span>

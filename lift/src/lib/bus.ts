@@ -1,5 +1,5 @@
 // Tiny change bus so independent hooks refetch after writes elsewhere.
-export type Topic = 'exercises' | 'templates' | 'programs' | 'sessions'
+export type Topic = 'exercises' | 'templates' | 'programs' | 'sessions' | 'folders' | 'body'
 
 const target = new EventTarget()
 

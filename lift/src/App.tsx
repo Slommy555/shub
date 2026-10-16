@@ -7,6 +7,7 @@ import { Layout } from './components/layout/Layout'
 import Login from './pages/Login'
 import Log from './pages/Log'
 import Program from './pages/Program'
+import Body from './pages/Body'
 // Recharts lives in these two; keep it out of the main bundle.
 const Progress = lazy(() => import('./pages/Progress'))
 const Library = lazy(() => import('./pages/Library'))
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/log" element={<Log />} />
           <Route path="/program" element={<Program />} />
           <Route path="/progress" element={<Suspense fallback={null}><Progress /></Suspense>} />
+          <Route path="/body" element={<Body />} />
           <Route path="/library" element={<Suspense fallback={null}><Library /></Suspense>} />
         </Route>
         <Route path="*" element={<Navigate to={authed ? '/log' : '/login'} replace />} />

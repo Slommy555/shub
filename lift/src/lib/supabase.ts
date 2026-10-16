@@ -22,6 +22,8 @@ export const T = {
   sets: 'lift_workout_sets',
   programs: 'lift_workout_programs',
   programDays: 'lift_program_days',
+  folders: 'lift_template_folders',
+  bodyLogs: 'lift_body_logs',
 } as const
 
 export async function currentUserId(): Promise<string> {

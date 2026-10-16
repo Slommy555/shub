@@ -11,19 +11,22 @@ interface Props {
   onClose: () => void
   onPick: (exercise: Exercise) => void
   title?: string
+  /** Show muscle-group filter chips above the list. */
+  filterable?: boolean
 }
 
-export function ExercisePicker({ open, onClose, onPick, title = 'Add exercise' }: Props) {
+export function ExercisePicker({ open, onClose, onPick, title = 'Add exercise', filterable }: Props) {
   const { exercises } = useExercises()
   const [q, setQ] = useState('')
+  const [muscle, setMuscle] = useState<string | null>(null)
 
   const groups = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const list = exercises.filter((e) => !needle || e.name.toLowerCase().includes(needle))
-    return MUSCLE_GROUPS.map((g) => ({ group: g, items: list.filter((e) => (e.muscle_group ?? 'other') === g) })).filter(
-      (g) => g.items.length,
-    )
-  }, [exercises, q])
+    return MUSCLE_GROUPS.filter((g) => !muscle || g === muscle)
+      .map((g) => ({ group: g, items: list.filter((e) => (e.muscle_group ?? 'other') === g) }))
+      .filter((g) => g.items.length)
+  }, [exercises, q, muscle])
 
   return (
     <Sheet open={open} onClose={onClose} title={title}>
@@ -31,6 +34,21 @@ export function ExercisePicker({ open, onClose, onPick, title = 'Add exercise' }
         <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-2" />
         <input className="field pl-10" placeholder="Search exercises" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+      {filterable && (
+        <div className="no-scrollbar -mx-5 mb-4 flex gap-2 overflow-x-auto px-5">
+          {[null, ...MUSCLE_GROUPS].map((m) => (
+            <button
+              key={m ?? 'all'}
+              onClick={() => setMuscle(m)}
+              className={`h-8 shrink-0 rounded-full border px-3 text-[12px] capitalize ${
+                muscle === m ? 'border-gold-border bg-gold-dim text-gold' : 'border-line bg-subtle text-ink-2'
+              }`}
+            >
+              {m ?? 'All'}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="space-y-5">
         {groups.map(({ group, items }) => (
           <div key={group}>

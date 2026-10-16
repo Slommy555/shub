@@ -5,7 +5,7 @@ import { ActionList, Sheet } from '../ui/Sheet'
 import { KindBadge } from '../ui/SetChip'
 import { Segmented } from '../ui/Pill'
 import { isExerciseComplete, useWorkoutSession } from '../../hooks/useWorkoutSession'
-import type { LiveExercise, SetKind } from '../../lib/types'
+import type { LiveExercise, SetFlag } from '../../lib/types'
 
 const REST_OPTIONS = [60, 90, 120, 180].map((s) => ({ value: s, label: s < 120 ? `${s}s` : `${s / 60}m` }))
 
@@ -25,16 +25,18 @@ export function ExerciseCard({ exercise, active, letter, isFirst, isLast }: Prop
   const complete = isExerciseComplete(exercise)
   const firstOpen = exercise.sets.find((s) => !s.done)?.id
 
+  // Warmups and working sets count separately; the W badge tells them apart.
   let working = 0
-  const numbers = exercise.sets.map((s) => (s.kind === 'warmup' ? 0 : ++working))
+  let warm = 0
+  const numbers = exercise.sets.map((s) => (s.warmup ? ++warm : ++working))
   const menuSet = exercise.sets.find((s) => s.id === setMenu)
 
-  const kindItem = (kind: SetKind, label: string) => ({
-    label: menuSet?.kind === kind ? `Unmark ${label.replace('Mark as ', '')}` : label,
+  const kindItem = (kind: SetFlag, label: string) => ({
+    label: menuSet?.[kind] ? `Unmark ${label.replace('Mark as ', '')}` : label,
     badge: <KindBadge kind={kind} />,
-    active: menuSet?.kind === kind,
+    active: !!menuSet?.[kind],
     onSelect: () => {
-      if (setMenu) w.setKind(exercise.key, setMenu, kind)
+      if (setMenu) w.toggleFlag(exercise.key, setMenu, kind)
       setSetMenu(null)
     },
   })

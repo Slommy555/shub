@@ -59,7 +59,51 @@ export function useTemplates() {
     emitChange('programs')
   }, [])
 
-  return { templates, byId, loading, create, remove, reload: load }
+  const moveToFolder = useCallback(async (id: string, folderId: string | null) => {
+    const { error } = await supabase.from(T.templates).update({ folder_id: folderId }).eq('id', id)
+    if (error) throw error
+    emitChange('templates')
+  }, [])
+
+  return { templates, byId, loading, create, remove, moveToFolder, reload: load }
+}
+
+export type TemplateExerciseInput = Omit<TemplateExercise, 'id' | 'template_id' | 'position'>
+
+/**
+ * Upsert a template from the editor: insert or rename it, then replace its
+ * exercise list (delete every template_exercises row, re-insert in order).
+ */
+export async function saveTemplate(input: {
+  id: string | null
+  name: string
+  folderId?: string | null
+  exercises: TemplateExerciseInput[]
+}): Promise<string> {
+  let id = input.id
+  if (id) {
+    const { error } = await supabase.from(T.templates).update({ name: input.name }).eq('id', id)
+    if (error) throw error
+  } else {
+    const user_id = await currentUserId()
+    const { data, error } = await supabase
+      .from(T.templates)
+      .insert({ name: input.name, user_id, folder_id: input.folderId ?? null })
+      .select('id')
+      .single()
+    if (error) throw error
+    id = (data as { id: string }).id
+  }
+  const del = await supabase.from(T.templateExercises).delete().eq('template_id', id)
+  if (del.error) throw del.error
+  if (input.exercises.length) {
+    const rows = input.exercises.map((e, i) => ({ ...e, template_id: id, position: i }))
+    const ins = await supabase.from(T.templateExercises).insert(rows)
+    if (ins.error) throw ins.error
+  }
+  emitChange('templates')
+  emitChange('programs')
+  return id
 }
 
 /**
@@ -68,7 +112,7 @@ export function useTemplates() {
  */
 export async function saveSessionToTemplate(templateId: string, exercises: LiveExercise[]) {
   const rows = exercises.map((ex, i) => {
-    const working = ex.sets.filter((s) => s.kind !== 'warmup')
+    const working = ex.sets.filter((s) => !s.warmup)
     const basis = working.length ? working : ex.sets
     const weights = basis.map((s) => s.weight).filter((w): w is number => w != null)
     const lastReps = [...basis].reverse().find((s) => s.reps != null)?.reps
